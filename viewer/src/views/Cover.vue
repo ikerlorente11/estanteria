@@ -10,8 +10,9 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { useStore } from '../lib/store'
 
-/** A cover, fetched with the session's credential and kept in the shared cache. `has` false shows a placeholder at once. */
-const props = withDefaults(defineProps<{ id: number; has?: boolean; icon?: string }>(), { has: true, icon: 'es-i-book' })
+/** A cover, fetched with the session's credential and kept in the shared cache. `has` false shows a
+ * placeholder at once. An item's by `id`, or any image of the API by `src` (a catalogue's cover). */
+const props = withDefaults(defineProps<{ id?: number; src?: string; has?: boolean; icon?: string }>(), { id: 0, src: '', has: true, icon: 'es-i-book' })
 const store = useStore()
 const url = ref('')
 let gone = false
@@ -19,12 +20,12 @@ let gone = false
 async function load() {
   url.value = ''
   if (!props.has) return
-  const id = props.id
+  const path = props.src || store.api.coverPath(props.id)
   try {
-    const got = await store.covers.get(store.api.coverPath(id))
-    if (!gone && id === props.id) url.value = got
+    const got = await store.covers.get(path)
+    if (!gone && path === (props.src || store.api.coverPath(props.id))) url.value = got
   } catch (_) { /* placeholder stays */ }
 }
-watch(() => [props.id, props.has], load, { immediate: true })
+watch(() => [props.id, props.src, props.has], load, { immediate: true })
 onBeforeUnmount(() => { gone = true })
 </script>

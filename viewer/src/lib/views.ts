@@ -7,11 +7,20 @@ export type View =
   | { v: 'read'; id: number; page?: number }
   | { v: 'item'; id: number }
   | { v: 'sources' }
+  | { v: 'catalogs' }
+  | { v: 'catalog'; kind: string; path?: string; q?: string }
 
 /** The view a route's query stands for (the app keeps its place in the URL). */
 export function viewFromQuery(query: Record<string, unknown>): View {
   const v = String(query.v || 'home')
   const id = Number(query.id)
+  if (v === 'catalogs') return { v }
+  if (v === 'catalog' && query.kind) {
+    const view: View = { v, kind: String(query.kind) }
+    if (query.path) view.path = String(query.path)
+    if (query.q) view.q = String(query.q)
+    return view
+  }
   if (v === 'library') {
     const view: View = { v }
     if (query.q) view.q = String(query.q)
@@ -45,5 +54,11 @@ export function queryFromView(view: View): Record<string, string> {
   if (view.v === 'series') return { v: 'series', name: view.name }
   if (view.v === 'read') return view.page !== undefined ? { v: 'read', id: String(view.id), page: String(view.page) } : { v: 'read', id: String(view.id) }
   if (view.v === 'item') return { v: 'item', id: String(view.id) }
+  if (view.v === 'catalog') {
+    const q: Record<string, string> = { v: 'catalog', kind: view.kind }
+    if (view.path) q.path = view.path
+    if (view.q) q.q = view.q
+    return q
+  }
   return { v: view.v }
 }

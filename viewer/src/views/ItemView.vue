@@ -25,7 +25,14 @@
             <button v-if="!item.progress?.finished" class="es-btn" @click="mark(true)">Marcar como leído</button>
             <button v-else class="es-btn" @click="mark(false)">Marcar como no leído</button>
             <a v-if="item.format !== 'folder'" class="es-btn" href="#" @click.prevent="download"><i class="es-i es-i-download" aria-hidden="true"></i> Descargar</a>
+            <button v-if="item.source_id && item.format !== 'folder'" class="es-btn" :disabled="saving" title="Copiar el archivo a la carpeta Lectura de tu Archivador" @click="toCloud">
+              <span v-if="saving" class="es-spin"></span><i v-else class="es-i es-i-cloud" aria-hidden="true"></i> Guardar en El Archivador
+            </button>
+            <button v-if="fromCatalog" class="es-btn" title="Quitar de tu estantería (sigue en el catálogo)" @click="remove">
+              <i class="es-i es-i-delete" aria-hidden="true"></i> Quitar
+            </button>
           </div>
+          <p v-if="origin" class="es-origin"><i class="es-i es-i-server" aria-hidden="true"></i> De {{ origin }}</p>
           <p v-if="item.progress && !item.progress.finished && item.progress.percent > 0" class="es-muted es-small">
             Vas por el {{ Math.round(item.progress.percent * 100) }} %<template v-if="item.progress.page !== null && item.kind !== 'book'"> (página {{ item.progress.page + 1 }})</template>
             <template v-if="item.progress.device"> · desde {{ item.progress.device }}</template>
@@ -59,9 +66,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { ItemDetail } from '../lib/api'
-import { kindLabel, sizeLabel, useStore } from '../lib/store'
+import { kindLabel, sizeLabel, sourceName, useStore } from '../lib/store'
 import Cover from './Cover.vue'
 
 const props = defineProps<{ id: number }>()
@@ -69,6 +76,29 @@ const store = useStore()
 const { state, go } = store
 const item = ref<ItemDetail | null>(null)
 const loading = ref(true)
+const saving = ref(false)
+const origin = computed(() => (item.value ? sourceName(item.value, state.status?.sources) : ''))
+const fromCatalog = computed(() => !!item.value?.source_id && !!state.status?.sources.find((s) => s.id === item.value!.source_id)?.catalog)
+
+async function toCloud() {
+  if (!item.value) return
+  saving.value = true
+  try {
+    const r = await store.api.saveItem(item.value.id)
+    store.notify(`Guardado en ${r.path}`)
+    store.refresh()
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  saving.value = false
+}
+async function remove() {
+  if (!item.value) return
+  try {
+    await store.api.removeItem(item.value.id)
+    store.notify('Quitado de tu estantería.')
+    store.refresh()
+    go({ v: 'library' }, true)
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+}
 
 async function load() {
   if (!state.connected) return

@@ -315,3 +315,24 @@
 .es-i-play { --es-i: url('/icons/play-line.svg'); }
 .es-i-delete { --es-i: url('/icons/delete-bin-line.svg'); }
 .es-i-add { --es-i: url('/icons/add-line.svg'); }
+
+/* ---- public catalogues ---- */
+.es-intro { margin: -6px 0 0; max-width: 720px; line-height: 1.5; }
+.es-catalogs { display: grid; gap: 10px; max-width: 720px; }
+.es-catalog { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; background: var(--es-surface-2); text-decoration: none; color: inherit; transition: background .12s; }
+.es-catalog:hover { background: var(--es-surface-3); }
+.es-catalog-mark { width: 46px; height: 46px; flex: none; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; color: #fff; background: var(--es-accent); }
+.es-catalog-gutenberg { background: #4a5a8a; }
+.es-catalog-archive { background: #3b3b3b; }
+.es-catalog-mangadex { background: #ff6740; }
+.es-catalog-text { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.es-catalog-text strong { font-size: 15px; }
+.es-catalog-go { color: var(--es-muted); }
+.es-page-title { display: grid; gap: 2px; min-width: 0; }
+.es-chips-big .es-chip { padding: 7px 14px; font-size: 13.5px; text-decoration: none; }
+.es-hero-slim { align-items: flex-start; }
+.es-hero-pic-small { width: clamp(90px, 10vw, 130px); }
+.es-entry .es-card-text { padding-right: 0; }
+.es-entry-actions { display: flex; gap: 4px; align-items: center; }
+.es-entry-actions .es-btn.es-small { padding: 4px 9px; }
+.es-entry-kept .es-card-cover { outline: 2px solid var(--es-accent); outline-offset: 1px; }

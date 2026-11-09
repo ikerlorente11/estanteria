@@ -9,7 +9,7 @@
       <div class="es-rtools">
         <button class="es-rbtn" :class="{ on: panel === 'toc' }" title="Índice" @click="toggle('toc')"><i class="es-i es-i-list" aria-hidden="true"></i></button>
         <button class="es-rbtn" :class="{ on: bookmarked }" :title="bookmarked ? 'Quitar el marcador (b)' : 'Marcar este punto (b)'" @click="toggleBookmark"><i class="es-i" :class="bookmarked ? 'es-i-bookmark-fill' : 'es-i-bookmark'" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i><span v-if="bookmarks.length" class="es-rbadge">{{ bookmarks.length }}</span></button>
         <button class="es-rbtn" :class="{ on: panel === 'settings' }" title="Texto y aspecto" @click="toggle('settings')"><i class="es-i es-i-font" aria-hidden="true"></i></button>
         <button class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
@@ -29,8 +29,11 @@
 
     <footer class="es-rbottom" :inert="!uiShown">
       <button class="es-rbtn" title="Anterior" @click.stop="prev"><i class="es-i es-i-prev" aria-hidden="true"></i></button>
-      <input class="es-rslider" type="range" min="0" max="1000" :value="Math.round(percent * 1000)" aria-label="Posición en el libro" :disabled="!located"
-             @change="goPercent(Number(($event.target as HTMLInputElement).value) / 1000)" />
+      <span class="es-rslider-wrap">
+        <input class="es-rslider" type="range" min="0" max="1000" :value="Math.round(percent * 1000)" aria-label="Posición en el libro" :disabled="!located"
+               @change="goPercent(Number(($event.target as HTMLInputElement).value) / 1000)" />
+        <span v-for="t in ticks" :key="t.id" class="es-rtick" :class="`es-rtick-${t.kind}`" :style="{ left: `${t.at}%` }" :title="t.title" @click.stop="goToBookmark(t.bookmark)"></span>
+      </span>
       <span class="es-rcount es-rcount-wide">
         <template v-if="located && total">pág. {{ location + 1 }} / {{ total }} · </template>{{ Math.round(percent * 100) }} %
       </span>
@@ -162,6 +165,17 @@ let atEnd = false
 let turning = false
 
 const bookmarked = computed(() => bookmarks.value.some((b) => b.kind === 'bookmark' && b.location === cfi))
+/** Where the bookmarks, notes and highlights are, along the slider (once the book's positions are known). */
+const ticks = computed(() => {
+  if (!located.value || !book) return []
+  return bookmarks.value.filter((b) => b.location).map((b) => {
+    const start = b.location!.includes(',') ? b.location!.replace(/,.*\)$/, ')') : b.location!
+    let at = 0
+    try { at = (book!.locations.percentageFromCfi(start) || 0) * 100 } catch (_) { return null }
+    const what = b.kind === 'bookmark' ? 'Marcador' : b.kind === 'note' ? 'Nota' : 'Subrayado'
+    return { id: b.id, bookmark: b, kind: b.kind, at, title: `${what}${b.excerpt ? `: ${b.excerpt.slice(0, 80)}` : ''}${b.note ? ` — ${b.note.slice(0, 80)}` : ''}` }
+  }).filter((t): t is NonNullable<typeof t> => !!t)
+})
 
 function set<K extends keyof BookSettings>(key: K, value: BookSettings[K]) {
   settings[key] = value

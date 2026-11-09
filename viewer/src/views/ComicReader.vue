@@ -5,7 +5,7 @@
       <button class="es-rbtn" title="Volver (Esc)" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
         <strong class="es-ellipsis">{{ shortTitle(item) }}</strong>
-        <small class="es-ellipsis es-muted">{{ item.title !== shortTitle(item) ? item.title : item.series || '' }}</small>
+        <small class="es-ellipsis es-muted">{{ item.title !== shortTitle(item) ? item.title : item.series || '' }}<template v-if="hereLabel"> · <span class="es-rhere">{{ hereLabel }}</span></template></small>
       </div>
       <div class="es-rtools">
         <button class="es-rbtn" :class="{ on: settings.mode === 'single' }" title="Una página (1)" @click="setMode('single')"><i class="es-i es-i-page" aria-hidden="true"></i></button>
@@ -14,7 +14,7 @@
         <span class="es-rsep"></span>
         <button class="es-rbtn" :class="{ on: rtl }" :title="rtl ? 'Sentido manga: de derecha a izquierda (m)' : 'De izquierda a derecha (m)'" @click="toggleDirection"><i class="es-i es-i-lr" aria-hidden="true"></i></button>
         <button class="es-rbtn" :class="{ on: bookmarked }" :title="bookmarked ? 'Quitar el marcador (b)' : 'Marcar esta página (b)'" @click="toggleBookmark"><i class="es-i" :class="bookmarked ? 'es-i-bookmark-fill' : 'es-i-bookmark'" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i><span v-if="bookmarks.length" class="es-rbadge">{{ bookmarks.length }}</span></button>
         <button class="es-rbtn" :class="{ on: panel === 'settings' }" title="Ajustes" @click="toggle('settings')"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
         <button class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
@@ -42,8 +42,11 @@
 
     <footer class="es-rbottom" :inert="!uiShown">
       <button class="es-rbtn" :title="rtl ? 'Siguiente' : 'Anterior'" @click.stop="rtl ? next() : prev()"><i class="es-i es-i-prev" aria-hidden="true"></i></button>
-      <input class="es-rslider" type="range" min="0" :max="Math.max(0, item.pages - 1)" :value="page" :dir="rtl ? 'rtl' : 'ltr'" :aria-label="`Página ${page + 1} de ${item.pages}`"
-             @input="goPage(Number(($event.target as HTMLInputElement).value))" />
+      <span class="es-rslider-wrap">
+        <input class="es-rslider" type="range" min="0" :max="Math.max(0, item.pages - 1)" :value="page" :dir="rtl ? 'rtl' : 'ltr'" :aria-label="`Página ${page + 1} de ${item.pages}`"
+               @input="goPage(Number(($event.target as HTMLInputElement).value))" />
+        <span v-for="t in ticks" :key="t.id" class="es-rtick" :class="`es-rtick-${t.kind}`" :style="{ left: `${t.at}%` }" :title="t.title" @click.stop="goPage(t.page)"></span>
+      </span>
       <span class="es-rcount es-rcount-wide">{{ page + 1 }}<template v-if="current.pages.length > 1 && settings.mode !== 'strip'">–{{ current.pages[current.pages.length - 1] + 1 }}</template> / {{ item.pages }} · {{ Math.round(((current.pages[current.pages.length - 1] ?? page) + 1) / item.pages * 100) }} %</span>
       <button class="es-rbtn" :title="rtl ? 'Anterior' : 'Siguiente'" @click.stop="rtl ? prev() : next()"><i class="es-i es-i-next" aria-hidden="true"></i></button>
     </footer>
@@ -156,6 +159,23 @@ const list = computed(() => spreads(item.pages, item.page_sizes, settings.mode a
 const at = computed(() => spreadOf(list.value, page.value))
 const current = computed(() => list.value[at.value] || { pages: [page.value] })
 const bookmarked = computed(() => bookmarks.value.some((b) => b.kind === 'bookmark' && b.page === page.value))
+/** Where the bookmarks and notes are, along the slider (the first of each page wins the spot). */
+const ticks = computed(() => {
+  const span = Math.max(1, item.pages - 1)
+  return bookmarks.value.filter((b) => b.page !== null && b.page !== undefined).map((b) => {
+    const x = (b.page! / span) * 100
+    return { id: b.id, page: b.page!, kind: b.kind, at: rtl.value ? 100 - x : x, title: `${b.kind === 'bookmark' ? 'Marcador' : 'Nota'} en la página ${b.page! + 1}${b.note ? `: ${b.note}` : ''}` }
+  })
+})
+/** What this page has: "marcada", "2 notas"… shown next to the title. */
+const hereLabel = computed(() => {
+  const here = bookmarks.value.filter((b) => current.value.pages.includes(b.page ?? -1))
+  const notes = here.filter((b) => b.kind !== 'bookmark').length
+  const parts: string[] = []
+  if (here.some((b) => b.kind === 'bookmark')) parts.push('marcada')
+  if (notes) parts.push(notes === 1 ? '1 nota' : `${notes} notas`)
+  return parts.join(', ')
+})
 function toggle(name: string) {
   panel.value = panel.value === name ? '' : name
   if (panel.value) { uiShown.value = true; clearTimeout(uiTimer) }

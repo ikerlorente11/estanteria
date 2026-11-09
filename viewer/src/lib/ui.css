@@ -286,3 +286,14 @@
 .es-bview.es-turn-in-prev { transition: none; opacity: 0; transform: translateX(-22px); }
 .es-bview.es-turn-in-fade { transition: none; opacity: 0; }
 .es-rcount-wide { min-width: 150px; }
+
+/* ---- where the marks are: ticks along the slider, a count on the button, a word in the title ---- */
+.es-rslider-wrap { flex: 1; position: relative; display: flex; align-items: center; min-width: 0; padding-bottom: 6px; }
+.es-rslider-wrap .es-rslider { width: 100%; }
+.es-rtick { position: absolute; bottom: 0; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--es-accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(20,20,24,.85); }
+.es-rtick-note { border-radius: 2px; background: #f4c58f; }
+.es-rtick-highlight { border-radius: 2px; background: #f4c58f; opacity: .7; }
+.es-rtick:hover { transform: scale(1.4); }
+.es-rbtn { position: relative; }
+.es-rbadge { position: absolute; top: 2px; right: 1px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--es-accent); color: #fff; font-size: 10px; font-weight: 700; line-height: 15px; text-align: center; }
+.es-rhere { color: #f4c58f; font-weight: 600; }

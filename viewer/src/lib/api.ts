@@ -247,7 +247,8 @@ export class Api {
 
   items(query: ItemQuery = {}) {
     const params = new URLSearchParams()
-    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== '') params.set(k, String(v))
+    // an empty folder is the top of Lectura, so it travels; any other empty value means «no filter»
+    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && (v !== '' || k === 'folder')) params.set(k, String(v))
     const qs = params.toString()
     return this.call<Item[]>(`/api/items${qs ? `?${qs}` : ''}`)
   }

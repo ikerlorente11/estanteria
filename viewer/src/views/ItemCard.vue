@@ -11,6 +11,7 @@
     <div class="es-card-text">
       <a href="#" class="es-card-title es-ellipsis" :title="item.title" @click.prevent="emit('read')">{{ title }}</a>
       <span class="es-muted es-small es-ellipsis">{{ subtitle }}</span>
+      <span v-if="origin" class="es-origin es-ellipsis" :title="`De ${origin}`"><i class="es-i es-i-server" aria-hidden="true"></i> {{ origin }}</span>
     </div>
     <button class="es-card-info" title="Detalles" aria-label="Detalles" @click="emit('open')"><i class="es-i es-i-more" aria-hidden="true"></i></button>
   </article>
@@ -19,11 +20,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Item } from '../lib/api'
-import { kindLabel, percentOf, shortTitle } from '../lib/store'
+import { kindLabel, percentOf, shortTitle, sourceName, useStore } from '../lib/store'
 import Cover from './Cover.vue'
 
 const props = withDefaults(defineProps<{ item: Item; showSeries?: boolean }>(), { showSeries: true })
 const emit = defineEmits<{ read: []; open: [] }>()
+const store = useStore()
+const origin = computed(() => sourceName(props.item, store.state.status?.sources))
 
 const percent = computed(() => percentOf(props.item))
 const done = computed(() => !!props.item.progress?.finished)

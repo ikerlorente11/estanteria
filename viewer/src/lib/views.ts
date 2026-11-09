@@ -2,7 +2,7 @@
 
 export type View =
   | { v: 'home' }
-  | { v: 'library'; q?: string; kind?: string; sort?: string; folder?: string }
+  | { v: 'library'; q?: string; kind?: string; sort?: string; folder?: string; source?: string }
   | { v: 'series'; name: string }
   | { v: 'read'; id: number; page?: number }
   | { v: 'item'; id: number }
@@ -18,6 +18,7 @@ export function viewFromQuery(query: Record<string, unknown>): View {
     if (query.kind) view.kind = String(query.kind)
     if (query.sort) view.sort = String(query.sort)
     if (query.folder !== undefined && query.folder !== null) view.folder = String(query.folder)
+    if (query.source) view.source = String(query.source)
     return view
   }
   if (v === 'series' && query.name) return { v, name: String(query.name) }
@@ -38,6 +39,7 @@ export function queryFromView(view: View): Record<string, string> {
     if (view.kind) q.kind = view.kind
     if (view.sort) q.sort = view.sort
     if (view.folder !== undefined) q.folder = view.folder
+    if (view.source) q.source = view.source
     return q
   }
   if (view.v === 'series') return { v: 'series', name: view.name }

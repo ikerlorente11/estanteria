@@ -10,6 +10,11 @@
       <div class="es-chips" role="tablist" aria-label="Tipo">
         <button v-for="k in KINDS" :key="k.id" class="es-chip" :class="{ on: (kind || '') === k.id }" @click="setKind(k.id)">{{ k.label }}</button>
       </div>
+      <div v-if="sources.length" class="es-chips" role="tablist" aria-label="Biblioteca">
+        <button class="es-chip" :class="{ on: !source }" @click="setSource('')">Todas</button>
+        <button class="es-chip" :class="{ on: source === 'archivador' }" @click="setSource('archivador')">El Archivador</button>
+        <button v-for="s in sources" :key="s.id" class="es-chip" :class="{ on: source === String(s.id) }" @click="setSource(String(s.id))">{{ s.name }}</button>
+      </div>
       <span class="es-grow"></span>
       <label class="es-muted es-small">Orden
         <select class="es-select" :value="sort || 'series'" @change="setSort(($event.target as HTMLSelectElement).value)">
@@ -32,14 +37,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { Item, Kind } from '../lib/api'
 import { useStore } from '../lib/store'
 import ItemCard from './ItemCard.vue'
 
 const PAGE = 60
 const KINDS = [{ id: '', label: 'Todo' }, { id: 'comic', label: 'Cómics' }, { id: 'pdf', label: 'PDF' }, { id: 'book', label: 'Libros' }]
-const props = defineProps<{ q: string; kind?: string; sort?: string; folder?: string }>()
+const props = defineProps<{ q: string; kind?: string; sort?: string; folder?: string; source?: string }>()
 const store = useStore()
 const { state, go } = store
 const items = ref<Item[]>([])
@@ -47,11 +52,13 @@ const loading = ref(true)
 const loadingMore = ref(false)
 const exhausted = ref(false)
 const searchEl = ref<HTMLInputElement>()
+const sources = computed(() => state.status?.sources || [])
 let typing: any = null
 let request = 0
 
 function query(offset = 0) {
-  return { q: props.q || undefined, kind: (props.kind || undefined) as Kind | undefined, sort: (props.sort || 'series') as any, folder: props.folder, limit: PAGE, offset }
+  return { q: props.q || undefined, kind: (props.kind || undefined) as Kind | undefined, sort: (props.sort || 'series') as any, folder: props.folder,
+           source: props.source || undefined, limit: PAGE, offset }
 }
 async function load() {
   if (!state.connected) return
@@ -75,7 +82,7 @@ async function more() {
   loadingMore.value = false
 }
 function current() {
-  return { v: 'library' as const, q: props.q || undefined, kind: props.kind, sort: props.sort, folder: props.folder }
+  return { v: 'library' as const, q: props.q || undefined, kind: props.kind, sort: props.sort, folder: props.folder, source: props.source }
 }
 function typed(value: string) {
   clearTimeout(typing)
@@ -83,9 +90,10 @@ function typed(value: string) {
 }
 function setKind(kind: string) { go({ ...current(), kind: kind || undefined }, true) }
 function setSort(sort: string) { go({ ...current(), sort: sort === 'series' ? undefined : sort }, true) }
+function setSource(source: string) { go({ ...current(), source: source || undefined }, true) }
 
 onMounted(load)
 watch(() => state.connected, load)
-watch(() => [props.q, props.kind, props.sort, props.folder], load)
+watch(() => [props.q, props.kind, props.sort, props.folder, props.source], load)
 watch(() => state.status?.pending, (now, before) => { if (before && !now) load() })
 </script>

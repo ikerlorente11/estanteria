@@ -17,6 +17,8 @@ export interface Progress {
 
 export interface Item {
   id: number
+  /** null: the user's own Archivador; else one of their outside libraries */
+  source_id: number | null
   path: string
   folder: string
   name: string
@@ -74,6 +76,34 @@ export interface Series {
   last_read: number | null
 }
 
+export type SourceKind = 'komga' | 'kavita' | 'opds' | 'webdav'
+
+export interface Source {
+  id: number
+  kind: SourceKind
+  label: string
+  name: string
+  url: string
+  username: string
+  config: Record<string, unknown>
+  enabled: boolean
+  scanned: number | null
+  scan_error: string | null
+  info: { name?: string; version?: string }
+  items: number
+  supports_progress: boolean
+  created: number
+  updated: number
+}
+
+export interface SourceKindInfo {
+  kind: SourceKind
+  label: string
+  fields: ('url' | 'username' | 'secret')[]
+  secret_label: string
+  supports_progress: boolean
+}
+
 export interface LibraryStatus {
   connected: boolean
   username: string
@@ -83,6 +113,8 @@ export interface LibraryStatus {
   pending: number
   errors: number
   folders: string[]
+  archivador: { total: number; pending: number; errors: number }
+  sources: Source[]
 }
 
 export interface ItemQuery {
@@ -93,6 +125,8 @@ export interface ItemQuery {
   sort?: 'series' | 'title' | 'added' | 'modified'
   limit?: number
   offset?: number
+  /** 'archivador', or a source id */
+  source?: string
 }
 
 export interface ProgressUpdate {
@@ -179,4 +213,15 @@ export class Api {
     return this.call<Bookmark>(`/api/items/${id}/bookmarks/${bookmarkId}`, { method: 'PUT', body: JSON.stringify(change) })
   }
   deleteBookmark(bookmarkId: number) { return this.call<{ ok: boolean }>(`/api/bookmarks/${bookmarkId}`, { method: 'DELETE' }) }
+
+  sourceKinds() { return this.call<SourceKindInfo[]>('/api/sources/kinds') }
+  sources() { return this.call<Source[]>('/api/sources') }
+  addSource(source: { kind: SourceKind; name: string; url: string; username?: string; secret?: string; config?: Record<string, unknown> }) {
+    return this.call<Source>('/api/sources', { method: 'POST', body: JSON.stringify(source) })
+  }
+  changeSource(id: number, change: { name?: string; url?: string; username?: string; secret?: string; config?: Record<string, unknown>; enabled?: boolean }) {
+    return this.call<Source>(`/api/sources/${id}`, { method: 'PUT', body: JSON.stringify(change) })
+  }
+  deleteSource(id: number) { return this.call<{ ok: boolean }>(`/api/sources/${id}`, { method: 'DELETE' }) }
+  scanSource(id: number) { return this.call<{ files: number; new: number; changed: number; removed: number }>(`/api/sources/${id}/scan`, { method: 'POST' }) }
 }

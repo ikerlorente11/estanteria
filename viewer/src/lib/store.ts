@@ -1,6 +1,6 @@
 /** What every page of the app shares: the API, the images, the library's state and how to move around. */
 import { inject, reactive, type InjectionKey } from 'vue'
-import type { Api, Item, LibraryStatus, Series } from './api.ts'
+import type { Api, Item, LibraryStatus, Series, Source } from './api.ts'
 import type { ImageCache } from './images.ts'
 import type { View } from './views.ts'
 
@@ -53,6 +53,12 @@ export function percentOf(item: Item): number {
   if (!p) return 0
   if (p.finished) return 1
   return Math.max(0, Math.min(1, p.percent || 0))
+}
+
+/** The name of the library an item comes from ('' for the user's own Archivador). */
+export function sourceName(item: Item, sources: Source[] | undefined): string {
+  if (!item.source_id) return ''
+  return sources?.find((s) => s.id === item.source_id)?.name || 'Biblioteca externa'
 }
 
 export function sizeLabel(bytes: number): string {

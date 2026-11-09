@@ -1,0 +1,27 @@
+{
+  "name": "estanteria-viewer",
+  "version": "0.2.0",
+  "description": "La Estantería: la biblioteca y los visores de cómic y de libro (componentes Vue), compartidos por la web del drive, el escritorio y Android",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./ui.css": "./src/lib/ui.css"
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "test": "node --experimental-strip-types test/layout.test.ts && node --experimental-strip-types test/views.test.ts"
+  },
+  "dependencies": {
+    "epubjs": "^0.3.93"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vue": "^3.4.21"
+  }
+}

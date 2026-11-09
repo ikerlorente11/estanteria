@@ -9,6 +9,9 @@
         <h1 class="es-h1">{{ listing?.title || label }}</h1>
       </div>
       <span class="es-grow"></span>
+      <button v-if="listing && listing.entries.length" class="es-btn" :disabled="savingAll" :title="`Guardar en tu estantería todo lo que hay aquí${listing.next ? ', incluidas las páginas siguientes' : ''}`" @click="keepAll">
+        <span v-if="savingAll" class="es-spin"></span><i v-else class="es-i es-i-bookmark" aria-hidden="true"></i> Guardar todo
+      </button>
       <input ref="searchEl" :value="q" class="es-search" type="search" :placeholder="`Buscar en ${label}`" aria-label="Buscar"
              @keydown.enter="search(($event.target as HTMLInputElement).value)" @input="typed(($event.target as HTMLInputElement).value)" />
     </header>
@@ -83,6 +86,7 @@ const listing = ref<CatalogListing | null>(null)
 const loading = ref(true)
 const loadingMore = ref(false)
 const busy = ref('')
+const savingAll = ref(false)
 const searchEl = ref<HTMLInputElement>()
 let typing: any = null
 let request = 0
@@ -154,6 +158,17 @@ async function unkeep(e: CatalogEntry) {
 async function read(e: CatalogEntry) {
   const id = e.item || (await keep(e))
   if (id) go({ v: 'read', id })
+}
+async function keepAll() {
+  if (!listing.value) return
+  savingAll.value = true
+  try {
+    const r = await store.api.keepListing(props.kind, props.path || '', props.q || '')
+    store.notify(r.saved ? `${r.saved} ${r.saved === 1 ? 'elemento guardado' : 'elementos guardados'} en tu estantería${r.complete ? '' : ' (había más: se ha parado en ese tope)'}.` : 'No había nada que guardar.')
+    store.refresh()
+    await load()
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  savingAll.value = false
 }
 async function toCloud(e: CatalogEntry) {
   busy.value = e.id

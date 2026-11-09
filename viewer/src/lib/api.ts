@@ -181,8 +181,10 @@ export interface ItemQuery {
   sort?: 'series' | 'title' | 'added' | 'modified'
   limit?: number
   offset?: number
-  /** 'archivador', or a source id */
+  /** 'archivador', 'external' (every outside library and catalogue), or a source id */
   source?: string
+  /** only what is right in `folder`, not in its subfolders */
+  direct?: boolean
 }
 
 export interface ProgressUpdate {
@@ -291,6 +293,10 @@ export class Api {
   /** Keeps an entry on the shelf (it becomes an item) and, with 'archivador', copies its file to the cloud too. */
   keepEntry(kind: string, id: string, to: 'library' | 'archivador' = 'library') {
     return this.call<Item & { saved_to?: string }>(`/api/catalogs/${kind}/entries/${encodeURIComponent(id)}/save`, { method: 'POST', body: JSON.stringify({ to }) })
+  }
+  /** Keeps every entry of a listing (a series, a shelf, a search), page after page. */
+  keepListing(kind: string, path: string, q = '') {
+    return this.call<{ saved: number; source_id: number; complete: boolean }>(`/api/catalogs/${kind}/save-all`, { method: 'POST', body: JSON.stringify({ path, q }) })
   }
   /** Copies an item of an outside library or a catalogue into the reading folder of the cloud. */
   saveItem(id: number) { return this.call<{ path: string }>(`/api/items/${id}/save`, { method: 'POST' }) }

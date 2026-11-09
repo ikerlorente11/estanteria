@@ -336,3 +336,8 @@
 .es-entry-actions { display: flex; gap: 4px; align-items: center; }
 .es-entry-actions .es-btn.es-small { padding: 4px 9px; }
 .es-entry-kept .es-card-cover { outline: 2px solid var(--es-accent); outline-offset: 1px; }
+
+/* ---- the folders of Lectura ---- */
+.es-folder .es-cover-box { background: linear-gradient(160deg, var(--es-surface-3), var(--es-surface-2)); border: 1px solid var(--es-line); }
+.es-folder .es-cover-box img { opacity: .92; }
+.es-folder-mark { color: var(--es-accent); width: 14px; height: 14px; }

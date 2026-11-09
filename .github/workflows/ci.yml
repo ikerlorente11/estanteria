@@ -1,0 +1,31 @@
+name: CI
+
+# CI común (github.com/ikerlorente11/ci): en cada push, los tests del visor compartido (la web del drive, el escritorio
+# de PC Toolkit y la app Android lo importan de aquí).
+on:
+  push:
+    branches: [master]
+    paths-ignore: ["**.md", "docs/**", ".claude/**", "LICENSE"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**", ".claude/**", "LICENSE"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    uses: ikerlorente11/ci/.github/workflows/changes.yml@main
+    with:
+      filters: |
+        viewer: ['viewer/**']
+  viewer:
+    needs: changes
+    if: contains(fromJSON(needs.changes.outputs.changed), 'viewer')
+    uses: ikerlorente11/ci/.github/workflows/node.yml@main
+    with:
+      directory: viewer
+      manager: pnpm
+      install: pnpm install --no-frozen-lockfile
+      test: pnpm test

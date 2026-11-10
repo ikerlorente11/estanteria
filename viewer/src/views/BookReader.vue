@@ -11,7 +11,7 @@
         <button class="es-rbtn" :class="{ on: bookmarked }" :title="bookmarked ? 'Quitar el marcador (b)' : 'Marcar este punto (b)'" @click="toggleBookmark"><i class="es-i" :class="bookmarked ? 'es-i-bookmark-fill' : 'es-i-bookmark'" aria-hidden="true"></i></button>
         <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i><span v-if="bookmarks.length" class="es-rbadge">{{ bookmarks.length }}</span></button>
         <button class="es-rbtn" :class="{ on: panel === 'settings' }" title="Texto y aspecto" @click="toggle('settings')"><i class="es-i es-i-font" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
+        <button v-if="store.canFullscreen !== false" class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
     </header>
 

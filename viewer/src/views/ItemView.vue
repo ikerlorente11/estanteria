@@ -41,7 +41,10 @@
             </button>
             <button v-if="local" class="es-btn" title="Mostrar el archivo en el Explorador" @click="reveal"><i class="es-i es-i-computer" aria-hidden="true"></i> Mostrar en el Explorador</button>
             <button v-if="local && item.source_id === -1" class="es-btn" title="Quitar de Archivos sueltos (el archivo no se borra)" @click="unshelve"><i class="es-i es-i-delete" aria-hidden="true"></i> Quitar</button>
-            <a v-if="item.format !== 'folder' && !local" class="es-btn" href="#" :title="store.offline ? 'Bajar el archivo original a donde elijas' : ''" @click.prevent="download"><i class="es-i es-i-download" aria-hidden="true"></i> {{ store.offline ? 'Archivo' : 'Descargar' }}</a>
+            <a v-if="item.format !== 'folder' && !local" class="es-btn" :class="{ 'es-btn-done': dl?.state === 'done' }" href="#" :title="dl?.state === 'done' ? 'Descargado en este dispositivo: abrirlo con otra app' : dl?.state === 'error' ? dl.error || 'No se pudo descargar' : store.offline ? 'Bajar el archivo original a donde elijas' : ''" @click.prevent="download">
+              <span v-if="dl?.state === 'downloading'" class="es-spin"></span><i v-else class="es-i" :class="dl?.state === 'done' ? 'es-i-check' : 'es-i-download'" aria-hidden="true"></i>
+              {{ dl?.state === 'downloading' ? `Descargando ${dl.percent ?? 0} %` : dl?.state === 'done' ? 'Descargado' : dl?.state === 'error' ? 'Reintentar' : store.offline ? 'Archivo' : 'Descargar' }}
+            </a>
             <button v-if="item.source_id && !local && item.format !== 'folder'" class="es-btn" :disabled="saving" title="Copiar el archivo a la carpeta Lectura de tu Archivador" @click="toCloud">
               <span v-if="saving" class="es-spin"></span><i v-else class="es-i es-i-cloud" aria-hidden="true"></i> Guardar en El Archivador
             </button>
@@ -110,6 +113,8 @@ const origin = computed(() => (item.value ? sourceName(item.value, state.status?
 const local = computed(() => !!item.value && isLocal(item.value.id))
 const online = computed(() => store.offline?.state.online !== false)
 const pdfAs = loadSettings().pdf
+/** how the host's download of this file is going, when the host keeps downloads */
+const dl = computed(() => (item.value ? store.downloads?.[store.api.filePath(item.value.id)] : undefined))
 
 // ---- a file of this PC up to the Archivador ----
 /** null: not asked; 0: asking where; 0–1: how much went */

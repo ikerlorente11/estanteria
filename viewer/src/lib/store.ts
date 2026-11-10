@@ -24,8 +24,19 @@ export interface Store {
   offline?: Offline
   /** The files and folders of this device, when the app can read them (the desktop). */
   shelf?: LocalShelf
-  /** Saves a file of the service where the host wants (Android: through the app); without it, the browser downloads it. */
+  /** Saves a file of the service where the host wants (Android: through the app); without it, the browser downloads it.
+   * A host that keeps what it downloaded tells how each one is going in `downloads` (by the file's API path) and opens
+   * it when asked again once done. */
   saveFile?: (path: string, name: string) => void
+  downloads?: Record<string, DownloadState>
+  /** false when the host is already full screen (the Android app): the readers hide the button */
+  canFullscreen?: boolean
+}
+
+export interface DownloadState {
+  state: 'downloading' | 'done' | 'error'
+  percent?: number
+  error?: string
 }
 
 export const STORE: InjectionKey<Store> = Symbol('estanteria')

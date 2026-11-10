@@ -85,7 +85,7 @@
 <script setup lang="ts">
 import { computed, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
 import { Api, CatalogView, CatalogsView, Cover, DownloadsView, HomeView, LocalShelf, Offline, ImageCache, ItemView, LibraryView, ReaderView, SeriesView, SourcesView, STORE,
-         createState, queryFromView, viewFromQuery, type Item, type Store, type View } from 'estanteria-viewer'
+         createState, queryFromView, viewFromQuery, type DownloadState, type Item, type Store, type View } from 'estanteria-viewer'
 import { HOST_BASE, TOKEN, forgetToken, hostBackend, hostShelf, hostUrl, info, loadConnection, saveConnection, tellApp, type Connection } from './lib/host'
 
 /**
@@ -172,8 +172,10 @@ function makeStore(): Store {
   const covers = new ImageCache(current, 400)
   const pages = new ImageCache(current, 24)
   const s: Store = { api: current, covers, pages, readingRoot: 'Lectura', state, refresh, go: go as any, back, notify, read,
-    // the app downloads the file (through the host, with the token in the URL) and offers to share or open it
-    saveFile: (path, name) => { tellApp({ type: 'download', url: new URL(hostUrl(path), window.location.href).toString(), name }); notify(`Descargando ${name}…`) } }
+    // the app downloads the file (through the host, with the token in the URL) into its own folder, tells how it goes
+    // (window.__estanteriaDownload) and opens it with another app when asked again once done
+    saveFile: (path, name) => tellApp({ type: 'download', url: new URL(hostUrl(path), window.location.href).toString(), name, path }),
+    downloads, canFullscreen: false }
   if (hostInfo.offline) {
     const keeper = offline.value || new Offline(hostBackend())
     keeper.attach(current)
@@ -265,6 +267,12 @@ async function openLocal(uris: string[]) {
 }
 ;(window as any).__estanteriaOpen = (uri: string) => openLocal([uri])
 ;(window as any).__estanteriaNotify = (text: string, error = false) => notify(text, error)
+// ---- downloads kept by the app: how each is going, by the file's API path ----
+const downloads = reactive<Record<string, DownloadState>>({})
+;(window as any).__estanteriaDownload = (path: string, state: DownloadState | null) => {
+  if (state) downloads[path] = state
+  else delete downloads[path]
+}
 watch(connected, (ok) => { if (ok && waiting.length) { const uris = waiting; waiting = []; openLocal(uris) } })
 
 // without connection, look again every so often (and when Android says the network is back)

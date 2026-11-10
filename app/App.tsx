@@ -6,6 +6,8 @@ import { StatusBar } from 'expo-status-bar'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import * as SplashScreen from 'expo-splash-screen'
 import * as NavigationBar from 'expo-navigation-bar'
+import * as IntentLauncher from 'expo-intent-launcher'
+import * as SystemUI from 'expo-system-ui'
 import * as FileSystem from 'expo-file-system/legacy'
 
 import EstanteriaHost from './modules/estanteria-host'
@@ -21,17 +23,15 @@ SplashScreen.preventAutoHideAsync().catch(() => {})
 const DARK = '#141417'
 const LIGHT = '#fafafc'
 
-/** The folder downloads go to: the user picks it once (Android asks through its own chooser) and it is remembered. */
-const FOLDER_FILE = `${FileSystem.documentDirectory}downloads-folder.txt`
-async function downloadsFolder(): Promise<string | null> {
-  try {
-    const kept = await FileSystem.readAsStringAsync(FOLDER_FILE)
-    if (kept) return kept
-  } catch (_) { /* not chosen yet */ }
-  const asked = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync()
-  if (!asked.granted) return null
-  await FileSystem.writeAsStringAsync(FOLDER_FILE, asked.directoryUri).catch(() => {})
-  return asked.directoryUri
+/** Downloads live in the app's own files (Android/data/<app>/files/descargas), like the OpenCloud app keeps its own:
+ * nothing to choose, and they can be opened with another app from here. */
+const DOWNLOADS = `${FileSystem.documentDirectory}descargas/`
+function fileNameOf(raw: string): string { return raw.replace(/[\/:*?"<>|]+/g, '_') }
+function mimeOf(name: string): string {
+  const ext = name.toLowerCase().split('.').pop() || ''
+  return { pdf: 'application/pdf', epub: 'application/epub+zip', cbz: 'application/vnd.comicbook+zip', cbr: 'application/vnd.comicbook-rar',
+    cb7: 'application/x-7z-compressed', zip: 'application/zip', rar: 'application/vnd.rar', mobi: 'application/x-mobipocket-ebook',
+    azw3: 'application/vnd.amazon.mobi8-ebook', fb2: 'application/x-fictionbook+xml' }[ext] || 'application/octet-stream'
 }
 
 // In development the page's console and errors come out here (Metro): the web view does not log them itself.
@@ -48,6 +48,17 @@ const DEV_CONSOLE = __DEV__ ? `(function () {
   window.addEventListener('unhandledrejection', function (e) { send('error', ['unhandled: ' + (e.reason && e.reason.stack || e.reason)]); });
   ['log', 'info', 'warn', 'error'].forEach(function (k) { var o = console[k]; console[k] = function () { send(k, arguments); o.apply(console, arguments); }; });
 })(); true;` : undefined
+
+/** Which API path each downloaded file came from, so the page shows them as done from the start. */
+const INDEX = `${FileSystem.documentDirectory}descargas-index.json`
+async function readIndex(): Promise<Record<string, string>> {
+  try { return JSON.parse(await FileSystem.readAsStringAsync(INDEX)) } catch (_) { return {} }
+}
+async function remember(path: string, name: string): Promise<void> {
+  const index = await readIndex()
+  index[path] = name
+  await FileSystem.writeAsStringAsync(INDEX, JSON.stringify(index)).catch(() => {})
+}
 
 export default function App() {
   const system = useColorScheme()
@@ -83,6 +94,7 @@ export default function App() {
     if (Platform.OS !== 'android') return
     NavigationBar.setVisibilityAsync('hidden').catch(() => {})
   }, [])
+  useEffect(() => { SystemUI.setBackgroundColorAsync(scheme === 'dark' ? DARK : LIGHT).catch(() => {}) }, [scheme])
 
   // the page follows the system's theme through here: its own media query follows the app's theme, not the system's
   useEffect(() => {
@@ -110,38 +122,63 @@ export default function App() {
     return () => sub.remove()
   }, [open])
 
-  // a file of the service, fetched through the host and put in the folder the user chose once (Descargas, say);
-  // progress and the outcome show in the page
+  // a file of the service, fetched through the host into the app's own folder; the page shows how it goes on the
+  // item's button (window.__estanteriaDownload) and, once there, asking again opens it with another app
   const tell = useCallback((text: string, error = false) => {
     web.current?.injectJavaScript(`window.__estanteriaNotify && window.__estanteriaNotify(${JSON.stringify(text)}, ${error}); true;`)
   }, [])
-  const download = useCallback(async (url: string, rawName: string) => {
-    const name = rawName.replace(/[\\/:*?"<>|]+/g, '_')
-    const tmp = `${FileSystem.cacheDirectory}${Date.now()}-${name}`
+  const report = useCallback((path: string, state: { state: 'downloading' | 'done' | 'error'; percent?: number; error?: string } | null) => {
+    web.current?.injectJavaScript(`window.__estanteriaDownload && window.__estanteriaDownload(${JSON.stringify(path)}, ${JSON.stringify(state)}); true;`)
+  }, [])
+  const openFile = useCallback(async (uri: string, name: string) => {
     try {
-      const folder = await downloadsFolder()
-      if (!folder) { tell('Sin carpeta donde guardar: elige una para las descargas.', true); return }
+      const content = await FileSystem.getContentUriAsync(uri)
+      await IntentLauncher.startActivityAsync('android.intent.action.VIEW', { data: content, flags: 1, type: mimeOf(name) })
+    } catch (err: any) {
+      tell(`No hay con qué abrir ${name}: ${err?.message || err}`, true)
+    }
+  }, [tell])
+  const download = useCallback(async (url: string, rawName: string, path: string) => {
+    const name = fileNameOf(rawName)
+    const target = `${DOWNLOADS}${name}`
+    try {
+      await FileSystem.makeDirectoryAsync(DOWNLOADS, { intermediates: true })
+      const have = await FileSystem.getInfoAsync(target)
+      if (have.exists && have.size > 0) { report(path, { state: 'done' }); await openFile(target, name); return }
       let shown = -1
-      const job = FileSystem.createDownloadResumable(url, tmp, {}, (p) => {
+      report(path, { state: 'downloading', percent: 0 })
+      const job = FileSystem.createDownloadResumable(url, `${target}.part`, {}, (p) => {
         const pct = p.totalBytesExpectedToWrite > 0 ? Math.floor((p.totalBytesWritten / p.totalBytesExpectedToWrite) * 100) : -1
-        if (pct !== shown && (pct === -1 || pct % 5 === 0)) { shown = pct; tell(pct >= 0 ? `Descargando ${name}… ${pct} %` : `Descargando ${name}… ${Math.round(p.totalBytesWritten / 1e6)} MB`) }
+        if (pct !== shown) { shown = pct; report(path, { state: 'downloading', percent: Math.max(0, pct) }) }
       })
       const result = await job.downloadAsync()
       if (!result || result.status >= 400) throw new Error(`HTTP ${result?.status ?? '?'}`)
-      const mime = result.headers['content-type'] || result.headers['Content-Type'] || 'application/octet-stream'
-      const saved = await FileSystem.StorageAccessFramework.createFileAsync(folder, name, mime.split(';')[0])
-      await FileSystem.StorageAccessFramework.copyAsync({ from: result.uri, to: saved })
-      tell(`Guardado: ${name}`)
+      await FileSystem.moveAsync({ from: result.uri, to: target })
+      await remember(path, name)
+      report(path, { state: 'done' })
+      tell(`Descargado: ${name}`)
     } catch (err: any) {
-      tell(`No se pudo descargar: ${err?.message || err}`, true)
-    } finally {
-      FileSystem.deleteAsync(tmp, { idempotent: true }).catch(() => {})
+      report(path, { state: 'error', error: String(err?.message || err) })
+      tell(`No se pudo descargar ${name}: ${err?.message || err}`, true)
+      FileSystem.deleteAsync(`${target}.part`, { idempotent: true }).catch(() => {})
     }
-  }, [tell])
+  }, [openFile, report, tell])
+
+  // what is already downloaded, so the page shows it from the start
+  const announceDownloads = useCallback(async () => {
+    try {
+      const index = await readIndex()
+      for (const [path, name] of Object.entries(index)) {
+        const have = await FileSystem.getInfoAsync(`${DOWNLOADS}${name}`)
+        if (have.exists) report(path, { state: 'done' })
+      }
+    } catch (_) { /* no downloads yet */ }
+  }, [report])
 
   const onMessage = useCallback((e: WebViewMessageEvent) => {
     let msg: any
     try { msg = JSON.parse(e.nativeEvent.data) } catch (_) { return }
+    if (msg.type === 'ready') announceDownloads()
     if (msg.type === 'log') {
       ;(msg.level === 'error' ? console.error : msg.level === 'warn' ? console.warn : console.log)('[web]', ...(msg.args || []))
     } else if (msg.type === 'ready') {
@@ -155,7 +192,7 @@ export default function App() {
     } else if (msg.type === 'open-url' && typeof msg.url === 'string') {
       Linking.openURL(msg.url).catch(() => {})
     } else if (msg.type === 'download' && typeof msg.url === 'string') {
-      download(String(msg.url), String(msg.name || 'archivo'))
+      download(String(msg.url), String(msg.name || 'archivo'), String(msg.path || msg.url))
     }
   }, [open])
 

@@ -1,6 +1,6 @@
 <template>
   <div ref="root" class="es-reader" :class="[`es-bg-${settings.background}`, { 'es-ui-hidden': !uiShown, 'es-strip-mode': settings.mode === 'strip' }]"
-       tabindex="0" @keydown="onKey" @mousemove="showUi" @touchstart.passive="touchStart" @touchend.passive="touchEnd">
+       tabindex="0" @keydown="onKey" @mousemove="onMouseMove" @touchstart.passive="touchStart" @touchend.passive="touchEnd">
     <header class="es-rtop" :inert="!uiShown">
       <button class="es-rbtn" title="Volver (Esc)" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
@@ -17,7 +17,7 @@
         <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i><span v-if="bookmarks.length" class="es-rbadge">{{ bookmarks.length }}</span></button>
         <button v-if="item.kind === 'pdf' && item.meta?.text !== false" class="es-rbtn es-rbtn-text" title="Leer como documento: texto que se puede seleccionar y zoom sin perder nitidez" @click="asDocument"><i class="es-i es-i-font" aria-hidden="true"></i> Documento</button>
         <button class="es-rbtn" :class="{ on: panel === 'settings' }" title="Ajustes" @click="toggle('settings')"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
+        <button v-if="store.canFullscreen !== false" class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
     </header>
 
@@ -304,6 +304,14 @@ let touch: { x: number; y: number; t: number } | null = null
 function touchStart(event: TouchEvent) {
   const t = event.touches[0]
   touch = { x: t.clientX, y: t.clientY, t: Date.now() }
+  lastTouchAt = Date.now()
+}
+/** A finger on the screen also fires a mouse move: the chrome then only answers to taps (the middle of
+ * the page shows or hides it, and it stays), as a real pointer's moves would show it for a moment. */
+let lastTouchAt = 0
+function onMouseMove() {
+  if (Date.now() - lastTouchAt < 1500 || matchMedia('(hover: none)').matches) return
+  showUi()
 }
 function touchEnd(event: TouchEvent) {
   if (!touch || settings.mode === 'strip' || zoom.value !== 1) return

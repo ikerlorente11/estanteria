@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { Api } from '../src/lib/api.ts'
-import { Offline, type OfflineBackend, type OfflineProgress } from '../src/lib/offline.ts'
+import { LOCAL_BASE, Offline, type OfflineBackend, type OfflineProgress } from '../src/lib/offline.ts'
 
 const comic = { id: 7, source_id: null, path: '/Lectura/A/A 1.cbz', folder: 'A', name: 'A 1.cbz', format: 'cbz', kind: 'comic', size: 10, modified: 1, title: 'Uno',
                 series: 'A', number: 1, author: null, year: null, summary: null, pages: 3, direction: 'ltr', cover: true, state: 'ready', error: null,
@@ -100,4 +100,19 @@ assert.equal(offline.state.jobs[9].done, 1)
 handler({ id: 9, done: 1, total: 2, bytes: 10, error: 'página 2: HTTP 422', finished: false, cancelled: false })
 assert.equal(offline.status(9), 'error')
 assert.equal(offline.state.jobs[9].error, 'página 2: HTTP 422')
+// a file of this computer: answered here even with the service there, never sent to it
+const localId = LOCAL_BASE + 5
+offline.addLocal({ item: { ...comic, id: localId, title: 'Local', bookmarks: [] } as any, width: 0, added: 300, bytes: 9 })
+const before = sent.length
+assert.equal((await api.item(localId)).title, 'Local')
+assert.equal((await api.setProgress(localId, { page: 2, percent: 1, finished: true })).page, 2)
+assert.equal((await api.item(localId)).progress?.finished, true)
+const localNote = await api.addBookmark(localId, { kind: 'note', page: 0, note: 'mía' })
+assert.equal((await api.changeBookmark(localId, localNote.id, { note: 'mía, cambiada' })).note, 'mía, cambiada')
+assert.deepEqual((await api.item(localId)).bookmarks.map((b) => b.note), ['mía, cambiada'])
+await api.deleteBookmark(localNote.id)
+assert.deepEqual((await api.item(localId)).bookmarks, [])
+await assert.rejects(api.convertToEpub(localId), (err: any) => err.status === 409)
+assert.equal(offline.local(`/api/items/${localId}/pages/1?w=1600`), `http://offline.localhost/acc/${localId}/p/1`)
+assert.equal(sent.length, before)
 console.log('offline ok')

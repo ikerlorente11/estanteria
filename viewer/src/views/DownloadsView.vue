@@ -13,7 +13,7 @@
     <p v-if="!offline" class="es-muted">Esta versión de La Estantería no guarda copias; usa la app de escritorio o la de Android.</p>
     <template v-else>
       <p class="es-muted es-intro">
-        Lo descargado se lee sin conexión y, aunque haya, se abre desde este equipo, al instante. El progreso que hagas sin conexión se envía en cuanto vuelva.
+        Lo descargado se lee sin conexión y, aunque haya, se abre desde este equipo, al instante. El progreso que hagas sin conexión se envía en cuanto vuelva. Los cómics y libros de este equipo que abras con La Estantería también aparecen aquí (su progreso y sus notas se quedan en el equipo).
         <template v-if="offline.count"> Ocupa {{ sizeLabel(offline.bytes) }}<template v-if="where"> en <span class="es-path">{{ where }}</span></template>.</template>
       </p>
 

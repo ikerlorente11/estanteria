@@ -81,6 +81,9 @@ const HINTS: Record<string, string> = {
   komga: 'Un servidor Komga: entra con tu usuario y contraseña de Komga (o deja el usuario vacío y pon una clave de API). El progreso de lectura se guarda en Komga.',
   kavita: 'Un servidor Kavita: hace falta tu clave de API (en Kavita: tu usuario › Ajustes › API). El progreso de lectura se guarda en Kavita.',
   opds: 'Cualquier catálogo OPDS (Calibre-Web, Ubooquity, el servidor de Calibre…): la dirección del catálogo y, si lo pide, usuario y contraseña. El progreso se guarda aquí.',
+  opds2: 'Un catálogo OPDS 2.0 (JSON), como el de Komga en /opds/v2/catalog: los cómics con manifiesto se leen página a página. El progreso se guarda aquí.',
+  audiobookshelf: 'Un servidor Audiobookshelf: sus libros electrónicos (epub, pdf, cbz…; los audiolibros no). Tu usuario y contraseña, o el usuario vacío y una clave de API. El progreso se guarda también en Audiobookshelf.',
+  suwayomi: 'Un servidor Suwayomi (el de Tachiyomi/Mihon): los manga de su biblioteca, un elemento por capítulo. Usuario y contraseña solo si los tiene activados. Lo leído se guarda también en Suwayomi.',
   webdav: 'Una carpeta WebDAV (otro Nextcloud u OpenCloud, un NAS): la dirección de la carpeta con los archivos. El progreso se guarda aquí.'
 }
 const hint = computed(() => HINTS[form.kind] || '')

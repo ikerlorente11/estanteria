@@ -66,6 +66,20 @@ function write(key: string, value: unknown): void {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch (_) { /* storage full or off: only this session */ }
 }
 
+/** From here on, an item is a file of this device (opened from the file browser, not from the service):
+ * kept like a download, but its progress and notes stay here (see the desktop's local.rs). */
+export const LOCAL_BASE = 2 ** 50
+
+export function isLocal(id: number): boolean {
+  return id >= LOCAL_BASE
+}
+
+function refused(message: string): Error {
+  const err: any = new Error(message)
+  err.status = 409
+  return err
+}
+
 /** A book is kept as its file; anything else as its pages. */
 export function keptAsFile(item: Item): boolean {
   return item.kind === 'book'
@@ -131,6 +145,11 @@ export class Offline implements ApiOffline {
   }
 
   has(id: number): boolean { return !!this.state.entries[id] }
+
+  /** A file of this device the host just unpacked (it is already in its folder): shown at once. */
+  addLocal(entry: OfflineEntry): void {
+    if (entry?.item?.id) this.state.entries[entry.item.id] = entry
+  }
   /** 'done', 'running', 'waiting', 'error' or '' (not kept). */
   status(id: number): string { return this.state.entries[id] ? 'done' : this.state.jobs[id]?.state || '' }
   get count(): number { return Object.keys(this.state.entries).length }
@@ -319,6 +338,62 @@ export class Offline implements ApiOffline {
                modified: Math.max(...items.map((i) => i.modified)), added: Math.max(...items.map((i) => i.added)),
                last_read: Math.max(0, ...items.map((i) => i.progress?.updated || 0)) || null }
     }).sort((a, b) => a.series.localeCompare(b.series))
+  }
+
+  /** What only this device can answer, with or without connection: the files of this device. */
+  own(method: string, path: string, body: unknown): unknown {
+    const now = Date.now() / 1000
+    const b = (body || {}) as Record<string, any>
+    const base = path.split('?')[0]
+    const m = base.match(/^\/api\/items\/(\d+)(\/.*)?$/)
+    if (m && isLocal(Number(m[1]))) {
+      const id = Number(m[1])
+      const rest = m[2] || ''
+      const entry = this.state.entries[id]
+      if (!entry) throw refused('Ese archivo ya no está en Descargas: ábrelo otra vez desde el Explorador.')
+      if (!rest && method === 'GET') return { ...this.withProgress(entry.item), bookmarks: this.marksOf(id) }
+      if (rest === '/progress' && method === 'DELETE') {
+        delete this.known[id]
+        this.save()
+        return { ok: true }
+      }
+      if (rest === '/progress' && method === 'PUT') {
+        const progress: Progress = { page: b.page ?? null, location: b.location ?? null, percent: b.percent ?? 0, finished: !!b.finished,
+                                     device: b.device ?? null, updated: now }
+        this.known[id] = progress
+        this.save()
+        return progress
+      }
+      if (rest === '/bookmarks' && method === 'POST') {
+        const made: Bookmark = { id: this.marks.next, kind: b.kind || 'bookmark', page: b.page ?? null, location: b.location ?? null,
+                                 excerpt: b.excerpt || '', note: b.note || '', created: now, updated: null }
+        this.marks.next -= 1
+        this.knownMarks[id] = [...this.marksBase(id), made]
+        this.saveMarks()
+        write(KNOWN_MARKS_KEY, this.knownMarks)
+        return made
+      }
+      const one = rest.match(/^\/bookmarks\/(-?\d+)$/)
+      if (one && method === 'PUT') {
+        const was = this.marksBase(id).find((x) => x.id === Number(one[1]))
+        if (!was) throw refused('Esa nota ya no está.')
+        const changed = { ...was, ...b, updated: now }
+        this.knownMarks[id] = this.marksBase(id).map((x) => (x.id === was.id ? changed : x))
+        write(KNOWN_MARKS_KEY, this.knownMarks)
+        return changed
+      }
+      throw refused('Esto solo se puede con lo que está en El Archivador; este es un archivo de este PC.')
+    }
+    const gone = base.match(/^\/api\/bookmarks\/(-?\d+)$/)
+    if (gone && method === 'DELETE') {
+      const bid = Number(gone[1])
+      const owner = Object.keys(this.knownMarks).map(Number).find((i) => isLocal(i) && this.knownMarks[i].some((x) => x.id === bid))
+      if (owner === undefined) return undefined
+      this.knownMarks[owner] = this.knownMarks[owner].filter((x) => x.id !== bid)
+      write(KNOWN_MARKS_KEY, this.knownMarks)
+      return { ok: true }
+    }
+    return undefined
   }
 
   /** A change made while the service does not answer: kept to send later, answered from here. */

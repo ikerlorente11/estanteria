@@ -76,7 +76,7 @@ export interface Series {
   last_read: number | null
 }
 
-export type SourceKind = 'komga' | 'kavita' | 'opds' | 'webdav'
+export type SourceKind = 'komga' | 'kavita' | 'opds' | 'opds2' | 'audiobookshelf' | 'suwayomi' | 'webdav'
 
 export interface Source {
   id: number
@@ -209,6 +209,8 @@ export interface ApiOffline {
   online(ok: boolean): void
   /** the id the service gave a bookmark made offline (temporary ids are below 0) */
   bookmarkId?(id: number): number
+  /** the answer for what only this device has (the files of this device), with or without connection */
+  own?(method: string, path: string, body: unknown): unknown
 }
 
 /** Answers that mean the service is not there (the proxy in front answers instead). */
@@ -254,6 +256,8 @@ export class Api {
   }
 
   private async call<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const mine = this.offline?.own?.((init.method || 'GET').toUpperCase(), path, init.body ? JSON.parse(String(init.body)) : undefined)
+    if (mine !== undefined) return mine as T
     let res: Response
     try {
       res = await fetch(this.baseUrl + path, { ...init, headers: this.headers({ 'Content-Type': 'application/json', ...((init.headers as any) || {}) }) })
@@ -354,7 +358,9 @@ export class Api {
   private bookmarkId(id: number): number { return this.offline?.bookmarkId ? this.offline.bookmarkId(id) : id }
 
   /** A change to a bookmark not sent yet stays on this device (it changes what will be sent). */
-  private markCall<T>(path: string, init: RequestInit): Promise<T> {
+  private async markCall<T>(path: string, init: RequestInit): Promise<T> {
+    const mine = this.offline?.own?.(String(init.method), path, init.body ? JSON.parse(String(init.body)) : undefined)
+    if (mine !== undefined) return mine as T
     if (/\/-\d+$/.test(path) && this.offline) {
       const kept = this.offline.write(String(init.method), path, init.body ? JSON.parse(String(init.body)) : undefined)
       if (kept !== undefined) return Promise.resolve(kept as T)

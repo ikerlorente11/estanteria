@@ -6,7 +6,7 @@
           <a href="#" @click.prevent="openFolder('')">{{ rootName }}</a>
           <template v-for="c in crumbs" :key="c.path"> › <a href="#" @click.prevent="openFolder(c.path)">{{ c.name }}</a></template>
         </p>
-        <h1 class="es-h1">{{ folderMode && crumbs.length ? crumbs[crumbs.length - 1].name : localSource ? rootName : 'Biblioteca' }}</h1>
+        <h1 class="es-h1">{{ folderMode && crumbs.length ? crumbs[crumbs.length - 1].name : localSource ? rootName : 'Estantería' }}</h1>
       </div>
       <span class="es-grow"></span>
       <button v-if="localSource && store.shelf" class="es-btn" :disabled="store.shelf.state.scanning" title="Mirar otra vez qué hay en la carpeta" @click="rescan">

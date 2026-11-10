@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, BackHandler, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native'
+import { ActivityIndicator, Appearance, BackHandler, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
@@ -56,11 +56,17 @@ export default function App() {
       .then(({ url, token }) => {
         // in development the page can come from Vite on the PC (see .env.development); the host stays where it is
         const dev = __DEV__ && process.env.EXPO_PUBLIC_VIEWER_URL
-        setPage(dev ? `${dev.replace(/\/+$/, '')}/?t=${token}&host=${encodeURIComponent(url.replace(/\/+$/, ''))}` : `${url}?t=${token}`)
+        const scheme = `&scheme=${Appearance.getColorScheme() || 'light'}`
+        setPage(dev ? `${dev.replace(/\/+$/, '')}/?t=${token}&host=${encodeURIComponent(url.replace(/\/+$/, ''))}${scheme}` : `${url}?t=${token}${scheme}`)
       })
       .catch((err) => setError(String(err?.message || err)))
       .finally(() => SplashScreen.hideAsync().catch(() => {}))
   }, [])
+
+  // the page follows the system's theme through here: its own media query follows the app's theme, not the system's
+  useEffect(() => {
+    web.current?.injectJavaScript(`window.__estanteriaScheme && window.__estanteriaScheme(${JSON.stringify(system || 'light')}); true;`)
+  }, [system])
 
   // the back button goes back in the page (its views live in the hash); on the first view it leaves the app
   useEffect(() => {

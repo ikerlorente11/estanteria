@@ -42,7 +42,7 @@ html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, Roboto, sans-ser
 /* the gear: only on a phone (on a wide screen the account link lives at the bottom of the sidebar) */
 .es-gear { display: none; }
 @media (max-width: 760px) {
-  .es { --es-bar: 68px; }
+  .es { --es-bar: 76px; }
   .es-nav a { padding: 10px 4px; }
   .es-navcount { margin-left: 0; }
   .es-btn { min-height: 38px; }

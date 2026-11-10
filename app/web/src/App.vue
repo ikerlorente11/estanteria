@@ -11,7 +11,7 @@
         </div>
         <nav class="es-nav">
           <a href="#" :class="{ on: view.v === 'home' }" @click.prevent="go({ v: 'home' })"><span class="es-ni"><i class="es-i es-i-home" aria-hidden="true"></i></span> Inicio</a>
-          <a href="#" :class="{ on: view.v === 'library' }" @click.prevent="go({ v: 'library' })"><span class="es-ni"><i class="es-i es-i-grid" aria-hidden="true"></i></span> Biblioteca</a>
+          <a href="#" :class="{ on: view.v === 'library' }" @click.prevent="go({ v: 'library' })"><span class="es-ni"><i class="es-i es-i-grid" aria-hidden="true"></i></span> Estantería</a>
           <a href="#" :class="{ on: view.v === 'catalogs' || view.v === 'catalog' }" @click.prevent="go({ v: 'catalogs' })"><span class="es-ni"><i class="es-i es-i-cloud" aria-hidden="true"></i></span> Catálogos</a>
           <a href="#" :class="{ on: view.v === 'sources' }" @click.prevent="go({ v: 'sources' })"><span class="es-ni"><i class="es-i es-i-server" aria-hidden="true"></i></span> Bibliotecas</a>
           <a v-if="offline" href="#" :class="{ on: view.v === 'downloads' }" @click.prevent="go({ v: 'downloads' })">
@@ -112,12 +112,16 @@ const THEMES: { id: Theme; label: string; icon: string }[] = [
 ]
 const THEME_KEY = 'estanteria.theme'
 const theme = ref<Theme>((() => { try { return (localStorage.getItem(THEME_KEY) as Theme) || 'system' } catch (_) { return 'system' } })())
+// what the system is set to, as the app says (the web view's own media query follows the app's theme, not the system's)
+let systemScheme: 'light' | 'dark' | '' = (new URLSearchParams(window.location.search).get('scheme') as any) || ''
 function applyTheme() {
   const t = theme.value
-  if (t === 'system') delete document.documentElement.dataset.theme
-  else document.documentElement.dataset.theme = t
+  const effective = t === 'system' ? systemScheme : t
+  if (!effective) delete document.documentElement.dataset.theme
+  else document.documentElement.dataset.theme = effective
   tellApp({ type: 'theme', value: t })
 }
+;(window as any).__estanteriaScheme = (s: string) => { systemScheme = s === 'dark' ? 'dark' : s === 'light' ? 'light' : ''; applyTheme() }
 function setTheme(t: Theme) {
   theme.value = t
   try { localStorage.setItem(THEME_KEY, t) } catch (_) {}

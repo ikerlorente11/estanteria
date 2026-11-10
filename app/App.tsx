@@ -19,8 +19,25 @@ SplashScreen.preventAutoHideAsync().catch(() => {})
 const DARK = '#141417'
 const LIGHT = '#fafafc'
 
+// In development the page's console and errors come out here (Metro): the web view does not log them itself.
+const DEV_CONSOLE = __DEV__ ? `(function () {
+  var rn = window.ReactNativeWebView;
+  function send(level, args) {
+    try { rn.postMessage(JSON.stringify({ type: 'log', level: level, args: Array.prototype.map.call(args, function (x) {
+      if (typeof x === 'string') return x;
+      if (x && x.stack) return String(x.stack);
+      try { return JSON.stringify(x); } catch (e) { return String(x); }
+    }) })); } catch (e) {}
+  }
+  window.addEventListener('error', function (e) { send('error', [e.message + ' @ ' + e.filename + ':' + e.lineno]); });
+  window.addEventListener('unhandledrejection', function (e) { send('error', ['unhandled: ' + (e.reason && e.reason.stack || e.reason)]); });
+  ['log', 'info', 'warn', 'error'].forEach(function (k) { var o = console[k]; console[k] = function () { send(k, arguments); o.apply(console, arguments); }; });
+})(); true;` : undefined
+
 export default function App() {
-  const scheme = useColorScheme()
+  const system = useColorScheme()
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system')
+  const scheme = theme === 'system' ? system : theme
   const [page, setPage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const web = useRef<React.ComponentRef<typeof WebView> | null>(null)
@@ -69,9 +86,13 @@ export default function App() {
   const onMessage = useCallback((e: WebViewMessageEvent) => {
     let msg: any
     try { msg = JSON.parse(e.nativeEvent.data) } catch (_) { return }
-    if (msg.type === 'ready') {
+    if (msg.type === 'log') {
+      ;(msg.level === 'error' ? console.error : msg.level === 'warn' ? console.warn : console.log)('[web]', ...(msg.args || []))
+    } else if (msg.type === 'ready') {
       ready.current = true
       for (const uri of pending.current.splice(0)) open(uri)
+    } else if (msg.type === 'theme') {
+      setTheme(msg.value === 'light' || msg.value === 'dark' ? msg.value : 'system')
     } else if (msg.type === 'reading') {
       if (msg.on) activateKeepAwakeAsync().catch(() => {})
       else deactivateKeepAwake().catch(() => {})
@@ -105,6 +126,8 @@ export default function App() {
             textZoom={100}
             forceDarkOn={false}
             onMessage={onMessage}
+            injectedJavaScriptBeforeContentLoaded={DEV_CONSOLE}
+            onError={(e: { nativeEvent: { description?: string; url?: string } }) => console.warn('[web] no carga', e.nativeEvent.description, e.nativeEvent.url)}
             onNavigationStateChange={(s: { canGoBack: boolean }) => { canGoBack.current = s.canGoBack }}
             onShouldStartLoadWithRequest={(req: { url: string }) => {
               if (req.url.startsWith('http://127.0.0.1') || req.url.startsWith('http://localhost')) return true

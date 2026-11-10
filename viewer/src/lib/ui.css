@@ -248,6 +248,9 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
   .es-rcount { min-width: 54px; font-size: 12px; }
   .es-rtitle small { display: none; }
   .es-rsep { display: none; }
+  /* the + button sits in the corner of the page, above the bar at the bottom, not on it */
+  .es-fab-wrap { right: 16px; bottom: calc(var(--es-bar, 68px) + 16px); }
+  .es-fab { width: 52px; height: 52px; }
 }
 
 /* ---- notes, exact numbers, page turns ---- */

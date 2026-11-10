@@ -1,33 +1,55 @@
-/* The Android shell: the viewer's styles plus a light/dark theme of its own (there is no OpenCloud theme here). */
+/* The Android shell: the viewer's styles plus a light/dark theme of its own (there is no OpenCloud theme here).
+   The theme follows the system unless the user picks one in Ajustes (data-theme on <html>). */
 :root {
   --oc-role-surface: #ffffff; --oc-role-surface-container: #f2f2f5; --oc-role-surface-container-high: #e6e6ea;
   --oc-role-outline-variant: #e0e0e6; --oc-role-on-surface-variant: #6f6f78; --oc-role-on-surface: #1b1b1f; --oc-role-background: #fafafc;
   --oc-role-inverse-surface: #2b2b30; --oc-role-inverse-on-surface: #fff;
-  color-scheme: light dark;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --oc-role-surface: #1c1c20; --oc-role-surface-container: #26262b; --oc-role-surface-container-high: #313137;
     --oc-role-outline-variant: #3a3a41; --oc-role-on-surface-variant: #a3a3ad; --oc-role-on-surface: #ededf2; --oc-role-background: #141417;
     --oc-role-inverse-surface: #ededf2; --oc-role-inverse-on-surface: #1b1b1f;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --oc-role-surface: #1c1c20; --oc-role-surface-container: #26262b; --oc-role-surface-container-high: #313137;
+  --oc-role-outline-variant: #3a3a41; --oc-role-on-surface-variant: #a3a3ad; --oc-role-on-surface: #ededf2; --oc-role-background: #141417;
+  --oc-role-inverse-surface: #ededf2; --oc-role-inverse-on-surface: #1b1b1f;
+  color-scheme: dark;
 }
 html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, Roboto, sans-serif; background: var(--oc-role-background); color: var(--oc-role-on-surface);
   -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 #app { height: 100%; }
 /* the icons come with the app (public/icons), not from OpenCloud */
+.es-i-sun { --es-i: url('/icons/sun-line.svg'); }
+.es-i-moon { --es-i: url('/icons/moon-line.svg'); }
 .es-setup { max-width: 520px; display: grid; gap: 14px; }
 .es-setup label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
 .es-setup input { padding: 11px 12px; border-radius: 10px; border: 1px solid var(--es-line); background: var(--es-surface); color: inherit; font: inherit; font-size: 16px; }
 .es-setup input:focus { outline: 2px solid var(--es-accent); outline-offset: 1px; }
 .es-setup p { margin: 0; line-height: 1.5; }
 .es-setup-actions { display: flex; gap: 8px; align-items: center; }
+.es-setup-h2 { margin: 28px 0 10px; }
+.es-theme { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.es-theme .es-btn.on { background: var(--es-accent); color: var(--es-on-accent); border-color: transparent; }
+.es-theme .es-btn.on .es-i { background-color: currentColor; }
 .es-version { opacity: .7; }
 .es-navcount { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
 .es-navcount .es-spin { width: 10px; height: 10px; }
-/* a finger needs room: the bottom bar's links and the buttons */
+/* the gear: only on a phone (on a wide screen the account link lives at the bottom of the sidebar) */
+.es-gear { display: none; }
 @media (max-width: 760px) {
+  .es { --es-bar: 68px; }
   .es-nav a { padding: 10px 4px; }
   .es-navcount { margin-left: 0; }
   .es-btn { min-height: 38px; }
+  .es-back { display: none; }
+  .es-gear { display: inline-flex; align-items: center; justify-content: center; position: fixed; top: 10px; right: 12px; z-index: 120; width: 40px; height: 40px;
+    border: 0; border-radius: 12px; background: var(--es-surface-2); color: var(--es-muted); cursor: pointer; }
+  .es-gear .es-i { font-size: 19px; }
+  .es-gear.on { background: var(--es-accent); color: var(--es-on-accent); }
+  .es-page-head { padding-right: 48px; }
 }

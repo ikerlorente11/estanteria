@@ -45,6 +45,7 @@ createServer(async (req, res) => {
   res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Range, Accept-Ranges')
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end() }
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`)
+  console.log(new Date().toISOString().slice(11, 19), req.method, url.pathname)
   const given = req.headers['x-host-token'] || (String(req.headers.authorization || '').startsWith('Host ') ? req.headers.authorization.slice(5) : null) || url.searchParams.get('t')
   if (given !== TOKEN) return json(res, 401, { detail: 'falta el token del host' })
   const settings = load()

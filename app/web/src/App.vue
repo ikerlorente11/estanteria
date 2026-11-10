@@ -37,6 +37,8 @@
       </aside>
 
       <main ref="mainEl" class="es-main">
+        <!-- on a phone the bar at the bottom has no room for the account: a gear in the corner instead -->
+        <button class="es-gear" :class="{ on: view.v === 'setup' }" type="button" aria-label="Ajustes" @click="go({ v: 'setup' } as any)"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
         <p v-if="offline && !offline.state.online" class="es-offline-banner">
           <i class="es-i es-i-cloud" aria-hidden="true"></i>
           <span>Sin conexión con La Estantería: puedes leer lo descargado. Lo que leas se apunta y se envía al volver.</span>
@@ -56,6 +58,13 @@
               <button v-if="connected" class="es-btn" type="button" @click="disconnect">Olvidar</button>
             </div>
           </form>
+          <h2 class="es-h2 es-setup-h2">Aspecto</h2>
+          <div class="es-theme" role="radiogroup" aria-label="Tema">
+            <button v-for="t in THEMES" :key="t.id" type="button" class="es-btn" :class="{ on: theme === t.id }" role="radio" :aria-checked="theme === t.id" @click="setTheme(t.id)">
+              <i class="es-i" :class="t.icon" aria-hidden="true"></i> {{ t.label }}
+            </button>
+          </div>
+          <p class="es-muted es-small">La Estantería · v{{ version }}</p>
         </section>
         <template v-else-if="store">
           <HomeView v-if="view.v === 'home'" />
@@ -95,6 +104,26 @@ const toast = reactive({ text: '', error: false })
 const mainEl = ref<HTMLElement>()
 let toastTimer: any = null
 let hostInfo = { version: '', shelf: false, offline: false }
+
+// ---- the theme: the system's, or one chosen here (kept in this device) ----
+type Theme = 'system' | 'light' | 'dark'
+const THEMES: { id: Theme; label: string; icon: string }[] = [
+  { id: 'system', label: 'Como el sistema', icon: 'es-i-computer' }, { id: 'light', label: 'Claro', icon: 'es-i-sun' }, { id: 'dark', label: 'Oscuro', icon: 'es-i-moon' },
+]
+const THEME_KEY = 'estanteria.theme'
+const theme = ref<Theme>((() => { try { return (localStorage.getItem(THEME_KEY) as Theme) || 'system' } catch (_) { return 'system' } })())
+function applyTheme() {
+  const t = theme.value
+  if (t === 'system') delete document.documentElement.dataset.theme
+  else document.documentElement.dataset.theme = t
+  tellApp({ type: 'theme', value: t })
+}
+function setTheme(t: Theme) {
+  theme.value = t
+  try { localStorage.setItem(THEME_KEY, t) } catch (_) {}
+  applyTheme()
+}
+applyTheme()
 
 // ---- navigation in the hash ----
 const hash = ref(window.location.hash)

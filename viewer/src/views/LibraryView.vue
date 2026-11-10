@@ -3,13 +3,16 @@
     <header class="es-page-head">
       <div class="es-page-title">
         <p v-if="folderMode && crumbs.length" class="es-muted es-small es-crumbs">
-          <a href="#" @click.prevent="openFolder('')">{{ store.readingRoot }}</a>
+          <a href="#" @click.prevent="openFolder('')">{{ rootName }}</a>
           <template v-for="c in crumbs" :key="c.path"> › <a href="#" @click.prevent="openFolder(c.path)">{{ c.name }}</a></template>
         </p>
-        <h1 class="es-h1">{{ folderMode && crumbs.length ? crumbs[crumbs.length - 1].name : 'Biblioteca' }}</h1>
+        <h1 class="es-h1">{{ folderMode && crumbs.length ? crumbs[crumbs.length - 1].name : localSource ? rootName : 'Biblioteca' }}</h1>
       </div>
       <span class="es-grow"></span>
-      <OfflineButton v-if="store.offline && folderMode && crumbs.length && inFolder.length" :items="inFolder" what="la carpeta" />
+      <button v-if="localSource && store.shelf" class="es-btn" :disabled="store.shelf.state.scanning" title="Mirar otra vez qué hay en la carpeta" @click="rescan">
+        <span v-if="store.shelf.state.scanning" class="es-spin"></span><i v-else class="es-i es-i-refresh" aria-hidden="true"></i> Actualizar
+      </button>
+      <OfflineButton v-if="store.offline && !localSource && folderMode && crumbs.length && inFolder.length" :items="inFolder" what="la carpeta" />
       <input ref="searchEl" :value="q" class="es-search" type="search" placeholder="Buscar por título, serie o autor" aria-label="Buscar"
              @input="typed(($event.target as HTMLInputElement).value)" />
     </header>
@@ -35,7 +38,7 @@
 
     <p v-if="loading" class="es-muted"><span class="es-spin"></span> Cargando…</p>
     <template v-else>
-      <!-- the folders of Lectura, one level at a time -->
+      <!-- the folders of Lectura (or of a folder of this PC), one level at a time -->
       <div v-if="folderMode && subfolders.length" class="es-grid">
         <a v-for="f in subfolders" :key="f.path" href="#" class="es-series-card es-folder" :title="f.path" @click.prevent="openFolder(f.path)">
           <Cover :id="f.coverItem || 0" :has="!!f.coverItem && f.coverHas" icon="es-i-grid" />
@@ -44,9 +47,21 @@
         </a>
       </div>
 
-      <p v-if="!items.length && !subfolders.length && !external.length" class="es-muted">{{ q ? `Nada con «${q}».` : 'Nada por aquí.' }}</p>
+      <!-- at the top of «Todas»: the libraries of this PC, each like a folder -->
+      <section v-if="pcLibraries.length" class="es-section">
+        <h2 class="es-h2">En este PC</h2>
+        <div class="es-grid">
+          <a v-for="f in pcLibraries" :key="f.path" href="#" class="es-series-card es-folder" :title="f.name" @click.prevent="setSource(f.path)">
+            <Cover :id="f.coverItem || 0" :has="!!f.coverItem && f.coverHas" icon="es-i-computer" />
+            <strong class="es-ellipsis"><i class="es-i es-i-computer es-folder-mark" aria-hidden="true"></i> {{ f.name }}</strong>
+            <small class="es-muted">{{ f.folders }} {{ f.folders === 1 ? 'archivo' : 'archivos' }}</small>
+          </a>
+        </div>
+      </section>
+
+      <p v-if="!items.length && !subfolders.length && !external.length && !pcLibraries.length" class="es-muted">{{ q ? `Nada con «${q}».` : 'Nada por aquí.' }}</p>
       <section v-if="items.length" class="es-section">
-        <h2 v-if="folderMode && (subfolders.length || external.length)" class="es-h2">{{ crumbs.length ? 'En esta carpeta' : 'Sueltos en ' + store.readingRoot }}</h2>
+        <h2 v-if="folderMode && (subfolders.length || external.length || pcLibraries.length)" class="es-h2">{{ crumbs.length ? 'En esta carpeta' : 'Sueltos en ' + rootName }}</h2>
         <div class="es-grid">
           <ItemCard v-for="i in items" :key="i.id" :item="i" @read="store.read(i)" @open="go({ v: 'item', id: i.id })" />
         </div>
@@ -72,6 +87,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Item, Kind } from '../lib/api'
+import { isLocalSource } from '../lib/local'
 import { useStore } from '../lib/store'
 import Cover from './Cover.vue'
 import ItemCard from './ItemCard.vue'
@@ -89,6 +105,8 @@ const external = ref<Item[]>([])
 /** everything under the folder shown (its subfolders too), for «Descargar la carpeta» */
 const inFolder = ref<Item[]>([])
 const subfolders = ref<Subfolder[]>([])
+/** at the top of «Todas»: the libraries of this PC (path = their source id) */
+const pcLibraries = ref<Subfolder[]>([])
 const loading = ref(true)
 const loadingMore = ref(false)
 const exhausted = ref(false)
@@ -98,8 +116,12 @@ const sources = computed(() => state.status?.sources || [])
 let typing: any = null
 let request = 0
 
-/** Browsing Lectura folder by folder: no search, and either everything or the Archivador alone. */
-const folderMode = computed(() => !props.q && (!props.source || props.source === 'archivador'))
+/** Browsing folder by folder: no search, and either everything, the Archivador alone or a folder of this PC. */
+const localSource = computed(() => isLocalSource(props.source))
+const folderMode = computed(() => !props.q && (!props.source || props.source === 'archivador' || localSource.value))
+const rootName = computed(() => (localSource.value ? sources.value.find((s) => String(s.id) === props.source)?.name || 'Este PC' : store.readingRoot))
+/** where the folders shown come from: the Archivador, or a library of this PC */
+const folderSource = computed(() => (localSource.value ? props.source! : 'archivador'))
 const folder = computed(() => (folderMode.value ? props.folder || '' : ''))
 const crumbs = computed(() => {
   if (!folder.value) return []
@@ -110,10 +132,10 @@ const crumbs = computed(() => {
 function query(offset = 0, source = props.source || undefined) {
   const base = { q: props.q || undefined, kind: (props.kind || undefined) as Kind | undefined, sort: (props.sort || 'series') as any, limit: PAGE, offset }
   if (!folderMode.value) return { ...base, folder: props.folder, source }
-  return { ...base, folder: folder.value, direct: true, source: 'archivador' }
+  return { ...base, folder: folder.value, direct: true, source: folderSource.value }
 }
 function childFolders(): Subfolder[] {
-  const all = state.status?.folders || []
+  const all = localSource.value ? state.status?.local_folders?.[props.source!] || [] : state.status?.folders || []
   const prefix = folder.value ? folder.value + '/' : ''
   const found = new Map<string, Subfolder>()
   for (const f of all) {
@@ -137,14 +159,18 @@ async function load() {
     const [got, ext, covers] = await Promise.all([
       store.api.items(query()),
       wantExternal ? store.api.items({ ...query(0, 'external'), folder: undefined, direct: undefined, source: 'external' }) : Promise.resolve([] as Item[]),
-      Promise.all(folders.map((f) => store.api.items({ folder: f.path, source: 'archivador', limit: 1, sort: 'series' }).catch(() => [] as Item[]))),
+      Promise.all(folders.map((f) => store.api.items({ folder: f.path, source: folderSource.value, limit: 1, sort: 'series' }).catch(() => [] as Item[]))),
     ])
     if (mine !== request) return
-    inFolder.value = store.offline && folder.value
+    inFolder.value = store.offline && folder.value && !localSource.value
       ? await store.api.items({ folder: folder.value, source: 'archivador', limit: 1000 }).catch(() => [] as Item[]) : []
     if (mine !== request) return
     folders.forEach((f, i) => { const first = covers[i][0]; if (first) { f.coverItem = first.id; f.coverHas = first.cover } })
     subfolders.value = folders
+    const pc = !props.source && !folder.value && folderMode.value ? sources.value.filter((s) => s.id < 0) : []
+    const pcCovers = await Promise.all(pc.map((s) => store.api.items({ source: String(s.id), limit: 1, sort: 'series' }).catch(() => [] as Item[])))
+    if (mine !== request) return
+    pcLibraries.value = pc.map((s, i) => ({ name: s.name, path: String(s.id), folders: s.items, coverItem: pcCovers[i][0]?.id ?? null, coverHas: true }))
     items.value = got
     external.value = ext
     exhausted.value = got.length < PAGE
@@ -181,10 +207,16 @@ function setKind(kind: string) { go({ ...current(), kind: kind || undefined }, t
 function setSort(sort: string) { go({ ...current(), sort: sort === 'series' ? undefined : sort }, true) }
 function setSource(source: string) { go({ ...current(), source: source || undefined, folder: undefined }, true) }
 function openFolder(path: string) { go({ ...current(), folder: path || undefined }) }
+async function rescan() {
+  await store.shelf?.scan()
+  await store.refresh()
+  load()
+}
 
 onMounted(load)
 watch(() => state.connected, load)
 watch(() => [props.q, props.kind, props.sort, props.folder, props.source], load)
 watch(() => state.status?.pending, (now, before) => { if (before && !now) load() })
 watch(() => state.status?.folders?.length, (now, before) => { if (before !== undefined && now !== before) load() })
+watch(() => store.shelf?.count, (now, before) => { if (before !== undefined && now !== before) load() })
 </script>

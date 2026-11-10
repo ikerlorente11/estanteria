@@ -149,6 +149,7 @@
 .es-i-home { --es-i: url('/icons/home-5-line.svg'); }
 .es-i-grid { --es-i: url('/icons/layout-grid-line.svg'); }
 .es-i-server { --es-i: url('/icons/server-line.svg'); }
+.es-i-computer { --es-i: url('/icons/computer-line.svg'); }
 .es-i-cloud { --es-i: url('/icons/cloud-line.svg'); }
 .es-i-search { --es-i: url('/icons/search-line.svg'); }
 .es-i-close { --es-i: url('/icons/close-line.svg'); }
@@ -355,3 +356,24 @@
 .es-job-bar { display: block; height: 4px; border-radius: 2px; background: var(--es-surface-3); overflow: hidden; }
 .es-job-bar span { display: block; height: 100%; background: var(--es-accent); transition: width .2s; }
 .es-offline-banner { display: flex; align-items: center; gap: 10px; margin: 0; padding: 9px 14px; border-radius: 10px; background: var(--es-surface-2); font-size: 13.5px; }
+
+/* ---- PDF as a document (PdfReader) ---- */
+.es-pdf-stage { display: block; cursor: auto; padding: 16px 16px 40px; text-align: center; overflow-y: scroll; overflow-x: auto; }
+.es-pdf-page { position: relative; margin: 0 auto 14px; background: #fff; box-shadow: 0 2px 14px rgba(0, 0, 0, .35); text-align: initial; }
+.es-pdf-page canvas { display: block; }
+.es-pdf-page .es-pageload { position: absolute; inset: 0; display: grid; place-items: center; }
+.es-pdf-goto input { width: 4.2em; padding: 4px 6px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .06); color: inherit; font: inherit; text-align: center; }
+.es-pdf-zoom { min-width: 4.4em; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.es-pdf-zoomsign { font-size: 19px; line-height: 1; font-weight: 600; }
+/* pdf.js's text over the drawing: invisible, but it selects and copies */
+.es-pdf-page .textLayer { position: absolute; inset: 0; overflow: hidden; line-height: 1; text-align: initial; opacity: 1; forced-color-adjust: none; transform-origin: 0 0; z-index: 1; }
+.es-pdf-page .textLayer span, .es-pdf-page .textLayer br { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.es-pdf-page .textLayer ::selection { background: rgba(0, 92, 220, .3); }
+.es-pdf-page .textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: -1; cursor: default; user-select: none; }
+
+/* ---- the folders of this PC ---- */
+.es-subhead { margin-top: 28px; }
+.es-cache { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.es-upload { display: grid; gap: 8px; margin: 12px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--es-surface-2); max-width: 560px; }
+.es-upload label { display: grid; gap: 4px; font-size: 13px; }
+.es-upload input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--es-line, rgba(127, 127, 127, .35)); background: var(--es-surface, transparent); color: inherit; font: inherit; }

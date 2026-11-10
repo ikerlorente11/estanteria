@@ -4,7 +4,7 @@ export type View =
   | { v: 'home' }
   | { v: 'library'; q?: string; kind?: string; sort?: string; folder?: string; source?: string }
   | { v: 'series'; name: string }
-  | { v: 'read'; id: number; page?: number }
+  | { v: 'read'; id: number; page?: number; as?: 'doc' | 'pages' }
   | { v: 'item'; id: number }
   | { v: 'sources' }
   | { v: 'catalogs' }
@@ -34,7 +34,9 @@ export function viewFromQuery(query: Record<string, unknown>): View {
   if (v === 'series' && query.name) return { v, name: String(query.name) }
   if (v === 'read' && id > 0) {
     const page = Number(query.page)
-    return page >= 0 && query.page !== undefined ? { v, id, page } : { v, id }
+    const view: View = page >= 0 && query.page !== undefined ? { v, id, page } : { v, id }
+    if (query.as === 'doc' || query.as === 'pages') view.as = query.as
+    return view
   }
   if (v === 'item' && id > 0) return { v, id }
   if (v === 'sources') return { v }
@@ -53,7 +55,12 @@ export function queryFromView(view: View): Record<string, string> {
     return q
   }
   if (view.v === 'series') return { v: 'series', name: view.name }
-  if (view.v === 'read') return view.page !== undefined ? { v: 'read', id: String(view.id), page: String(view.page) } : { v: 'read', id: String(view.id) }
+  if (view.v === 'read') {
+    const q: Record<string, string> = { v: 'read', id: String(view.id) }
+    if (view.page !== undefined) q.page = String(view.page)
+    if (view.as) q.as = view.as
+    return q
+  }
   if (view.v === 'item') return { v: 'item', id: String(view.id) }
   if (view.v === 'catalog') {
     const q: Record<string, string> = { v: 'catalog', kind: view.kind }

@@ -76,7 +76,7 @@ export interface Series {
   last_read: number | null
 }
 
-export type SourceKind = 'komga' | 'kavita' | 'opds' | 'opds2' | 'audiobookshelf' | 'suwayomi' | 'webdav'
+export type SourceKind = 'komga' | 'kavita' | 'opds' | 'opds2' | 'audiobookshelf' | 'suwayomi' | 'webdav' | 'local'
 
 export interface Source {
   id: number
@@ -171,6 +171,8 @@ export interface LibraryStatus {
   folders: string[]
   archivador: { total: number; pending: number; errors: number }
   sources: Source[]
+  /** the folders of each library of this device, by its source id (the desktop) */
+  local_folders?: Record<string, string[]>
 }
 
 export interface ItemQuery {
@@ -211,6 +213,8 @@ export interface ApiOffline {
   bookmarkId?(id: number): number
   /** the answer for what only this device has (the files of this device), with or without connection */
   own?(method: string, path: string, body: unknown): unknown
+  /** the answer with what this device adds to it (its own files) */
+  merge?(method: string, path: string, data: unknown): unknown
 }
 
 /** Answers that mean the service is not there (the proxy in front answers instead). */
@@ -251,7 +255,7 @@ export class Api {
     const kept = !this.offline ? undefined
       : method === 'GET' ? this.offline.fallback(path)
       : this.offline.write(method, path, init.body ? JSON.parse(String(init.body)) : undefined)
-    if (kept !== undefined) return kept as T
+    if (kept !== undefined) return (this.offline?.merge ? this.offline.merge(method, path, kept) : kept) as T
     throw unreachable(cause)
   }
 
@@ -273,8 +277,9 @@ export class Api {
       throw err
     }
     const data = await res.json()
-    this.offline?.seen((init.method || 'GET').toUpperCase(), path, data)
-    return data
+    const method = (init.method || 'GET').toUpperCase()
+    this.offline?.seen(method, path, data)
+    return (this.offline?.merge ? this.offline.merge(method, path, data) : data) as T
   }
 
   /** A binary answer (a page, a cover, a book): the copy kept on this device if there is one, else

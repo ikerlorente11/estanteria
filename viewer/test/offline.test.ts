@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { Api } from '../src/lib/api.ts'
-import { LOCAL_BASE, Offline, type OfflineBackend, type OfflineProgress } from '../src/lib/offline.ts'
+import { LOCAL_BASE, LocalShelf, guess, type ShelfBackend } from '../src/lib/local.ts'
+import { Offline, type OfflineBackend, type OfflineProgress } from '../src/lib/offline.ts'
 
 const comic = { id: 7, source_id: null, path: '/Lectura/A/A 1.cbz', folder: 'A', name: 'A 1.cbz', format: 'cbz', kind: 'comic', size: 10, modified: 1, title: 'Uno',
                 series: 'A', number: 1, author: null, year: null, summary: null, pages: 3, direction: 'ltr', cover: true, state: 'ready', error: null,
@@ -28,6 +29,9 @@ const sent: string[] = []
   sent.push(`${init.method || 'GET'} ${url.replace('https://svc', '')}`)
   if (init.method === 'POST' && url.endsWith('/bookmarks')) return new Response(JSON.stringify({ ...JSON.parse(init.body), id: 77, created: 3, updated: null }), { status: 200 })
   if (url.endsWith('/api/items/9')) return new Response(JSON.stringify({ ...comic, id: 9, title: 'Nueve', pages: 2 }), { status: 200 })
+  const route = url.replace('https://svc', '').split('?')[0]
+  if (!init.method && ['/api/items', '/api/series', '/api/continue', '/api/recent'].includes(route)) return new Response('[]', { status: 200 })
+  if (!init.method && route === '/api/library') return new Response(JSON.stringify({ connected: true, total: 0, folders: [], sources: [] }), { status: 200 })
   return new Response(JSON.stringify(init.body ? JSON.parse(init.body) : {}), { status: 200 })
 }
 
@@ -100,19 +104,63 @@ assert.equal(offline.state.jobs[9].done, 1)
 handler({ id: 9, done: 1, total: 2, bytes: 10, error: 'página 2: HTTP 422', finished: false, cancelled: false })
 assert.equal(offline.status(9), 'error')
 assert.equal(offline.state.jobs[9].error, 'página 2: HTTP 422')
-// a file of this computer: answered here even with the service there, never sent to it
-const localId = LOCAL_BASE + 5
-offline.addLocal({ item: { ...comic, id: localId, title: 'Local', bookmarks: [] } as any, width: 0, added: 300, bytes: 9 })
+// the shelf of this computer: its libraries join the library, answered here even with the service there
+const L1 = LOCAL_BASE + 5, L2 = LOCAL_BASE + 6, L3 = LOCAL_BASE + 7
+const prepared: number[] = []
+const shelfBackend: ShelfBackend = {
+  config: async () => ({ roots: [{ id: 2, path: 'D:\Cómics', name: 'Cómics' }], files: 1, cache_limit: 2 ** 31, cache_bytes: 0 }),
+  scan: async () => [
+    { id: L1, root: 2, path: 'D:\Cómics\Saga\Saga 01.cbz', folder: 'Saga', name: 'Saga 01.cbz', format: 'cbz', size: 10, modified: 50 },
+    { id: L2, root: 2, path: 'D:\Cómics\Saga\Extra\Saga 02.pdf', folder: 'Saga/Extra', name: 'Saga 02.pdf', format: 'pdf', size: 10, modified: 60 },
+    { id: L3, root: 1, path: 'C:\Bajadas\Libro.epub', folder: '', name: 'Libro.epub', format: 'epub', size: 10, modified: 70 },
+  ],
+  pickFolders: async () => [], pickFiles: async () => [],
+  addRoot: async () => ({ id: 3, path: '', name: '' }), removeRoot: async () => {}, renameRoot: async () => {},
+  addFile: async (path) => ({ id: LOCAL_BASE + 9, root: 1, path, folder: '', name: 'Otro.cbz', format: 'cbz', size: 1, modified: 80 }),
+  removeFile: async () => {},
+  prepare: async (id) => { prepared.push(id); return { pages: 4, page_sizes: [[800, 1200], [800, 1200], [800, 1200], [800, 1200]] } },
+  url: (id, part) => `http://shelf.localhost/${part.replace('/', `/${id}/`).replace(/^([cf])$/, `$1/${id}`)}`,
+  setCacheLimit: async () => {}, clearCache: async () => {}, reveal: async () => {},
+  upload: async () => ({ path: '/Lectura/x', item: null }),
+}
+const shelf = new LocalShelf(shelfBackend)
+await shelf.load()
+offline.shelf = shelf
+assert.deepEqual(guess({ folder: 'Saga', name: 'Saga 01.cbz' }), { title: 'Saga 01', series: 'Saga', number: 1 })
+assert.deepEqual(guess({ folder: '', name: 'Libro_de  prueba.epub' }), { title: 'Libro de prueba', series: null, number: null })
 const before = sent.length
-assert.equal((await api.item(localId)).title, 'Local')
-assert.equal((await api.setProgress(localId, { page: 2, percent: 1, finished: true })).page, 2)
-assert.equal((await api.item(localId)).progress?.finished, true)
-const localNote = await api.addBookmark(localId, { kind: 'note', page: 0, note: 'mía' })
-assert.equal((await api.changeBookmark(localId, localNote.id, { note: 'mía, cambiada' })).note, 'mía, cambiada')
-assert.deepEqual((await api.item(localId)).bookmarks.map((b) => b.note), ['mía, cambiada'])
+const status = await api.library()
+assert.deepEqual(status.sources.filter((s) => s.id < 0).map((s) => [s.id, s.name, s.items]), [[-2, 'Cómics', 2], [-1, 'Archivos sueltos', 1]])
+assert.deepEqual(status.local_folders?.['-2'].sort(), ['Saga', 'Saga/Extra'])
+assert.deepEqual((await api.items({ source: '-2', folder: 'Saga', direct: true })).map((i) => i.id), [L1])
+assert.deepEqual((await api.items({ source: '-2', folder: 'Saga' })).map((i) => i.id), [L2, L1])   // series «Extra» (its folder), then «Saga»
+assert.deepEqual((await api.items({ q: 'libro' })).map((i) => i.id), [L3])                // a search finds them too
+assert.deepEqual((await api.items({ source: 'archivador', folder: '', direct: true })).map((i) => i.id), [])   // not among the Archivador's
+assert.deepEqual((await api.series()).map((s) => [s.series, s.items]), [['Extra', 1], ['Saga', 1]])
+// reading one: its pages counted once, served by the host, progress and notes here
+const detail = await api.item(L1)
+assert.equal(detail.pages, 4)
+await api.item(L1)
+assert.deepEqual(prepared, [L1])
+assert.equal((await api.item(L3)).kind, 'book')
+assert.deepEqual(prepared, [L1])                                                           // a book has no pages to count
+assert.equal(offline.local(`/api/items/${L1}/pages/2?w=1600`), `http://shelf.localhost/p/${L1}/2?w=1600`)
+assert.equal(offline.local(`/api/items/${L1}/cover`), `http://shelf.localhost/c/${L1}`)
+assert.equal(offline.local(`/api/items/${L3}/file`), `http://shelf.localhost/f/${L3}`)
+assert.equal((await api.setProgress(L1, { page: 2, percent: 0.75, finished: false })).page, 2)
+assert.deepEqual((await api.continueReading()).map((i) => i.id).includes(L1), true)
+const localNote = await api.addBookmark(L1, { kind: 'note', page: 0, note: 'mía' })
+assert.equal((await api.changeBookmark(L1, localNote.id, { note: 'mía, cambiada' })).note, 'mía, cambiada')
+assert.deepEqual((await api.item(L1)).bookmarks.map((b) => b.note), ['mía, cambiada'])
 await api.deleteBookmark(localNote.id)
-assert.deepEqual((await api.item(localId)).bookmarks, [])
-await assert.rejects(api.convertToEpub(localId), (err: any) => err.status === 409)
-assert.equal(offline.local(`/api/items/${localId}/pages/1?w=1600`), `http://offline.localhost/acc/${localId}/p/1`)
-assert.equal(sent.length, before)
+assert.deepEqual((await api.item(L1)).bookmarks, [])
+await assert.rejects(api.convertToEpub(L1), (err: any) => err.status === 409)
+await assert.rejects(api.item(LOCAL_BASE + 99), (err: any) => err.status === 404)
+assert.ok(!sent.slice(before).some((s) => s.includes(String(LOCAL_BASE).slice(0, 6))))      // nothing of them went to the service
+// opened from outside: on the shelf from then on
+const [added] = await shelf.addFiles(['E:\Otro.cbz'])
+assert.equal(added.source_id, -1)
+assert.ok((await api.items({ source: '-1' })).some((i) => i.id === added.id))
+assert.equal(shelf.uploadPath(L2), 'Cómics/Saga/Extra/Saga 02.pdf')
+assert.equal(shelf.uploadPath(L3), 'Del PC/Libro.epub')
 console.log('offline ok')

@@ -7,7 +7,8 @@
  * falls back here for its JSON when the service does not answer. Reading progress made offline waits
  * here (in this device's storage) and is sent when the service answers again. */
 import { reactive } from 'vue'
-import type { Api, ApiOffline, Bookmark, Item, ItemDetail, Progress, Series } from './api.ts'
+import type { Api, ApiOffline, Bookmark, Item, ItemDetail, LibraryStatus, Progress, Series } from './api.ts'
+import { isLocal, isLocalSource, type LocalShelf } from './local.ts'
 
 export interface OfflineEntry {
   item: ItemDetail
@@ -66,14 +67,6 @@ function write(key: string, value: unknown): void {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch (_) { /* storage full or off: only this session */ }
 }
 
-/** From here on, an item is a file of this device (opened from the file browser, not from the service):
- * kept like a download, but its progress and notes stay here (see the desktop's local.rs). */
-export const LOCAL_BASE = 2 ** 50
-
-export function isLocal(id: number): boolean {
-  return id >= LOCAL_BASE
-}
-
 function refused(message: string): Error {
   const err: any = new Error(message)
   err.status = 409
@@ -115,6 +108,8 @@ export class Offline implements ApiOffline {
   private marks: Marks = { next: -1, creates: {}, changes: {}, resolved: {}, ...read<Partial<Marks>>(MARKS_KEY, {}) }
   private knownMarks: Record<number, Bookmark[]> = read(KNOWN_MARKS_KEY, {})
   private api: Api | null = null
+  /** the files of this device (the desktop), shown with the library */
+  shelf: LocalShelf | null = null
 
   private backend: OfflineBackend
 
@@ -145,11 +140,6 @@ export class Offline implements ApiOffline {
   }
 
   has(id: number): boolean { return !!this.state.entries[id] }
-
-  /** A file of this device the host just unpacked (it is already in its folder): shown at once. */
-  addLocal(entry: OfflineEntry): void {
-    if (entry?.item?.id) this.state.entries[entry.item.id] = entry
-  }
   /** 'done', 'running', 'waiting', 'error' or '' (not kept). */
   status(id: number): string { return this.state.entries[id] ? 'done' : this.state.jobs[id]?.state || '' }
   get count(): number { return Object.keys(this.state.entries).length }
@@ -240,13 +230,17 @@ export class Offline implements ApiOffline {
     const found = this.match(path)
     if (!found) return null
     const [id, part] = found
+    if (isLocal(id) && this.shelf?.has(id)) {
+      const w = path.match(/[?&]w=(\d+)/)
+      return this.shelf.url(id, part === 'cover' ? 'c' : part === 'file' ? 'f' : part) + (w && part.startsWith('p/') ? `?w=${w[1]}` : '')
+    }
     const entry = this.state.entries[id]
     if (!entry) return null
     if (part === 'file' && !keptAsFile(entry.item)) return null
     return this.backend.url(id, part)
   }
 
-  private withProgress(item: ItemDetail): ItemDetail {
+  private withProgress<T extends Item>(item: T): T {
     const known = this.known[item.id]
     return known === undefined ? item : { ...item, progress: known }
   }
@@ -285,7 +279,7 @@ export class Offline implements ApiOffline {
   }
 
   fallback(path: string): unknown {
-    if (!this.count) return undefined
+    if (!this.count && !this.shelf?.count) return undefined
     const [base, qs] = path.split('?')
     const params = new URLSearchParams(qs || '')
     const all = this.items()
@@ -345,13 +339,16 @@ export class Offline implements ApiOffline {
     const now = Date.now() / 1000
     const b = (body || {}) as Record<string, any>
     const base = path.split('?')[0]
+    const params = new URLSearchParams(path.split('?')[1] || '')
+    if (base === '/api/items' && method === 'GET' && isLocalSource(params.get('source'))) {
+      return this.shelf ? this.shelf.query(queryOf(params), (i) => this.withProgress(i)) : []
+    }
     const m = base.match(/^\/api\/items\/(\d+)(\/.*)?$/)
     if (m && isLocal(Number(m[1]))) {
       const id = Number(m[1])
       const rest = m[2] || ''
-      const entry = this.state.entries[id]
-      if (!entry) throw refused('Ese archivo ya no está en Descargas: ábrelo otra vez desde el Explorador.')
-      if (!rest && method === 'GET') return { ...this.withProgress(entry.item), bookmarks: this.marksOf(id) }
+      if (!this.shelf?.has(id)) throw Object.assign(refused('Ese archivo ya no está en tu PC (¿se movió o se borró?).'), { status: 404 })
+      if (!rest && method === 'GET') return this.shelf.detail(id).then((d) => ({ ...this.withProgress(d), bookmarks: this.marksOf(id) }))
       if (rest === '/progress' && method === 'DELETE') {
         delete this.known[id]
         this.save()
@@ -394,6 +391,44 @@ export class Offline implements ApiOffline {
       return { ok: true }
     }
     return undefined
+  }
+
+  /** The service's answer (or the one kept for it) with the files of this device added: its libraries
+   * and folders, its series, what is being read of it, and what a search finds in it. */
+  merge(method: string, path: string, data: unknown): unknown {
+    const shelf = this.shelf
+    if (!shelf || method !== 'GET' || !shelf.count) return data
+    const [base, qs] = path.split('?')
+    const params = new URLSearchParams(qs || '')
+    const progress = (i: Item) => this.withProgress(i)
+    if (base === '/api/library' && data && typeof data === 'object') {
+      const status = data as LibraryStatus
+      const local: Record<string, string[]> = {}
+      for (const s of shelf.sources()) local[String(s.id)] = shelf.folders(s.id)
+      return { ...status, total: status.total + shelf.count, sources: [...(status.sources || []), ...shelf.sources()], local_folders: local }
+    }
+    if (base === '/api/series' && Array.isArray(data)) {
+      const out = new Map<string, Series>((data as Series[]).map((s) => [s.series, { ...s }]))
+      for (const s of shelf.series(progress)) {
+        const there = out.get(s.series)
+        if (!there) out.set(s.series, s)
+        else Object.assign(there, { items: there.items + s.items, finished: there.finished + s.finished,
+                                    last_read: Math.max(there.last_read || 0, s.last_read || 0) || null })
+      }
+      return [...out.values()].sort((a, b) => a.series.localeCompare(b.series, 'es'))
+    }
+    if (base === '/api/continue' && Array.isArray(data)) {
+      const reading = shelf.all().map(progress).filter((i) => i.progress && !i.progress.finished && i.progress.percent > 0)
+      return [...(data as Item[]), ...reading].sort((a, b) => (b.progress?.updated || 0) - (a.progress?.updated || 0))
+        .slice(0, Number(params.get('limit') || 20))
+    }
+    if (base === '/api/items' && Array.isArray(data)) {
+      const source = params.get('source')
+      // the Archivador's folders, the outside libraries: theirs alone; everything else, the shelf too (on the first page)
+      if (source || params.has('folder') || Number(params.get('offset') || 0) > 0) return data
+      return [...(data as Item[]), ...shelf.query(queryOf(params), progress)]
+    }
+    return data
   }
 
   /** A change made while the service does not answer: kept to send later, answered from here. */
@@ -585,4 +620,11 @@ export class Offline implements ApiOffline {
     write(PENDING_KEY, this.pending)
     write(KNOWN_KEY, this.known)
   }
+}
+
+function queryOf(params: URLSearchParams) {
+  const get = (k: string) => params.get(k) ?? undefined
+  return { q: get('q'), series: get('series'), kind: get('kind') as any, sort: get('sort') as any, source: get('source'),
+           folder: params.has('folder') ? params.get('folder')! : undefined, direct: params.get('direct') === 'true',
+           limit: params.has('limit') ? Number(params.get('limit')) : undefined, offset: params.has('offset') ? Number(params.get('offset')) : undefined }
 }

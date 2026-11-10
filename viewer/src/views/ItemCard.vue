@@ -14,7 +14,7 @@
     <div class="es-card-text">
       <a href="#" class="es-card-title es-ellipsis" :title="item.title" @click.prevent="emit('read')">{{ title }}</a>
       <span class="es-muted es-small es-ellipsis">{{ subtitle }}</span>
-      <span v-if="origin" class="es-origin es-ellipsis" :title="`De ${origin}`"><i class="es-i es-i-server" aria-hidden="true"></i> {{ origin }}</span>
+      <span v-if="origin" class="es-origin es-ellipsis" :title="local ? `En este PC: ${origin}` : `De ${origin}`"><i class="es-i" :class="local ? 'es-i-computer' : 'es-i-server'" aria-hidden="true"></i> {{ origin }}</span>
     </div>
     <button class="es-card-info" title="Detalles" aria-label="Detalles" @click="emit('open')"><i class="es-i es-i-more" aria-hidden="true"></i></button>
   </article>
@@ -23,6 +23,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Item } from '../lib/api'
+import { isLocal } from '../lib/local'
 import { kindLabel, percentOf, shortTitle, sourceName, useStore } from '../lib/store'
 import Cover from './Cover.vue'
 
@@ -30,6 +31,7 @@ const props = withDefaults(defineProps<{ item: Item; showSeries?: boolean }>(), 
 const emit = defineEmits<{ read: []; open: [] }>()
 const store = useStore()
 const origin = computed(() => sourceName(props.item, store.state.status?.sources))
+const local = computed(() => isLocal(props.item.id))
 /** 'done' when kept on this device, 'running'/'waiting' while downloading, '' else */
 const kept = computed(() => { const s = store.offline?.status(props.item.id) || ''; return s === 'error' ? '' : s })
 

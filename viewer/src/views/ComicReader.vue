@@ -15,6 +15,7 @@
         <button class="es-rbtn" :class="{ on: rtl }" :title="rtl ? 'Sentido manga: de derecha a izquierda (m)' : 'De izquierda a derecha (m)'" @click="toggleDirection"><i class="es-i es-i-lr" aria-hidden="true"></i></button>
         <button class="es-rbtn" :class="{ on: bookmarked }" :title="bookmarked ? 'Quitar el marcador (b)' : 'Marcar esta página (b)'" @click="toggleBookmark"><i class="es-i" :class="bookmarked ? 'es-i-bookmark-fill' : 'es-i-bookmark'" aria-hidden="true"></i></button>
         <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i><span v-if="bookmarks.length" class="es-rbadge">{{ bookmarks.length }}</span></button>
+        <button v-if="item.kind === 'pdf'" class="es-rbtn" title="Leer como documento: texto que se puede seleccionar y zoom sin perder nitidez" @click="asDocument"><i class="es-i es-i-font" aria-hidden="true"></i></button>
         <button class="es-rbtn" :class="{ on: panel === 'settings' }" title="Ajustes" @click="toggle('settings')"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
         <button class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
@@ -368,6 +369,13 @@ function onScroll() {
 
 // ---- progress, bookmarks ----
 let finishedSaved = !!item.progress?.finished
+/** A PDF from here on as a document (pdf.js), where the reader is. */
+function asDocument() {
+  settings.pdf = 'doc'
+  saveSettings(settings)
+  save()
+  store.go({ v: 'read', id: item.id, page: page.value, as: 'doc' }, true)
+}
 function save(finished = false) {
   clearTimeout(saveTimer)
   const last = current.value.pages[current.value.pages.length - 1]

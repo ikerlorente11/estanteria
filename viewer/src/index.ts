@@ -7,6 +7,7 @@ export * from './lib/api.ts'
 export * from './lib/images.ts'
 export * from './lib/layout.ts'
 export * from './lib/offline.ts'
+export * from './lib/local.ts'
 export * from './lib/store.ts'
 export * from './lib/views.ts'
 

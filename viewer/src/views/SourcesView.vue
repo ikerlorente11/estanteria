@@ -57,13 +57,51 @@
         </span>
       </li>
     </ul>
+
+    <!-- the desktop: folders and files of this PC, read here without the service -->
+    <template v-if="shelf">
+      <header class="es-page-head es-subhead">
+        <h2 class="es-h2">Carpetas de este PC</h2>
+        <span class="es-grow"></span>
+        <button class="es-btn" :disabled="shelfBusy" @click="addFiles"><i class="es-i es-i-add" aria-hidden="true"></i> Añadir archivos</button>
+        <button class="es-btn es-primary" :disabled="shelfBusy" @click="addFolders"><i class="es-i es-i-add" aria-hidden="true"></i> Añadir carpeta</button>
+      </header>
+      <p class="es-muted">Los cómics, PDF y libros (cbz, cbr, cb7, pdf, epub) de las carpetas que elijas aparecen en tu biblioteca con sus subcarpetas, como los de El Archivador. Se leen aquí mismo, sin copiarlos; el progreso y las notas se guardan en este PC. Lo que abras desde el Explorador o arrastres a la ventana también se queda, en «Archivos sueltos».</p>
+      <p v-if="shelf.state.error" class="es-banner es-banner-error">{{ shelf.state.error }}</p>
+      <ul class="es-sources">
+        <li v-for="s in shelfSources" :key="s.id" class="es-source">
+          <span class="es-source-icon"><i class="es-i es-i-computer" aria-hidden="true"></i></span>
+          <span class="es-source-text">
+            <strong>{{ s.name }}</strong>
+            <small v-if="s.url" class="es-muted es-ellipsis es-path">{{ s.url }}</small>
+            <small class="es-muted">{{ s.items }} {{ s.items === 1 ? 'archivo' : 'archivos' }}</small>
+          </span>
+          <span class="es-source-actions">
+            <a href="#" class="es-btn es-small" @click.prevent="go({ v: 'library', source: String(s.id) })">Ver</a>
+            <button class="es-btn es-small" :disabled="shelf.state.scanning" title="Mirar otra vez qué hay" @click="rescan"><span v-if="shelf.state.scanning" class="es-spin"></span><i v-else class="es-i es-i-refresh" aria-hidden="true"></i></button>
+            <button v-if="s.id !== -1" class="es-btn es-small" title="Cambiar el nombre" @click="renameRoot(s)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
+            <button v-if="s.id !== -1" class="es-btn es-small" title="Quitar de la estantería (la carpeta no se toca)" @click="removeRoot(s)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
+          </span>
+        </li>
+        <li v-if="!shelfSources.length" class="es-source es-muted">Ninguna todavía.</li>
+      </ul>
+      <p class="es-muted es-small es-cache">
+        Lo abierto de cbr, cb7 y PDF se guarda descomprimido para pasar de página al instante: ocupa {{ sizeLabel(shelf.state.cacheBytes) }} de un máximo de
+        <select class="es-select" :value="shelf.state.cacheLimit" @change="setLimit(Number(($event.target as HTMLSelectElement).value))">
+          <option v-for="b in limits" :key="b" :value="b">{{ Math.round(b / 2 ** 30) }} GB</option>
+        </select>
+        (lo más antiguo se borra solo).
+        <button class="es-btn es-small" @click="clearCache">Vaciar</button>
+      </p>
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { Source, SourceKind, SourceKindInfo } from '../lib/api'
-import { useStore } from '../lib/store'
+import { CACHE_LIMITS } from '../lib/local'
+import { sizeLabel, useStore } from '../lib/store'
 
 /** Other people's libraries: add one (the service checks it enters), see how each is doing, scan, edit, pause or remove it. */
 const store = useStore()
@@ -74,6 +112,43 @@ const adding = ref(false)
 const editing = ref<Source | null>(null)
 const saving = ref(false)
 const busy = ref<number | null>(null)
+
+// ---- the folders of this PC (the desktop) ----
+const shelf = computed(() => store.shelf || null)
+const shelfBusy = ref(false)
+const shelfSources = computed(() => (shelf.value ? shelf.value.sources() : []))
+const limits = computed(() => [...new Set([...CACHE_LIMITS, shelf.value?.state.cacheLimit || CACHE_LIMITS[1]])].sort((a, b) => a - b))
+async function shelfDo(work: () => Promise<unknown>, done?: string) {
+  shelfBusy.value = true
+  try {
+    await work()
+    await store.refresh()
+    if (done) store.notify(done)
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  shelfBusy.value = false
+}
+function addFolders() {
+  return shelfDo(async () => {
+    const n = await shelf.value!.addFolders()
+    if (n) store.notify(n === 1 ? 'Carpeta añadida.' : `${n} carpetas añadidas.`)
+  })
+}
+function addFiles() {
+  return shelfDo(async () => {
+    const added = await shelf.value!.pickFiles()
+    if (added.length) store.notify(added.length === 1 ? `«${added[0].title}» está en Archivos sueltos.` : `${added.length} archivos en Archivos sueltos.`)
+  })
+}
+function rescan() { return shelfDo(() => shelf.value!.scan()) }
+function removeRoot(s: Source) {
+  return shelfDo(() => shelf.value!.removeRoot(-s.id), `«${s.name}» ya no está en tu estantería (la carpeta sigue en su sitio).`)
+}
+function renameRoot(s: Source) {
+  const name = window.prompt('Nombre de la biblioteca', s.name)?.trim()
+  if (name && name !== s.name) return shelfDo(() => shelf.value!.renameRoot(-s.id, name))
+}
+function setLimit(bytes: number) { return shelfDo(() => shelf.value!.setCacheLimit(bytes)) }
+function clearCache() { return shelfDo(() => shelf.value!.clearCache(), 'Vaciado.') }
 const form = reactive({ kind: 'komga' as SourceKind, name: '', url: '', username: '', secret: '' })
 
 const kindInfo = computed(() => kinds.value.find((k) => k.kind === form.kind))

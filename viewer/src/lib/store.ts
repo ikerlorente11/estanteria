@@ -2,6 +2,7 @@
 import { inject, reactive, type InjectionKey } from 'vue'
 import type { Api, Item, LibraryStatus, Series, Source } from './api.ts'
 import type { ImageCache } from './images.ts'
+import type { LocalShelf } from './local.ts'
 import type { Offline } from './offline.ts'
 import type { View } from './views.ts'
 
@@ -21,6 +22,8 @@ export interface Store {
   read: (item: Item) => void
   /** Reading without connection, when the app can keep files (the desktop, Android); not on the web. */
   offline?: Offline
+  /** The files and folders of this device, when the app can read them (the desktop). */
+  shelf?: LocalShelf
 }
 
 export const STORE: InjectionKey<Store> = Symbol('estanteria')
@@ -80,12 +83,14 @@ export interface ReaderSettings {
   background: 'black' | 'dark' | 'white'
   /** how a page gives way to the next */
   animation: Animation
+  /** how a PDF opens: its pages as images in the comic reader, or as a document (text, zoom without blur) */
+  pdf: 'pages' | 'doc'
 }
 export type Animation = 'none' | 'fade' | 'slide'
 
 const SETTINGS_KEY = 'estanteria.reader'
 export function loadSettings(): ReaderSettings {
-  const base: ReaderSettings = { mode: 'single', fit: 'best', coverAlone: true, directions: {}, background: 'black', animation: 'fade' }
+  const base: ReaderSettings = { mode: 'single', fit: 'best', coverAlone: true, directions: {}, background: 'black', animation: 'fade', pdf: 'pages' }
   try { return { ...base, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') } } catch (_) { return base }
 }
 export function saveSettings(settings: ReaderSettings): void {

@@ -140,6 +140,7 @@ function query(offset = 0, source = props.source || undefined) {
   if (!folderMode.value) return { ...base, folder: props.folder, source }
   return { ...base, folder: folder.value, direct: true, source: folderSource.value }
 }
+function kindFilter(): Kind | undefined { return (props.kind || undefined) as Kind | undefined }
 function childFolders(): Subfolder[] {
   const all = localSource.value ? state.status?.local_folders?.[props.source!] || [] : state.status?.folders || []
   const prefix = folder.value ? folder.value + '/' : ''
@@ -165,18 +166,21 @@ async function load() {
     const [got, ext, covers] = await Promise.all([
       store.api.items(query()),
       wantExternal ? store.api.items({ ...query(0, 'external'), folder: undefined, direct: undefined, source: 'external' }) : Promise.resolve([] as Item[]),
-      Promise.all(folders.map((f) => store.api.items({ folder: f.path, source: folderSource.value, limit: 1, sort: 'series' }).catch(() => [] as Item[]))),
+      // the first item of each folder (its cover); with a type chosen, of that type: none, the folder is left out
+      Promise.all(folders.map((f) => store.api.items({ folder: f.path, source: folderSource.value, kind: kindFilter(), limit: 1, sort: 'series' }).catch(() => [] as Item[]))),
     ])
     if (mine !== request) return
     inFolder.value = store.offline && folder.value && !localSource.value
       ? await store.api.items({ folder: folder.value, source: 'archivador', limit: 1000 }).catch(() => [] as Item[]) : []
     if (mine !== request) return
     folders.forEach((f, i) => { const first = covers[i][0]; if (first) { f.coverItem = first.id; f.coverHas = first.cover } })
-    subfolders.value = folders
+    subfolders.value = props.kind ? folders.filter((_, i) => covers[i].length) : folders
+    // the libraries of this PC: answered on this device, so all their items (to count those of the type chosen)
     const pc = !props.source && !folder.value && folderMode.value ? sources.value.filter((s) => s.id < 0) : []
-    const pcCovers = await Promise.all(pc.map((s) => store.api.items({ source: String(s.id), limit: 1, sort: 'series' }).catch(() => [] as Item[])))
+    const pcItems = await Promise.all(pc.map((s) => store.api.items({ source: String(s.id), kind: kindFilter(), limit: 100000, sort: 'series' }).catch(() => [] as Item[])))
     if (mine !== request) return
-    pcLibraries.value = pc.map((s, i) => ({ name: s.name, path: String(s.id), folders: s.items, coverItem: pcCovers[i][0]?.id ?? null, coverHas: true }))
+    pcLibraries.value = pc.map((s, i) => ({ name: s.name, path: String(s.id), folders: pcItems[i].length, coverItem: pcItems[i][0]?.id ?? null, coverHas: true }))
+      .filter((f) => f.folders > 0 || !props.kind)
     items.value = got
     external.value = ext
     exhausted.value = got.length < PAGE

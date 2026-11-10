@@ -21,7 +21,9 @@
 .es-grow { flex: 1; }
 .es-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; display: block; }
 .es-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
-  animation: es-spin .8s linear infinite; vertical-align: -2px; flex: none; }
+  animation: es-spin .8s linear infinite; vertical-align: -2px; flex: none; box-sizing: border-box; }
+/* «⟳ Cargando…» on one line: the wheel and the text centred on each other */
+p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-items: center; gap: 8px; }
 @keyframes es-spin { to { transform: rotate(360deg); } }
 
 /* ---- sidebar ---- */
@@ -176,7 +178,8 @@
 
 /* ---- the reader (comics and books) ---- */
 .es-reader-shell { grid-area: main; min-height: 0; display: grid; }
-.es-reader-loading { display: grid; place-content: center; gap: 10px; text-align: center; height: 100%; padding: 20px; color: var(--es-muted); }
+.es-reader-loading { display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; height: 100%; padding: 20px; color: var(--es-muted); }
+.es-reader-loading > .es-spin { width: 22px; height: 22px; border-width: 2.5px; }
 .es-reader-loading p { margin: 0; max-width: 460px; }
 .es-reader { position: relative; display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; outline: none; color: #e8e8ec; background: #000; user-select: none; }
 .es-reader.es-bg-dark { background: #1c1c20; }
@@ -203,7 +206,7 @@
 .es-spread.es-rtl { flex-direction: row-reverse; }
 .es-pagebox { position: relative; display: block; background: rgba(128,128,128,.08); flex: none; }
 .es-pagebox img, .es-strip-page img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.es-pageload { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; color: rgba(255,255,255,.55); text-align: center; }
+.es-pageload { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; color: rgba(255,255,255,.55); text-align: center; }
 .es-bg-white .es-pageload { color: rgba(0,0,0,.4); }
 .es-pagefail { max-width: 240px; font-size: 12px; }
 .es-strip { display: grid; gap: 4px; margin: 0 auto; max-width: 100%; }

@@ -13,7 +13,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#141417"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "package": "com.ikerlorente11.estanteria",
       "versionCode": 1,
@@ -22,23 +24,51 @@
         "backgroundColor": "#1c1c20"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.INTERNET", "android.permission.WAKE_LOCK"],
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.WAKE_LOCK"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": ["DEFAULT", "BROWSABLE"],
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
           "data": [
-            { "mimeType": "application/vnd.comicbook+zip" },
-            { "mimeType": "application/vnd.comicbook-rar" },
-            { "mimeType": "application/x-cbz" },
-            { "mimeType": "application/x-cbr" },
-            { "mimeType": "application/x-cb7" },
-            { "mimeType": "application/epub+zip" },
-            { "mimeType": "application/pdf" },
-            { "mimeType": "application/zip" },
-            { "mimeType": "application/x-rar-compressed" },
-            { "mimeType": "application/vnd.rar" },
-            { "mimeType": "application/x-7z-compressed" }
+            {
+              "mimeType": "application/vnd.comicbook+zip"
+            },
+            {
+              "mimeType": "application/vnd.comicbook-rar"
+            },
+            {
+              "mimeType": "application/x-cbz"
+            },
+            {
+              "mimeType": "application/x-cbr"
+            },
+            {
+              "mimeType": "application/x-cb7"
+            },
+            {
+              "mimeType": "application/epub+zip"
+            },
+            {
+              "mimeType": "application/pdf"
+            },
+            {
+              "mimeType": "application/zip"
+            },
+            {
+              "mimeType": "application/x-rar-compressed"
+            },
+            {
+              "mimeType": "application/vnd.rar"
+            },
+            {
+              "mimeType": "application/x-7z-compressed"
+            }
           ]
         }
       ]
@@ -51,12 +81,17 @@
           "android": {
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
-            "buildToolsVersion": "36.0.0"
+            "buildToolsVersion": "36.0.0",
+            "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-splash-screen",
+      "expo-status-bar"
     ],
-    "runtimeVersion": { "policy": "appVersion" },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "owner": "ikerlorente11"
   }
 }

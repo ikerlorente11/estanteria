@@ -5,11 +5,16 @@
 import type { LocalFile, LocalRoot, OfflineBackend, OfflineEntry, OfflineProgress, Prepared, ShelfBackend, ShelfConfig, UploadDone } from 'estanteria-viewer'
 
 const TOKEN_KEY = 'estanteria.host.token'
-export const TOKEN: string = (() => {
-  const given = new URLSearchParams(window.location.search).get('t')
-  if (given) { try { sessionStorage.setItem(TOKEN_KEY, given) } catch (_) {} return given }
-  try { return sessionStorage.getItem(TOKEN_KEY) || '' } catch (_) { return '' }
-})()
+const BASE_KEY = 'estanteria.host.base'
+function remembered(key: string, param: string): string {
+  const given = new URLSearchParams(window.location.search).get(param)
+  if (given !== null) { try { sessionStorage.setItem(key, given) } catch (_) {} return given }
+  try { return sessionStorage.getItem(key) || '' } catch (_) { return '' }
+}
+export const TOKEN: string = remembered(TOKEN_KEY, 't')
+/** Where the host is: '' (this page's own origin), or another origin in development, when the page
+ * comes from Vite on the PC and the host runs on the device (`?host=http://127.0.0.1:48123`). */
+export const HOST_BASE: string = remembered(BASE_KEY, 'host').replace(/\/+$/, '')
 
 export interface HostInfo {
   version: string
@@ -25,11 +30,11 @@ export interface Connection {
 
 /** A URL of the host with the token, for images and files the web view fetches on its own. */
 export function hostUrl(path: string): string {
-  return `${path}${path.includes('?') ? '&' : '?'}t=${TOKEN}`
+  return `${HOST_BASE}${path}${path.includes('?') ? '&' : '?'}t=${TOKEN}`
 }
 
 export async function host<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(path, { ...init, headers: { 'X-Host-Token': TOKEN, 'Content-Type': 'application/json', ...((init.headers as any) || {}) } })
+  const res = await fetch(HOST_BASE + path, { ...init, headers: { 'X-Host-Token': TOKEN, 'Content-Type': 'application/json', ...((init.headers as any) || {}) } })
   if (!res.ok) {
     const detail = await res.json().then((b) => b.detail).catch(() => res.statusText)
     const err: any = new Error(typeof detail === 'string' ? detail : res.statusText)

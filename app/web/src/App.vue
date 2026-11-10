@@ -77,7 +77,7 @@
 import { computed, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
 import { Api, CatalogView, CatalogsView, Cover, DownloadsView, HomeView, LocalShelf, Offline, ImageCache, ItemView, LibraryView, ReaderView, SeriesView, SourcesView, STORE,
          createState, queryFromView, viewFromQuery, type Item, type Store, type View } from 'estanteria-viewer'
-import { TOKEN, forgetToken, hostBackend, hostShelf, info, loadConnection, saveConnection, tellApp, type Connection } from './lib/host'
+import { HOST_BASE, TOKEN, forgetToken, hostBackend, hostShelf, info, loadConnection, saveConnection, tellApp, type Connection } from './lib/host'
 
 /**
  * The Android shell of La Estantería: the same library and readers as the web and the desktop, served
@@ -125,7 +125,7 @@ function notify(text: string, error = false) {
 }
 
 // ---- the service, through the host (it adds the credential; this header only names this page to it) ----
-const api = new Api('', () => `Host ${TOKEN}`)
+const api = new Api(HOST_BASE, () => `Host ${TOKEN}`)
 let current: Api = api
 const store = ref<Store | null>(null)
 // ---- reading without connection: the host keeps the files; the keeper follows the account the host has ----
@@ -135,7 +135,7 @@ const jobCount = computed(() => (offline.value ? Object.keys(offline.value.state
 let shelf: LocalShelf | null = null
 
 function makeStore(): Store {
-  current = new Api('', () => `Host ${TOKEN}`)
+  current = new Api(HOST_BASE, () => `Host ${TOKEN}`)
   const covers = new ImageCache(current, 400)
   const pages = new ImageCache(current, 24)
   const s: Store = { api: current, covers, pages, readingRoot: 'Lectura', state, refresh, go: go as any, back, notify, read }

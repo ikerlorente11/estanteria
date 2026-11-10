@@ -12,3 +12,4 @@ modules/estanteria-host/android/src/main/assets/viewer/
 *.aab
 credentials.json
 credentials/
+devhost/settings.json

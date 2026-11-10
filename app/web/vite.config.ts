@@ -9,6 +9,8 @@ export default defineConfig({
   // the viewer is linked from ../../viewer: its imports (vue, epubjs, pdfjs-dist) resolve from here
   resolve: { preserveSymlinks: true },
   clearScreen: false,
+  // in development the device reaches this server through `adb reverse tcp:5173 tcp:5173`
+  server: { port: 5173, strictPort: true },
   build: {
     outDir: '../modules/estanteria-host/android/src/main/assets/viewer',
     emptyOutDir: true,

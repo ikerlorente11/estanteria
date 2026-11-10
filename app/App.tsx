@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, BackHandler, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
@@ -23,14 +23,24 @@ export default function App() {
   const scheme = useColorScheme()
   const [page, setPage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const web = useRef<WebView>(null)
+  const web = useRef<React.ComponentRef<typeof WebView> | null>(null)
   const canGoBack = useRef(false)
   const pending = useRef<string[]>([])
   const ready = useRef(false)
 
   useEffect(() => {
-    EstanteriaHost.start()
-      .then(({ url, token }) => setPage(`${url}?t=${token}`))
+    // Without the native module (Expo Go) the host is the development one on the PC (devhost/, through adb reverse).
+    const started: Promise<{ url: string; token: string }> = EstanteriaHost
+      ? EstanteriaHost.start()
+      : process.env.EXPO_PUBLIC_HOST_URL
+        ? Promise.resolve({ url: `${process.env.EXPO_PUBLIC_HOST_URL.replace(/\/+$/, '')}/`, token: process.env.EXPO_PUBLIC_HOST_TOKEN || 'dev' })
+        : Promise.reject(new Error('Esta app necesita su módulo nativo (o EXPO_PUBLIC_HOST_URL en desarrollo).'))
+    started
+      .then(({ url, token }) => {
+        // in development the page can come from Vite on the PC (see .env.development); the host stays where it is
+        const dev = __DEV__ && process.env.EXPO_PUBLIC_VIEWER_URL
+        setPage(dev ? `${dev.replace(/\/+$/, '')}/?t=${token}&host=${encodeURIComponent(url.replace(/\/+$/, ''))}` : `${url}?t=${token}`)
+      })
       .catch((err) => setError(String(err?.message || err)))
       .finally(() => SplashScreen.hideAsync().catch(() => {}))
   }, [])
@@ -51,7 +61,7 @@ export default function App() {
     else pending.current.push(uri)
   }, [])
   useEffect(() => {
-    Linking.getInitialURL().then(open)
+    Linking.getInitialURL().then((u) => open(u ?? null))
     const sub = Linking.addEventListener('url', (e) => open(e.url))
     return () => sub.remove()
   }, [open])
@@ -74,7 +84,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={['top', 'bottom', 'left', 'right']}>
-        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} backgroundColor={background} />
+        <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         {error ? (
           <View style={styles.center}><Text style={styles.error}>{error}</Text></View>
         ) : !page ? (
@@ -84,7 +94,7 @@ export default function App() {
             ref={web}
             source={{ uri: page }}
             style={[styles.web, { backgroundColor: background }]}
-            originWhitelist={['http://127.0.0.1:*']}
+            originWhitelist={['http://127.0.0.1:*', 'http://localhost:*']}
             domStorageEnabled
             javaScriptEnabled
             allowsBackForwardNavigationGestures={false}
@@ -95,9 +105,9 @@ export default function App() {
             textZoom={100}
             forceDarkOn={false}
             onMessage={onMessage}
-            onNavigationStateChange={(s) => { canGoBack.current = s.canGoBack }}
-            onShouldStartLoadWithRequest={(req) => {
-              if (req.url.startsWith('http://127.0.0.1')) return true
+            onNavigationStateChange={(s: { canGoBack: boolean }) => { canGoBack.current = s.canGoBack }}
+            onShouldStartLoadWithRequest={(req: { url: string }) => {
+              if (req.url.startsWith('http://127.0.0.1') || req.url.startsWith('http://localhost')) return true
               Linking.openURL(req.url).catch(() => {})   // links out (a catalog's site, the Archivador) go to the browser
               return false
             }}

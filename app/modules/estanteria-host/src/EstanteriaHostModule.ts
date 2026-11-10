@@ -1,4 +1,4 @@
-import { NativeModule, requireNativeModule } from 'expo'
+import { NativeModule, requireOptionalNativeModule } from 'expo'
 
 import type { EstanteriaHostModuleEvents, HostStarted } from './EstanteriaHost.types'
 
@@ -8,4 +8,5 @@ declare class EstanteriaHostModule extends NativeModule<EstanteriaHostModuleEven
   stop(): void
 }
 
-export default requireNativeModule<EstanteriaHostModule>('EstanteriaHost')
+/** null in Expo Go (no native code there): the app then uses the development host on the PC, see devhost/. */
+export default requireOptionalNativeModule<EstanteriaHostModule>('EstanteriaHost')

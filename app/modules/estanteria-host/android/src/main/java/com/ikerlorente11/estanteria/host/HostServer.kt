@@ -43,10 +43,21 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
         super.stop()
     }
 
-    override fun serve(session: IHTTPSession): Response {
+    override fun serve(session: IHTTPSession): Response = answer(session).also { cors(it) }
+
+    /** The page may come from another origin while developing (Vite on the PC): the token still guards everything. */
+    private fun cors(response: Response) {
+        response.addHeader("Access-Control-Allow-Origin", "*")
+        response.addHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Host-Token, Range")
+        response.addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        response.addHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Range, Accept-Ranges")
+    }
+
+    private fun answer(session: IHTTPSession): Response {
         val path = session.uri
         return try {
             when {
+                session.method == Method.OPTIONS -> newFixedLengthResponse(Response.Status.NO_CONTENT, "text/plain", "")
                 path == "/" || path.startsWith("/assets/") || path.startsWith("/icons/") || path == "/favicon.ico" -> page(path)
                 !authorized(session) -> json(Response.Status.UNAUTHORIZED, JSONObject().put("detail", "falta el token del host"))
                 path.startsWith("/api/") || path.startsWith("/opds/") -> proxy(session)

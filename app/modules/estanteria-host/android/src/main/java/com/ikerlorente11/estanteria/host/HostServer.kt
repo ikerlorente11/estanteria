@@ -43,7 +43,9 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
         super.stop()
     }
 
-    override fun serve(session: IHTTPSession): Response = answer(session).also { cors(it) }
+    /** One connection per request: NanoHTTPD's keep-alive loses the odd request when the browser reuses a
+     * connection it is closing (a «Failed to fetch» now and then); on the loopback a new one costs nothing. */
+    override fun serve(session: IHTTPSession): Response = answer(session).also { cors(it); it.closeConnection(true) }
 
     /** The page may come from another origin while developing (Vite on the PC): the token still guards everything. */
     private fun cors(response: Response) {
@@ -315,7 +317,7 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
 
     companion object {
         const val PORT = 48123
-        const val SOCKET_READ_TIMEOUT = 0   // the event stream stays open as long as the page wants
+        const val SOCKET_READ_TIMEOUT = 30_000   // for reading a request; a response (the event stream) may take as long as it wants
         const val version = "0.1.0"
     }
 }

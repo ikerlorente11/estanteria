@@ -24,11 +24,12 @@
             <button v-if="item.progress && !item.progress.finished && item.progress.percent > 0" class="es-btn" @click="go({ v: 'read', id: item.id, page: 0 })">Desde el principio</button>
             <button v-if="!item.progress?.finished" class="es-btn" @click="mark(true)">Marcar como leído</button>
             <button v-else class="es-btn" @click="mark(false)">Marcar como no leído</button>
-            <button v-if="item.format === 'pdf'" class="es-btn" :disabled="converting"
-                    title="Rehacer este PDF como libro EPUB (texto que se adapta a la pantalla, con su índice), junto al PDF en tu Archivador. Solo para PDF con texto, no escaneados."
+            <button v-if="convertTo" class="es-btn" :disabled="converting" :title="convertTo === 'EPUB'
+                      ? 'Rehacer este PDF como libro EPUB (texto que se adapta a la pantalla, con su índice), junto al PDF en tu Archivador. Solo para PDF con texto, no escaneados.'
+                      : 'Maquetar este libro como PDF (páginas A5, con su índice), junto al libro en tu Archivador: para imprimirlo o leerlo donde solo se lee PDF.'"
                     @click="convert">
               <span v-if="converting" class="es-spin"></span><i v-else class="es-i es-i-book" aria-hidden="true"></i>
-              {{ converting ? 'Convirtiendo…' : 'Convertir a EPUB' }}
+              {{ converting ? 'Convirtiendo…' : `Convertir a ${convertTo}` }}
             </button>
             <OfflineButton v-if="store.offline" :items="[item]" />
             <a v-if="item.format !== 'folder'" class="es-btn" href="#" :title="store.offline ? 'Bajar el archivo original a donde elijas' : ''" @click.prevent="download"><i class="es-i es-i-download" aria-hidden="true"></i> {{ store.offline ? 'Archivo' : 'Descargar' }}</a>
@@ -99,13 +100,17 @@ async function toCloud() {
   saving.value = false
 }
 const converting = ref(false)
+/** What this item can be converted into: a PDF with text into an EPUB, a book into a PDF. */
+const convertTo = computed(() => !item.value ? '' : item.value.format === 'pdf' ? 'EPUB' : ['epub', 'fb2', 'mobi'].includes(item.value.format) ? 'PDF' : '')
 async function convert() {
   if (!item.value) return
   converting.value = true
-  store.notify('Convirtiendo a EPUB: puede tardar unos segundos…')
+  store.notify(`Convirtiendo a ${convertTo.value}: puede tardar unos segundos…`)
   try {
     const r = await store.api.convertToEpub(item.value.id)
-    store.notify(`Hecho: «${r.stats.title}», ${r.stats.chapters} capítulos. Lo tienes junto al PDF.`)
+    store.notify(r.stats.to === 'pdf'
+      ? `Hecho: «${r.stats.title}», ${r.stats.pages} páginas. Lo tienes junto al libro.`
+      : `Hecho: «${r.stats.title}», ${r.stats.chapters} capítulos. Lo tienes junto al PDF.`)
     store.refresh()
     if (r.item) go({ v: 'item', id: r.item.id })
   } catch (err: any) { store.notify(err?.message || String(err), true) }

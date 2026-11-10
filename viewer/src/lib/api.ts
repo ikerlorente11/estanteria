@@ -207,6 +207,8 @@ export interface ApiOffline {
   seen(method: string, path: string, data: unknown): void
   /** whether the service answers */
   online(ok: boolean): void
+  /** the id the service gave a bookmark made offline (temporary ids are below 0) */
+  bookmarkId?(id: number): number
 }
 
 /** Answers that mean the service is not there (the proxy in front answers instead). */
@@ -341,9 +343,24 @@ export class Api {
     return this.call<Bookmark>(`/api/items/${id}/bookmarks`, { method: 'POST', body: JSON.stringify(bookmark) })
   }
   changeBookmark(id: number, bookmarkId: number, change: { kind?: BookmarkKind; note?: string }) {
-    return this.call<Bookmark>(`/api/items/${id}/bookmarks/${bookmarkId}`, { method: 'PUT', body: JSON.stringify(change) })
+    const path = `/api/items/${id}/bookmarks/${this.bookmarkId(bookmarkId)}`
+    return this.markCall<Bookmark>(path, { method: 'PUT', body: JSON.stringify(change) })
   }
-  deleteBookmark(bookmarkId: number) { return this.call<{ ok: boolean }>(`/api/bookmarks/${bookmarkId}`, { method: 'DELETE' }) }
+  deleteBookmark(bookmarkId: number) {
+    return this.markCall<{ ok: boolean }>(`/api/bookmarks/${this.bookmarkId(bookmarkId)}`, { method: 'DELETE' })
+  }
+
+  /** A bookmark made offline keeps a temporary id (below 0) until it is sent: the one the service gave it. */
+  private bookmarkId(id: number): number { return this.offline?.bookmarkId ? this.offline.bookmarkId(id) : id }
+
+  /** A change to a bookmark not sent yet stays on this device (it changes what will be sent). */
+  private markCall<T>(path: string, init: RequestInit): Promise<T> {
+    if (/\/-\d+$/.test(path) && this.offline) {
+      const kept = this.offline.write(String(init.method), path, init.body ? JSON.parse(String(init.body)) : undefined)
+      if (kept !== undefined) return Promise.resolve(kept as T)
+    }
+    return this.call<T>(path, init)
+  }
 
   sourceKinds() { return this.call<SourceKindInfo[]>('/api/sources/kinds') }
   sources() { return this.call<Source[]>('/api/sources') }

@@ -7,7 +7,7 @@
  * falls back here for its JSON when the service does not answer. Reading progress made offline waits
  * here (in this device's storage) and is sent when the service answers again. */
 import { reactive } from 'vue'
-import type { Api, ApiOffline, Item, ItemDetail, Progress, Series } from './api.ts'
+import type { Api, ApiOffline, Bookmark, Item, ItemDetail, Progress, Series } from './api.ts'
 
 export interface OfflineEntry {
   item: ItemDetail
@@ -56,6 +56,8 @@ export const OFFLINE_WIDTHS = [1200, 1600, 2000, 2560]
 const WIDTH_KEY = 'estanteria.offline.width'
 const PENDING_KEY = 'estanteria.offline.pending'
 const KNOWN_KEY = 'estanteria.offline.progress'
+const MARKS_KEY = 'estanteria.offline.marks'
+const KNOWN_MARKS_KEY = 'estanteria.offline.bookmarks'
 
 function read<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch (_) { return fallback }
@@ -71,6 +73,17 @@ export function keptAsFile(item: Item): boolean {
 
 type Pending = { clear?: boolean; body?: Record<string, unknown>; at: number }
 
+/** Bookmarks, notes and highlights made or changed while the service does not answer. One made offline
+ * has a temporary id below 0 until it is sent; a change to it changes what will be sent. */
+interface Marks {
+  next: number
+  creates: Record<number, { item: number; body: Record<string, any>; mark: Bookmark; at: number }>
+  /** a change to a bookmark the service has (null: delete it) */
+  changes: Record<number, { item: number; change: Record<string, any> | null; at: number }>
+  /** temporary id → the one the service gave it, for the views that still hold the temporary one */
+  resolved: Record<number, number>
+}
+
 export class Offline implements ApiOffline {
   readonly state = reactive({
     loaded: false,
@@ -85,6 +98,8 @@ export class Offline implements ApiOffline {
   private flushing = false
   private pending: Record<number, Pending> = read(PENDING_KEY, {})
   private known: Record<number, Progress> = read(KNOWN_KEY, {})
+  private marks: Marks = { next: -1, creates: {}, changes: {}, resolved: {}, ...read<Partial<Marks>>(MARKS_KEY, {}) }
+  private knownMarks: Record<number, Bookmark[]> = read(KNOWN_MARKS_KEY, {})
   private api: Api | null = null
 
   private backend: OfflineBackend
@@ -217,6 +232,35 @@ export class Offline implements ApiOffline {
     return known === undefined ? item : { ...item, progress: known }
   }
 
+  /** The bookmarks of an item as this device knows them: the service's last answer plus what was made offline. */
+  private marksOf(id: number): Bookmark[] {
+    const out: Bookmark[] = []
+    for (const b of this.marksBase(id)) {
+      const c = this.marks.changes[b.id]
+      if (c && c.change === null) continue
+      out.push(c ? { ...b, ...c.change, updated: c.at } : b)
+    }
+    for (const c of Object.values(this.marks.creates)) if (c.item === id) out.push(c.mark)
+    return out.sort((a, b) => (a.page ?? 0) - (b.page ?? 0) || a.created - b.created)
+  }
+
+  private marksBase(id: number): Bookmark[] {
+    return this.knownMarks[id] ?? this.state.entries[id]?.item.bookmarks ?? []
+  }
+
+  private hasMarks(id: number): boolean {
+    return Object.values(this.marks.creates).some((c) => c.item === id) || Object.values(this.marks.changes).some((c) => c.item === id)
+  }
+
+  private marksPending(): boolean {
+    return !!(Object.keys(this.marks.creates).length || Object.keys(this.marks.changes).length)
+  }
+
+  /** The id the service gave a bookmark made offline (or the same id). */
+  bookmarkId(id: number): number {
+    return id < 0 ? this.marks.resolved[id] ?? id : id
+  }
+
   private items(): ItemDetail[] {
     return Object.values(this.state.entries).map((e) => this.withProgress(e.item))
   }
@@ -243,7 +287,7 @@ export class Offline implements ApiOffline {
     const one = base.match(/^\/api\/items\/(\d+)$/)
     if (one) {
       const entry = this.state.entries[Number(one[1])]
-      return entry ? this.withProgress(entry.item) : undefined
+      return entry ? { ...this.withProgress(entry.item), bookmarks: this.marksOf(entry.item.id) } : undefined
     }
     if (base === '/api/sources' || base === '/api/catalogs' || base === '/api/sources/kinds') return []
     return undefined
@@ -279,6 +323,8 @@ export class Offline implements ApiOffline {
 
   /** A change made while the service does not answer: kept to send later, answered from here. */
   write(method: string, path: string, body: unknown): unknown {
+    const mark = this.writeMark(method, path, (body || {}) as Record<string, any>)
+    if (mark !== undefined) return mark
     const m = path.match(/^\/api\/items\/(\d+)\/progress$/)
     if (!m || this.flushing) return undefined        // while sending what was kept, a failure is a failure
     const id = Number(m[1])
@@ -299,6 +345,53 @@ export class Offline implements ApiOffline {
     return progress
   }
 
+  private writeMark(method: string, path: string, body: Record<string, any>): unknown {
+    const now = Date.now() / 1000
+    const add = path.match(/^\/api\/items\/(\d+)\/bookmarks$/)
+    const change = path.match(/^\/api\/items\/(\d+)\/bookmarks\/(-?\d+)$/)
+    const remove = path.match(/^\/api\/bookmarks\/(-?\d+)$/)
+    const id = change ? Number(change[2]) : remove ? Number(remove[1]) : NaN
+    // while sending, only what was made offline can still change here (anything else is a real failure)
+    if (this.flushing && !(id < 0)) return undefined
+    if (add && method === 'POST') {
+      const item = Number(add[1])
+      const temp = this.marks.next
+      this.marks.next -= 1
+      const made: Bookmark = { id: temp, kind: body.kind || 'bookmark', page: body.page ?? null, location: body.location ?? null,
+                               excerpt: body.excerpt || '', note: body.note || '', created: now, updated: null }
+      this.marks.creates[temp] = { item, body: { ...body }, mark: made, at: now }
+      this.saveMarks()
+      return made
+    }
+    if (change && method === 'PUT') {
+      const item = Number(change[1])
+      const created = this.marks.creates[id]
+      if (created) {
+        Object.assign(created.body, body)
+        created.mark = { ...created.mark, ...body, updated: now }
+        this.saveMarks()
+        return created.mark
+      }
+      if (id < 0) return undefined
+      const was = this.marksOf(item).find((b) => b.id === id)
+      if (!was) return undefined
+      this.marks.changes[id] = { item, change: { ...(this.marks.changes[id]?.change || {}), ...body }, at: now }
+      this.saveMarks()
+      return { ...was, ...body, updated: now }
+    }
+    if (remove && method === 'DELETE') {
+      if (this.marks.creates[id]) delete this.marks.creates[id]
+      else if (id < 0) return { ok: true }
+      else {
+        const owner = Object.keys(this.state.entries).map(Number).find((i) => this.marksBase(i).some((b) => b.id === id)) ?? -1
+        this.marks.changes[id] = { item: owner, change: null, at: now }
+      }
+      this.saveMarks()
+      return { ok: true }
+    }
+    return undefined
+  }
+
   /** What the service answered, to remember the progress of kept items for when it does not. */
   seen(method: string, path: string, data: unknown): void {
     const base = path.split('?')[0]
@@ -311,7 +404,14 @@ export class Offline implements ApiOffline {
       }
     }
     if (method === 'GET' && Array.isArray(data)) data.forEach(remember)
-    else if (method === 'GET' && /^\/api\/items\/\d+$/.test(base)) remember(data)
+    else if (method === 'GET' && /^\/api\/items\/\d+$/.test(base)) {
+      remember(data)
+      const item = data as ItemDetail
+      if (item && this.state.entries[item.id] && Array.isArray(item.bookmarks) && !this.hasMarks(item.id)) {
+        this.knownMarks[item.id] = item.bookmarks
+        write(KNOWN_MARKS_KEY, this.knownMarks)
+      }
+    } else if (/^\/api\/(items\/\d+\/)?bookmarks(\/\d+)?$/.test(base)) this.seenMark(method, base, data as Bookmark)
     else if (method === 'PUT' && /^\/api\/items\/\d+\/progress$/.test(base)) {
       const id = Number(base.split('/')[3])
       if (this.state.entries[id]) { this.known[id] = data as Progress; changed = true }
@@ -319,17 +419,38 @@ export class Offline implements ApiOffline {
     if (changed) write(KNOWN_KEY, this.known)
   }
 
+  private seenMark(method: string, base: string, data: Bookmark): void {
+    const parts = base.split('/')
+    const item = parts[2] === 'items' ? Number(parts[3]) : -1
+    let changed = false
+    if (method === 'POST' && this.state.entries[item]) {
+      this.knownMarks[item] = [...this.marksBase(item).filter((b) => b.id !== data.id), data]
+      changed = true
+    } else if (method === 'PUT' && this.state.entries[item]) {
+      this.knownMarks[item] = this.marksBase(item).map((b) => (b.id === data.id ? data : b))
+      changed = true
+    } else if (method === 'DELETE') {
+      const gone = Number(parts[parts.length - 1])
+      for (const key of Object.keys(this.state.entries).map(Number)) {
+        const list = this.marksBase(key)
+        if (list.some((b) => b.id === gone)) { this.knownMarks[key] = list.filter((b) => b.id !== gone); changed = true }
+      }
+    }
+    if (changed) write(KNOWN_MARKS_KEY, this.knownMarks)
+  }
+
   /** The service answers (`true`) or not; when it comes back, what was read offline is sent. */
   online(ok: boolean): void {
     const was = this.state.online
     this.state.online = ok
-    if (ok && (!was || Object.keys(this.pending).length)) this.flush()
+    if (ok && (!was || Object.keys(this.pending).length || this.marksPending())) this.flush()
   }
 
   async flush(): Promise<void> {
-    if (this.flushing || !this.api || !Object.keys(this.pending).length) return
+    if (this.flushing || !this.api || (!Object.keys(this.pending).length && !this.marksPending())) return
     this.flushing = true
     try {
+      if (!(await this.flushMarks())) return
       for (const [key, p] of Object.entries(this.pending)) {
         const id = Number(key)
         try {
@@ -343,6 +464,46 @@ export class Offline implements ApiOffline {
       }
       this.save()
     } finally { this.flushing = false }
+  }
+
+  /** Sends the bookmarks made offline, then the changes; false if the service went away again. */
+  private async flushMarks(): Promise<boolean> {
+    const api = this.api!
+    try {
+      for (const [key, c] of Object.entries(this.marks.creates).sort((a, b) => a[1].at - b[1].at)) {
+        const temp = Number(key)
+        try {
+          this.marks.resolved[temp] = (await api.addBookmark(c.item, c.body)).id
+        } catch (err: any) {
+          if (err?.offline) throw err
+          // the item is gone (404) or the service will not take it: nothing left to send
+        }
+        delete this.marks.creates[temp]
+        this.saveMarks()
+      }
+      for (const [key, c] of Object.entries(this.marks.changes)) {
+        const id = Number(key)
+        try {
+          if (c.change === null) await api.deleteBookmark(id)
+          else await api.changeBookmark(c.item, id, c.change)
+        } catch (err: any) {
+          if (err?.offline) throw err
+        }
+        if (this.marks.changes[id]?.at === c.at) delete this.marks.changes[id]
+        this.saveMarks()
+      }
+      return true
+    } catch (_) {
+      this.saveMarks()
+      return false
+    }
+  }
+
+  private saveMarks(): void {
+    // temporary ids are only needed while a view may still hold them: keep the newest (the lowest)
+    const resolved = Object.entries(this.marks.resolved)
+    if (resolved.length > 200) this.marks.resolved = Object.fromEntries(resolved.sort((a, b) => Number(a[0]) - Number(b[0])).slice(0, 200))
+    write(MARKS_KEY, this.marks)
   }
 
   private save(): void {

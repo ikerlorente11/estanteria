@@ -4,8 +4,10 @@ import { Offline, type OfflineBackend, type OfflineProgress } from '../src/lib/o
 
 const comic = { id: 7, source_id: null, path: '/Lectura/A/A 1.cbz', folder: 'A', name: 'A 1.cbz', format: 'cbz', kind: 'comic', size: 10, modified: 1, title: 'Uno',
                 series: 'A', number: 1, author: null, year: null, summary: null, pages: 3, direction: 'ltr', cover: true, state: 'ready', error: null,
-                added: 5, updated: 5, meta: {}, progress: null, page_sizes: [], bookmarks: [] }
-const book = { ...comic, id: 8, path: '/Lectura/L.epub', folder: '', name: 'L.epub', format: 'epub', kind: 'book', title: 'Libro', series: null, number: null, pages: 0, added: 9 }
+                added: 5, updated: 5, meta: {}, progress: null, page_sizes: [],
+                bookmarks: [{ id: 50, kind: 'note', page: 0, location: null, excerpt: '', note: 'vieja', created: 1, updated: null },
+                            { id: 51, kind: 'bookmark', page: 2, location: null, excerpt: '', note: '', created: 2, updated: null }] }
+const book = { ...comic, bookmarks: [], id: 8, path: '/Lectura/L.epub', folder: '', name: 'L.epub', format: 'epub', kind: 'book', title: 'Libro', series: null, number: null, pages: 0, added: 9 }
 
 let handler: (p: OfflineProgress) => void = () => {}
 const started: any[] = []
@@ -24,6 +26,7 @@ const sent: string[] = []
   if (url.startsWith('http://offline.localhost/')) return new Response(new Blob(['img']), { status: 200 })
   if (!up) throw new TypeError('Failed to fetch')
   sent.push(`${init.method || 'GET'} ${url.replace('https://svc', '')}`)
+  if (init.method === 'POST' && url.endsWith('/bookmarks')) return new Response(JSON.stringify({ ...JSON.parse(init.body), id: 77, created: 3, updated: null }), { status: 200 })
   if (url.endsWith('/api/items/9')) return new Response(JSON.stringify({ ...comic, id: 9, title: 'Nueve', pages: 2 }), { status: 200 })
   return new Response(JSON.stringify(init.body ? JSON.parse(init.body) : {}), { status: 200 })
 }
@@ -60,17 +63,31 @@ const p = await api.setProgress(7, { page: 1, percent: 0.66, finished: false, de
 assert.equal(p.page, 1)
 assert.equal((await api.item(7)).progress?.page, 1)
 assert.deepEqual((await api.continueReading()).map((i) => i.id), [7])
-await assert.rejects(api.addBookmark(7, { kind: 'bookmark', page: 1 }), (err: any) => err.offline === true)
+
+// notes and bookmarks offline: made with a temporary id, changed and deleted here, shown in the item
+const made = await api.addBookmark(7, { kind: 'note', page: 1, note: 'primera' })
+assert.ok(made.id < 0)
+assert.equal((await api.changeBookmark(7, made.id, { note: 'corregida' })).note, 'corregida')
+const gone = await api.addBookmark(7, { kind: 'bookmark', page: 2 })
+await api.deleteBookmark(gone.id)
+assert.equal((await api.changeBookmark(7, 50, { note: 'nueva' })).note, 'nueva')
+await api.deleteBookmark(51)
+assert.deepEqual((await api.item(7)).bookmarks.map((b) => [b.id, b.note]), [[50, 'nueva'], [made.id, 'corregida']])
+assert.deepEqual((await api.item(8)).bookmarks, [])
 
 // back online: what was read is sent once
 up = true
 await api.library()
 await new Promise((r) => setTimeout(r, 10))
 assert.equal(offline.state.online, true)
-assert.deepEqual(sent.filter((s) => s.startsWith('PUT')), ['PUT /api/items/7/progress'])
+assert.deepEqual(sent.filter((s) => !s.startsWith('GET')),
+                 ['POST /api/items/7/bookmarks', 'PUT /api/items/7/bookmarks/50', 'DELETE /api/bookmarks/51', 'PUT /api/items/7/progress'])
 await api.library()
 await new Promise((r) => setTimeout(r, 10))
-assert.equal(sent.filter((s) => s.startsWith('PUT')).length, 1)
+assert.equal(sent.filter((s) => !s.startsWith('GET')).length, 4)
+// a view still holding the temporary id reaches the bookmark the service made
+await api.deleteBookmark(made.id)
+assert.equal(sent[sent.length - 1], 'DELETE /api/bookmarks/77')
 
 // the queue: one item at a time, the backend reports, the next goes
 assert.equal(offline.add([comic as any]), 0)                    // already kept

@@ -174,7 +174,8 @@ function makeStore(): Store {
   const s: Store = { api: current, covers, pages, readingRoot: 'Lectura', state, refresh, go: go as any, back, notify, read,
     // the app downloads the file (through the host, with the token in the URL) into its own folder, tells how it goes
     // (window.__estanteriaDownload) and opens it with another app when asked again once done
-    saveFile: (path, name) => tellApp({ type: 'download', url: new URL(hostUrl(path), window.location.href).toString(), name, path }),
+    saveFile: (path, name, quiet) => tellApp({ type: 'download', url: new URL(hostUrl(path), window.location.href).toString(), name, path, quiet: !!quiet }),
+    removeDownload: (path) => tellApp({ type: 'remove-download', path }),
     downloads, canFullscreen: false }
   if (hostInfo.offline) {
     const keeper = offline.value || new Offline(hostBackend())
@@ -296,6 +297,7 @@ onMounted(async () => {
   form.username = connection.username
   await connect()
   if (!connected.value && view.value.v !== 'setup') go({ v: 'setup' }, true)
+  console.log(`viewport ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio} screen ${screen.width}x${screen.height}`)
   tellApp({ type: 'ready' })
 })
 </script>

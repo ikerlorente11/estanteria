@@ -27,8 +27,10 @@ export interface Store {
   /** Saves a file of the service where the host wants (Android: through the app); without it, the browser downloads it.
    * A host that keeps what it downloaded tells how each one is going in `downloads` (by the file's API path) and opens
    * it when asked again once done. */
-  saveFile?: (path: string, name: string) => void
+  saveFile?: (path: string, name: string, quiet?: boolean) => void
   downloads?: Record<string, DownloadState>
+  /** deletes a download the host keeps */
+  removeDownload?: (path: string) => void
   /** false when the host is already full screen (the Android app): the readers hide the button */
   canFullscreen?: boolean
 }
@@ -37,6 +39,8 @@ export interface DownloadState {
   state: 'downloading' | 'done' | 'error'
   percent?: number
   error?: string
+  name?: string
+  bytes?: number
 }
 
 export const STORE: InjectionKey<Store> = Symbol('estanteria')

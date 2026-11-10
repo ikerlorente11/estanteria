@@ -13,6 +13,9 @@
         <span v-if="store.shelf.state.scanning" class="es-spin"></span><i v-else class="es-i es-i-refresh" aria-hidden="true"></i> Actualizar
       </button>
       <OfflineButton v-if="store.offline && !localSource && folderMode && crumbs.length && inFolder.length" :items="inFolder" what="la carpeta" />
+      <button v-else-if="store.saveFile && !localSource && folderMode && crumbs.length && pendingInFolder.length" class="es-btn" title="Descargar a este dispositivo todo lo que hay en la carpeta" @click="downloadFolder">
+        <i class="es-i es-i-download" aria-hidden="true"></i> Descargar carpeta ({{ pendingInFolder.length }})
+      </button>
       <input ref="searchEl" :value="q" class="es-search" type="search" placeholder="Buscar por título, serie o autor" aria-label="Buscar"
              @input="typed(($event.target as HTMLInputElement).value)" />
     </header>
@@ -36,6 +39,7 @@
       <span class="es-libbar-label">Biblioteca</span>
       <button class="es-chip" :class="{ on: !source }" @click="setSource('')">Todas</button>
       <button class="es-chip" :class="{ on: source === 'archivador' }" @click="setSource('archivador')"><i class="es-i es-i-cloud" aria-hidden="true"></i> El Archivador</button>
+      <button v-if="store.downloads" class="es-chip" :class="{ on: downloadedMode }" title="Lo descargado a este dispositivo" @click="setSource('descargados')"><i class="es-i es-i-download" aria-hidden="true"></i> Descargados<template v-if="downloadedIds.size"> ({{ downloadedIds.size }})</template></button>
       <button v-for="s in sources" :key="s.id" class="es-chip" :class="{ on: source === String(s.id) }" :title="s.id < 0 ? `En este PC: ${s.url || s.name}` : s.label"
               @click="setSource(String(s.id))"><i class="es-i" :class="s.id < 0 ? 'es-i-computer' : 'es-i-server'" aria-hidden="true"></i> {{ s.name }}</button>
     </div>
@@ -110,6 +114,13 @@ const items = ref<Item[]>([])
 const external = ref<Item[]>([])
 /** everything under the folder shown (its subfolders too), for «Descargar la carpeta» */
 const inFolder = ref<Item[]>([])
+/** what the folder holds that is not downloaded yet (a host that keeps downloads) */
+const pendingInFolder = computed(() => inFolder.value.filter((i) => i.format !== 'folder' && store.downloads?.[store.api.filePath(i.id)]?.state !== 'done'))
+function downloadFolder() {
+  const items = pendingInFolder.value
+  for (const i of items) store.saveFile?.(store.api.filePath(i.id), i.name, true)
+  store.notify(`${items.length} ${items.length === 1 ? 'archivo' : 'archivos'} en cola de descarga.`)
+}
 const subfolders = ref<Subfolder[]>([])
 /** at the top of «Todas»: the libraries of this PC (path = their source id) */
 const pcLibraries = ref<Subfolder[]>([])
@@ -124,6 +135,10 @@ let request = 0
 
 /** Browsing folder by folder: no search, and either everything, the Archivador alone or a folder of this PC. */
 const localSource = computed(() => isLocalSource(props.source))
+/** the files the host downloaded (Android): a view of its own, filtered here */
+const downloadedMode = computed(() => props.source === 'descargados')
+const downloadedIds = computed(() => new Set(Object.entries(store.downloads || {}).filter(([, d]) => d.state === 'done')
+  .map(([path]) => Number(path.match(/\/api\/items\/(\d+)\/file/)?.[1]) || 0).filter(Boolean)))
 const folderMode = computed(() => !props.q && (!props.source || props.source === 'archivador' || localSource.value))
 const rootName = computed(() => (localSource.value ? sources.value.find((s) => String(s.id) === props.source)?.name || 'Este PC' : store.readingRoot))
 /** where the folders shown come from: the Archivador, or a library of this PC */
@@ -160,6 +175,22 @@ async function load() {
   if (!state.connected) return
   const mine = ++request
   loading.value = true
+  if (downloadedMode.value) {
+    try {
+      const ids = downloadedIds.value
+      const all = ids.size ? await store.api.items({ q: props.q || undefined, kind: (props.kind || undefined) as Kind | undefined, sort: (props.sort || 'series') as any, limit: 1000 }) : []
+      if (mine !== request) return
+      items.value = all.filter((i) => ids.has(i.id))
+      external.value = []
+      subfolders.value = []
+      pcLibraries.value = []
+      inFolder.value = []
+      exhausted.value = true
+      externalExhausted.value = true
+    } catch (err: any) { store.notify(err?.message || String(err), true) }
+    if (mine === request) loading.value = false
+    return
+  }
   try {
     const folders = folderMode.value ? childFolders() : []
     const wantExternal = folderMode.value && !props.source && !folder.value
@@ -170,7 +201,7 @@ async function load() {
       Promise.all(folders.map((f) => store.api.items({ folder: f.path, source: folderSource.value, kind: kindFilter(), limit: 1, sort: 'series' }).catch(() => [] as Item[]))),
     ])
     if (mine !== request) return
-    inFolder.value = store.offline && folder.value && !localSource.value
+    inFolder.value = (store.offline || store.saveFile) && folder.value && !localSource.value
       ? await store.api.items({ folder: folder.value, source: 'archivador', limit: 1000 }).catch(() => [] as Item[]) : []
     if (mine !== request) return
     folders.forEach((f, i) => { const first = covers[i][0]; if (first) { f.coverItem = first.id; f.coverHas = first.cover } })

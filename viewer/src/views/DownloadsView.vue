@@ -10,7 +10,24 @@
       </label>
     </header>
 
-    <p v-if="!offline" class="es-muted">Esta versión de La Estantería no guarda copias; usa la app de escritorio o la de Android.</p>
+    <template v-if="!offline && store.downloads">
+      <p class="es-muted es-intro">Los archivos que descargas quedan en esta app (su carpeta «descargas») y se abren con otra app. Lo que lees aquí sigue viniendo de tu Archivador.</p>
+      <p v-if="!files.length" class="es-muted">Nada todavía. En la ficha de un cómic o un libro, o en una carpeta, tienes «Descargar».</p>
+      <ul v-else class="es-jobs">
+        <li v-for="f in files" :key="f.path" class="es-job" :class="{ 'es-job-bad': f.state === 'error' }">
+          <span class="es-job-text">
+            <strong class="es-ellipsis">{{ f.name }}</strong>
+            <small class="es-muted">{{ f.state === 'downloading' ? `Descargando ${f.percent ?? 0} %` : f.state === 'error' ? `No se pudo: ${f.error}` : f.bytes ? sizeLabel(f.bytes) : 'Descargado' }}</small>
+            <span v-if="f.state === 'downloading'" class="es-job-bar"><span :style="{ width: `${f.percent ?? 0}%` }"></span></span>
+          </span>
+          <button v-if="f.id" class="es-btn es-small" @click="go({ v: 'item', id: f.id })">Ficha</button>
+          <button v-if="f.state === 'done'" class="es-btn es-small" @click="store.saveFile?.(f.path, f.name)">Abrir</button>
+          <button class="es-mini" title="Borrar de este dispositivo" @click="store.removeDownload?.(f.path)"><i class="es-i es-i-close" aria-hidden="true"></i></button>
+        </li>
+      </ul>
+      <button v-if="files.length > 1" class="es-btn es-more" @click="removeDownloads"><i class="es-i es-i-delete" aria-hidden="true"></i> Borrar todas las descargas</button>
+    </template>
+    <p v-else-if="!offline" class="es-muted">Esta versión de La Estantería no guarda copias; usa la app de escritorio o la de Android.</p>
     <template v-else>
       <p class="es-muted es-intro">
         Lo descargado se lee sin conexión y, aunque haya, se abre desde este equipo, al instante. El progreso que hagas sin conexión se envía en cuanto vuelva. Los cómics y libros de este equipo no hace falta descargarlos: están en la biblioteca, en «En este PC».
@@ -60,6 +77,13 @@ const offline = computed(() => store.offline)
 const where = ref('')
 
 const jobs = computed(() => Object.values(offline.value?.state.jobs || {}))
+/** the files a host without offline reading keeps (Android: plain downloads), by name */
+const files = computed(() => Object.entries(store.downloads || {})
+  .map(([path, d]) => ({ path, ...d, name: d.name || decodeURIComponent(path.split('/').pop() || path), id: Number(path.match(/\/api\/items\/(\d+)\/file/)?.[1]) || 0 }))
+  .sort((a, b) => a.name.localeCompare(b.name)))
+function removeDownloads() {
+  for (const f of files.value) store.removeDownload?.(f.path)
+}
 const kept = computed(() => Object.values(offline.value?.state.entries || {})
   .sort((a, b) => (a.item.series || a.item.title).localeCompare(b.item.series || b.item.title) || (a.item.number ?? 0) - (b.item.number ?? 0))
   .map((e) => e.item))

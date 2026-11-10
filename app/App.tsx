@@ -92,9 +92,9 @@ export default function App() {
   // the system's bar at the bottom stays hidden (a swipe from the edge brings it back for a moment): a reader wants the screen
   useEffect(() => {
     if (Platform.OS !== 'android') return
-    NavigationBar.setVisibilityAsync('hidden').catch(() => {})
+    try { Promise.resolve(NavigationBar.setVisibilityAsync('hidden')).catch(() => {}) } catch (_) {}
   }, [])
-  useEffect(() => { SystemUI.setBackgroundColorAsync(scheme === 'dark' ? DARK : LIGHT).catch(() => {}) }, [scheme])
+  useEffect(() => { try { Promise.resolve(SystemUI.setBackgroundColorAsync(scheme === 'dark' ? DARK : LIGHT)).catch(() => {}) } catch (_) {} }, [scheme])
 
   // the page follows the system's theme through here: its own media query follows the app's theme, not the system's
   useEffect(() => {
@@ -127,7 +127,7 @@ export default function App() {
   const tell = useCallback((text: string, error = false) => {
     web.current?.injectJavaScript(`window.__estanteriaNotify && window.__estanteriaNotify(${JSON.stringify(text)}, ${error}); true;`)
   }, [])
-  const report = useCallback((path: string, state: { state: 'downloading' | 'done' | 'error'; percent?: number; error?: string } | null) => {
+  const report = useCallback((path: string, state: { state: 'downloading' | 'done' | 'error'; percent?: number; error?: string; name?: string; bytes?: number } | null) => {
     web.current?.injectJavaScript(`window.__estanteriaDownload && window.__estanteriaDownload(${JSON.stringify(path)}, ${JSON.stringify(state)}); true;`)
   }, [])
   const openFile = useCallback(async (uri: string, name: string) => {
@@ -138,31 +138,59 @@ export default function App() {
       tell(`No hay con qué abrir ${name}: ${err?.message || err}`, true)
     }
   }, [tell])
-  const download = useCallback(async (url: string, rawName: string, path: string) => {
+  const queue = useRef<{ url: string; name: string; path: string; quiet: boolean }[]>([])
+  const busy = useRef(false)
+  const download = useCallback(async (url: string, rawName: string, path: string, quiet: boolean) => {
     const name = fileNameOf(rawName)
     const target = `${DOWNLOADS}${name}`
     try {
       await FileSystem.makeDirectoryAsync(DOWNLOADS, { intermediates: true })
       const have = await FileSystem.getInfoAsync(target)
-      if (have.exists && have.size > 0) { report(path, { state: 'done' }); await openFile(target, name); return }
+      if (have.exists && have.size > 0) { report(path, { state: 'done', name, bytes: have.size }); if (!quiet) await openFile(target, name); return }
       let shown = -1
-      report(path, { state: 'downloading', percent: 0 })
+      report(path, { state: 'downloading', percent: 0, name })
       const job = FileSystem.createDownloadResumable(url, `${target}.part`, {}, (p) => {
         const pct = p.totalBytesExpectedToWrite > 0 ? Math.floor((p.totalBytesWritten / p.totalBytesExpectedToWrite) * 100) : -1
-        if (pct !== shown) { shown = pct; report(path, { state: 'downloading', percent: Math.max(0, pct) }) }
+        if (pct !== shown) { shown = pct; report(path, { state: 'downloading', percent: Math.max(0, pct), name }) }
       })
       const result = await job.downloadAsync()
       if (!result || result.status >= 400) throw new Error(`HTTP ${result?.status ?? '?'}`)
       await FileSystem.moveAsync({ from: result.uri, to: target })
       await remember(path, name)
-      report(path, { state: 'done' })
-      tell(`Descargado: ${name}`)
+      const info = await FileSystem.getInfoAsync(target)
+      report(path, { state: 'done', name, bytes: info.exists ? info.size : undefined })
+      if (!quiet) tell(`Descargado: ${name}`)
     } catch (err: any) {
-      report(path, { state: 'error', error: String(err?.message || err) })
+      report(path, { state: 'error', error: String(err?.message || err), name })
       tell(`No se pudo descargar ${name}: ${err?.message || err}`, true)
       FileSystem.deleteAsync(`${target}.part`, { idempotent: true }).catch(() => {})
     }
   }, [openFile, report, tell])
+  // one at a time (a whole folder may be asked for at once)
+  const enqueue = useCallback((job: { url: string; name: string; path: string; quiet: boolean }) => {
+    queue.current.push(job)
+    if (job.quiet) report(job.path, { state: 'downloading', percent: 0, name: fileNameOf(job.name) })
+    if (busy.current) return
+    busy.current = true
+    ;(async () => {
+      while (queue.current.length) {
+        const next = queue.current.shift()!
+        await download(next.url, next.name, next.path, next.quiet)
+      }
+      busy.current = false
+    })()
+  }, [download, report])
+  const removeDownload = useCallback(async (path: string) => {
+    const index = await readIndex()
+    const name = index[path]
+    queue.current = queue.current.filter((j) => j.path !== path)
+    if (name) {
+      await FileSystem.deleteAsync(`${DOWNLOADS}${name}`, { idempotent: true }).catch(() => {})
+      delete index[path]
+      await FileSystem.writeAsStringAsync(INDEX, JSON.stringify(index)).catch(() => {})
+    }
+    report(path, null)
+  }, [report])
 
   // what is already downloaded, so the page shows it from the start
   const announceDownloads = useCallback(async () => {
@@ -170,7 +198,7 @@ export default function App() {
       const index = await readIndex()
       for (const [path, name] of Object.entries(index)) {
         const have = await FileSystem.getInfoAsync(`${DOWNLOADS}${name}`)
-        if (have.exists) report(path, { state: 'done' })
+        if (have.exists) report(path, { state: 'done', name, bytes: have.size })
       }
     } catch (_) { /* no downloads yet */ }
   }, [report])
@@ -192,9 +220,11 @@ export default function App() {
     } else if (msg.type === 'open-url' && typeof msg.url === 'string') {
       Linking.openURL(msg.url).catch(() => {})
     } else if (msg.type === 'download' && typeof msg.url === 'string') {
-      download(String(msg.url), String(msg.name || 'archivo'), String(msg.path || msg.url))
+      enqueue({ url: String(msg.url), name: String(msg.name || 'archivo'), path: String(msg.path || msg.url), quiet: !!msg.quiet })
+    } else if (msg.type === 'remove-download' && typeof msg.path === 'string') {
+      removeDownload(msg.path)
     }
-  }, [open])
+  }, [open, announceDownloads, enqueue, removeDownload])
 
   const background = scheme === 'dark' ? DARK : LIGHT
   return (

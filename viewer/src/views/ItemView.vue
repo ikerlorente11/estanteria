@@ -45,6 +45,7 @@
               <span v-if="dl?.state === 'downloading'" class="es-spin"></span><i v-else class="es-i" :class="dl?.state === 'done' ? 'es-i-check' : 'es-i-download'" aria-hidden="true"></i>
               {{ dl?.state === 'downloading' ? `Descargando ${dl.percent ?? 0} %` : dl?.state === 'done' ? 'Descargado' : dl?.state === 'error' ? 'Reintentar' : store.offline ? 'Archivo' : 'Descargar' }}
             </a>
+            <a v-if="dl?.state === 'done' && store.removeDownload" class="es-btn" href="#" title="Borrar la descarga de este dispositivo" @click.prevent="store.removeDownload(store.api.filePath(item.id))"><i class="es-i es-i-delete" aria-hidden="true"></i></a>
             <button v-if="item.source_id && !local && item.format !== 'folder'" class="es-btn" :disabled="saving" title="Copiar el archivo a la carpeta Lectura de tu Archivador" @click="toCloud">
               <span v-if="saving" class="es-spin"></span><i v-else class="es-i es-i-cloud" aria-hidden="true"></i> Guardar en El Archivador
             </button>

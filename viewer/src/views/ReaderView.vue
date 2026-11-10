@@ -29,9 +29,10 @@ const PdfReader = defineAsyncComponent(() => import('./PdfReader.vue'))
 /** Opens an item and hands it to the reader of its kind: pages (comics, PDF) or text (EPUB). */
 const props = defineProps<{ id: number; startPage?: number; as?: 'doc' | 'pages' }>()
 /** a PDF: as a document (pdf.js), or its pages as images in the comic reader; the reader's setting unless asked */
-const asDoc = computed(() => (props.as ? props.as === 'doc' : loadSettings().pdf === 'doc'))
 const store = useStore()
 const item = ref<ItemDetail | null>(null)
+// never for a PDF without text (a comic, a scan): the service says
+const asDoc = computed(() => item.value?.meta?.text !== false && (props.as ? props.as === 'doc' : loadSettings().pdf === 'doc'))
 const loading = ref(true)
 const error = ref('')
 

@@ -22,7 +22,7 @@
               {{ item.progress && !item.progress.finished && item.progress.percent > 0 ? 'Seguir leyendo' : item.progress?.finished ? 'Leer otra vez' : 'Leer' }}
             </button>
             <button v-if="item.progress && !item.progress.finished && item.progress.percent > 0" class="es-btn" @click="go({ v: 'read', id: item.id, page: 0 })">Desde el principio</button>
-            <button v-if="item.kind === 'pdf'" class="es-btn" :title="pdfAs === 'doc' ? 'Sus páginas como imágenes, en el lector de cómics (doble página, manga, tira)' : 'Como documento: texto que se puede seleccionar y zoom sin perder nitidez'"
+            <button v-if="item.kind === 'pdf' && item.meta?.text !== false" class="es-btn" :title="pdfAs === 'doc' ? 'Sus páginas como imágenes, en el lector de cómics (doble página, manga, tira)' : 'Como documento: texto que se puede seleccionar y zoom sin perder nitidez'"
                     @click="go({ v: 'read', id: item.id, as: pdfAs === 'doc' ? 'pages' : 'doc' })">
               <i class="es-i" :class="pdfAs === 'doc' ? 'es-i-pages' : 'es-i-page'" aria-hidden="true"></i> {{ pdfAs === 'doc' ? 'Leer como cómic' : 'Leer como documento' }}
             </button>

@@ -196,6 +196,8 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-rtools { display: flex; align-items: center; gap: 2px; }
 .es-rsep { width: 1px; height: 20px; background: rgba(255,255,255,.2); margin: 0 4px; }
 .es-rbtn { width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+/* a reader button with a word next to its icon (the ways out of a mode must be read, not guessed) */
+.es-rbtn-text { width: auto; padding: 0 10px; gap: 6px; font-size: 13px; font-weight: 600; }
 .es-rbtn:hover { background: rgba(255,255,255,.12); }
 .es-rbtn.on { color: var(--es-accent); background: rgba(217,130,43,.18); }
 .es-rslider { flex: 1; accent-color: var(--es-accent); cursor: pointer; min-width: 0; }

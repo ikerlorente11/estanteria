@@ -7,7 +7,6 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import * as SplashScreen from 'expo-splash-screen'
 import * as NavigationBar from 'expo-navigation-bar'
 import * as FileSystem from 'expo-file-system/legacy'
-import * as Sharing from 'expo-sharing'
 
 import EstanteriaHost from './modules/estanteria-host'
 
@@ -21,6 +20,19 @@ SplashScreen.preventAutoHideAsync().catch(() => {})
 
 const DARK = '#141417'
 const LIGHT = '#fafafc'
+
+/** The folder downloads go to: the user picks it once (Android asks through its own chooser) and it is remembered. */
+const FOLDER_FILE = `${FileSystem.documentDirectory}downloads-folder.txt`
+async function downloadsFolder(): Promise<string | null> {
+  try {
+    const kept = await FileSystem.readAsStringAsync(FOLDER_FILE)
+    if (kept) return kept
+  } catch (_) { /* not chosen yet */ }
+  const asked = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync()
+  if (!asked.granted) return null
+  await FileSystem.writeAsStringAsync(FOLDER_FILE, asked.directoryUri).catch(() => {})
+  return asked.directoryUri
+}
 
 // In development the page's console and errors come out here (Metro): the web view does not log them itself.
 const DEV_CONSOLE = __DEV__ ? `(function () {
@@ -98,6 +110,35 @@ export default function App() {
     return () => sub.remove()
   }, [open])
 
+  // a file of the service, fetched through the host and put in the folder the user chose once (Descargas, say);
+  // progress and the outcome show in the page
+  const tell = useCallback((text: string, error = false) => {
+    web.current?.injectJavaScript(`window.__estanteriaNotify && window.__estanteriaNotify(${JSON.stringify(text)}, ${error}); true;`)
+  }, [])
+  const download = useCallback(async (url: string, rawName: string) => {
+    const name = rawName.replace(/[\\/:*?"<>|]+/g, '_')
+    const tmp = `${FileSystem.cacheDirectory}${Date.now()}-${name}`
+    try {
+      const folder = await downloadsFolder()
+      if (!folder) { tell('Sin carpeta donde guardar: elige una para las descargas.', true); return }
+      let shown = -1
+      const job = FileSystem.createDownloadResumable(url, tmp, {}, (p) => {
+        const pct = p.totalBytesExpectedToWrite > 0 ? Math.floor((p.totalBytesWritten / p.totalBytesExpectedToWrite) * 100) : -1
+        if (pct !== shown && (pct === -1 || pct % 5 === 0)) { shown = pct; tell(pct >= 0 ? `Descargando ${name}… ${pct} %` : `Descargando ${name}… ${Math.round(p.totalBytesWritten / 1e6)} MB`) }
+      })
+      const result = await job.downloadAsync()
+      if (!result || result.status >= 400) throw new Error(`HTTP ${result?.status ?? '?'}`)
+      const mime = result.headers['content-type'] || result.headers['Content-Type'] || 'application/octet-stream'
+      const saved = await FileSystem.StorageAccessFramework.createFileAsync(folder, name, mime.split(';')[0])
+      await FileSystem.StorageAccessFramework.copyAsync({ from: result.uri, to: saved })
+      tell(`Guardado: ${name}`)
+    } catch (err: any) {
+      tell(`No se pudo descargar: ${err?.message || err}`, true)
+    } finally {
+      FileSystem.deleteAsync(tmp, { idempotent: true }).catch(() => {})
+    }
+  }, [tell])
+
   const onMessage = useCallback((e: WebViewMessageEvent) => {
     let msg: any
     try { msg = JSON.parse(e.nativeEvent.data) } catch (_) { return }
@@ -114,22 +155,14 @@ export default function App() {
     } else if (msg.type === 'open-url' && typeof msg.url === 'string') {
       Linking.openURL(msg.url).catch(() => {})
     } else if (msg.type === 'download' && typeof msg.url === 'string') {
-      // a file of the service, fetched through the host: saved in the app's cache and handed to the system (save, open with…)
-      const name = String(msg.name || 'archivo').replace(/[\\/:*?"<>|]+/g, '_')
-      const target = `${FileSystem.cacheDirectory}${name}`
-      FileSystem.downloadAsync(msg.url, target)
-        .then(async ({ status, uri }) => {
-          if (status >= 400) throw new Error(`HTTP ${status}`)
-          if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { dialogTitle: name })
-        })
-        .catch((err) => web.current?.injectJavaScript(`window.__estanteriaNotify && window.__estanteriaNotify(${JSON.stringify(`No se pudo descargar: ${err?.message || err}`)}, true); true;`))
+      download(String(msg.url), String(msg.name || 'archivo'))
     }
   }, [open])
 
   const background = scheme === 'dark' ? DARK : LIGHT
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={['top', 'bottom', 'left', 'right']}>
+      <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={['top', 'left', 'right']}>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         {error ? (
           <View style={styles.center}><Text style={styles.error}>{error}</Text></View>

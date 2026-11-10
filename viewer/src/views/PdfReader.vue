@@ -15,7 +15,7 @@
         <button class="es-rbtn es-pdf-zoom" :class="{ on: fit }" title="Ajustar al ancho (0)" @click="fitWidth">{{ fit ? 'Ancho' : `${Math.round(zoom * 100)} %` }}</button>
         <button class="es-rbtn" title="Acercar (+)" @click="zoomBy(1.2)"><span class="es-pdf-zoomsign" aria-hidden="true">+</span></button>
         <span class="es-rsep"></span>
-        <button class="es-rbtn" title="Leer como cómic: sus páginas como imágenes (doble página, manga, tira)" @click="asPages"><i class="es-i es-i-pages" aria-hidden="true"></i></button>
+        <button class="es-rbtn es-rbtn-text" title="Leer como cómic: sus páginas como imágenes (doble página, manga, tira)" @click="asPages"><i class="es-i es-i-pages" aria-hidden="true"></i> Cómic</button>
         <button class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
     </header>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Appearance, BackHandler, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native'
+import { ActivityIndicator, Appearance, Dimensions, BackHandler, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
@@ -202,6 +202,13 @@ export default function App() {
       }
     } catch (_) { /* no downloads yet */ }
   }, [report])
+
+  // development: what the system leaves us (the gap under the bar is whatever the host app does not get)
+  useEffect(() => {
+    if (!__DEV__) return
+    const w = Dimensions.get('window'), sc = Dimensions.get('screen')
+    console.log(`[app] window ${w.width}x${w.height} screen ${sc.width}x${sc.height} scale ${sc.scale}`)
+  }, [])
 
   const onMessage = useCallback((e: WebViewMessageEvent) => {
     let msg: any

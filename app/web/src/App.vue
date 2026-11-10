@@ -297,7 +297,7 @@ onMounted(async () => {
   form.username = connection.username
   await connect()
   if (!connected.value && view.value.v !== 'setup') go({ v: 'setup' }, true)
-  console.log(`viewport ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio} screen ${screen.width}x${screen.height}`)
+  console.log(`viewport ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio} screen ${screen.width}x${screen.height} availHeight ${screen.availHeight}`)
   tellApp({ type: 'ready' })
 })
 </script>

@@ -13,9 +13,6 @@
         <span v-if="store.shelf.state.scanning" class="es-spin"></span><i v-else class="es-i es-i-refresh" aria-hidden="true"></i> Actualizar
       </button>
       <OfflineButton v-if="store.offline && !localSource && folderMode && crumbs.length && inFolder.length" :items="inFolder" what="la carpeta" />
-      <button v-else-if="store.saveFile && !localSource && folderMode && crumbs.length && pendingInFolder.length" class="es-btn" title="Descargar a este dispositivo todo lo que hay en la carpeta" @click="downloadFolder">
-        <i class="es-i es-i-download" aria-hidden="true"></i> Descargar carpeta ({{ pendingInFolder.length }})
-      </button>
       <input ref="searchEl" :value="q" class="es-search" type="search" placeholder="Buscar por título, serie o autor" aria-label="Buscar"
              @input="typed(($event.target as HTMLInputElement).value)" />
     </header>
@@ -44,14 +41,31 @@
               @click="setSource(String(s.id))"><i class="es-i" :class="s.id < 0 ? 'es-i-computer' : 'es-i-server'" aria-hidden="true"></i> {{ s.name }}</button>
     </div>
 
+    <!-- inside .es, where the theme's variables live; fixed, so it is where the ⋮ was whatever scrolls -->
+    <div v-if="folderMenu" class="es-fab-menu es-folder-menu" role="menu" :style="{ top: `${folderMenu.y}px`, left: `${folderMenu.x}px` }" @click.stop>
+        <p class="es-folder-menu-title es-ellipsis">{{ folderMenu.path.split('/').pop() }}</p>
+        <p v-if="!folderMenu.items" class="es-muted es-small"><span class="es-spin"></span> Mirando qué hay…</p>
+        <template v-else>
+          <button class="es-fab-item" role="menuitem" :disabled="!folderMenuPending.length" @click="downloadFolderMenu">
+            <span class="es-fab-icon"><i class="es-i es-i-download" aria-hidden="true"></i></span>
+            <span class="es-fab-text"><strong>Descargar</strong><small>{{ folderMenuPending.length ? `${folderMenuPending.length} ${folderMenuPending.length === 1 ? 'archivo' : 'archivos'} que faltan` : 'Ya está todo en este dispositivo' }}</small></span>
+          </button>
+          <button class="es-fab-item" role="menuitem" :disabled="!folderMenuDone.length" @click="removeFolderMenu">
+            <span class="es-fab-icon"><i class="es-i es-i-delete" aria-hidden="true"></i></span>
+            <span class="es-fab-text"><strong>Borrar descargas</strong><small>{{ folderMenuDone.length ? `${folderMenuDone.length} ${folderMenuDone.length === 1 ? 'archivo descargado' : 'archivos descargados'}` : 'Nada descargado de aquí' }}</small></span>
+          </button>
+        </template>
+      </div>
+
     <p v-if="loading" class="es-muted"><span class="es-spin"></span> Cargando…</p>
     <template v-else>
       <!-- the folders of Lectura (or of a folder of this PC), one level at a time -->
       <div v-if="folderMode && subfolders.length" class="es-grid">
-        <a v-for="f in subfolders" :key="f.path" href="#" class="es-series-card es-folder" :title="f.path" @click.prevent="openFolder(f.path)">
+        <a v-for="f in subfolders" :key="f.path" href="#" class="es-series-card es-folder es-card" :title="f.path" @click.prevent="openFolder(f.path)">
           <Cover :id="f.coverItem || 0" :has="!!f.coverItem && f.coverHas" icon="es-i-grid" />
           <strong class="es-ellipsis"><i class="es-i es-i-grid es-folder-mark" aria-hidden="true"></i> {{ f.name }}</strong>
           <small class="es-muted">{{ f.folders ? `${f.folders} ${f.folders === 1 ? 'carpeta' : 'carpetas'}` : 'Carpeta' }}</small>
+          <button v-if="store.saveFile && !localSource" class="es-card-info" title="Más" aria-label="Más" @click.stop.prevent="openFolderMenu(f.path, $event)"><i class="es-i es-i-more" aria-hidden="true"></i></button>
         </a>
       </div>
 
@@ -114,12 +128,34 @@ const items = ref<Item[]>([])
 const external = ref<Item[]>([])
 /** everything under the folder shown (its subfolders too), for «Descargar la carpeta» */
 const inFolder = ref<Item[]>([])
-/** what the folder holds that is not downloaded yet (a host that keeps downloads) */
-const pendingInFolder = computed(() => inFolder.value.filter((i) => i.format !== 'folder' && store.downloads?.[store.api.filePath(i.id)]?.state !== 'done'))
-function downloadFolder() {
-  const items = pendingInFolder.value
+// ---- a folder's menu (⋮ on its card): download what it holds to this device, or delete what was downloaded ----
+const folderMenu = ref<{ path: string; y: number; x: number; items: Item[] | null } | null>(null)
+const folderMenuPending = computed(() => (folderMenu.value?.items || []).filter((i) => i.format !== 'folder' && store.downloads?.[store.api.filePath(i.id)]?.state !== 'done'))
+const folderMenuDone = computed(() => (folderMenu.value?.items || []).filter((i) => store.downloads?.[store.api.filePath(i.id)]?.state === 'done'))
+async function openFolderMenu(path: string, event: MouseEvent) {
+  if (folderMenu.value?.path === path) { folderMenu.value = null; return }
+  const r = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  // under the ⋮, kept on screen (the menu is about 300 px wide)
+  const menu = { path, y: Math.min(r.bottom + 4, window.innerHeight - 170), x: Math.max(8, Math.min(r.right - 300, window.innerWidth - 316)), items: null as Item[] | null }
+  folderMenu.value = menu
+  setTimeout(() => document.addEventListener('click', closeFolderMenu, { once: true }))
+  try {
+    const items = await store.api.items({ folder: path, source: 'archivador', limit: 1000 })
+    if (folderMenu.value && folderMenu.value.path === path) folderMenu.value.items = items
+  } catch (err: any) { store.notify(err?.message || String(err), true); folderMenu.value = null }
+}
+function closeFolderMenu() { folderMenu.value = null }
+function downloadFolderMenu() {
+  const items = folderMenuPending.value
   for (const i of items) store.saveFile?.(store.api.filePath(i.id), i.name, true)
   store.notify(`${items.length} ${items.length === 1 ? 'archivo' : 'archivos'} en cola de descarga.`)
+  folderMenu.value = null
+}
+function removeFolderMenu() {
+  const items = folderMenuDone.value
+  for (const i of items) store.removeDownload?.(store.api.filePath(i.id))
+  store.notify(`${items.length} ${items.length === 1 ? 'descarga borrada' : 'descargas borradas'}.`)
+  folderMenu.value = null
 }
 const subfolders = ref<Subfolder[]>([])
 /** at the top of «Todas»: the libraries of this PC (path = their source id) */
@@ -201,7 +237,7 @@ async function load() {
       Promise.all(folders.map((f) => store.api.items({ folder: f.path, source: folderSource.value, kind: kindFilter(), limit: 1, sort: 'series' }).catch(() => [] as Item[]))),
     ])
     if (mine !== request) return
-    inFolder.value = (store.offline || store.saveFile) && folder.value && !localSource.value
+    inFolder.value = store.offline && folder.value && !localSource.value
       ? await store.api.items({ folder: folder.value, source: 'archivador', limit: 1000 }).catch(() => [] as Item[]) : []
     if (mine !== request) return
     folders.forEach((f, i) => { const first = covers[i][0]; if (first) { f.coverItem = first.id; f.coverHas = first.cover } })

@@ -423,3 +423,8 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
   .es-fab-wrap { right: 16px; bottom: calc(var(--es-bar, 68px) + 16px); }
   .es-fab { width: 52px; height: 52px; }
 }
+
+/* a folder's menu (download / delete what was downloaded), where its ⋮ is: after the + menu's rules, which it borrows */
+.es-folder-menu { position: fixed; top: auto; bottom: auto; left: auto; z-index: 160; }
+.es-folder-menu-title { margin: 4px 10px 6px; font-size: 12px; font-weight: 600; color: var(--es-muted); max-width: 280px; }
+.es-folder .es-card-info { bottom: 2px; }

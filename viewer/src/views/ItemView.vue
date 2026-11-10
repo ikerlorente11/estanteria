@@ -161,7 +161,8 @@ async function toCloud() {
 }
 const converting = ref(false)
 /** What this item can be converted into: a PDF with text into an EPUB, a book into a PDF. */
-const convertTo = computed(() => !item.value ? '' : item.value.format === 'pdf' ? 'EPUB' : ['epub', 'fb2', 'mobi'].includes(item.value.format) ? 'PDF' : '')
+// a PDF only when it has text (the service says; a scanned book or a comic has nothing to convert)
+const convertTo = computed(() => !item.value ? '' : item.value.format === 'pdf' ? (item.value.meta?.text === false ? '' : 'EPUB') : ['epub', 'fb2', 'mobi'].includes(item.value.format) ? 'PDF' : '')
 async function convert() {
   if (!item.value) return
   converting.value = true
@@ -205,6 +206,7 @@ async function removeBookmark(id: number) {
 }
 async function download() {
   if (!item.value) return
+  if (store.saveFile) { store.saveFile(store.api.filePath(item.value.id), item.value.name); return }
   try {
     const blob = await store.api.blob(store.api.filePath(item.value.id))
     const url = URL.createObjectURL(blob)

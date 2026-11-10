@@ -5,6 +5,9 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import * as SplashScreen from 'expo-splash-screen'
+import * as NavigationBar from 'expo-navigation-bar'
+import * as FileSystem from 'expo-file-system/legacy'
+import * as Sharing from 'expo-sharing'
 
 import EstanteriaHost from './modules/estanteria-host'
 
@@ -63,6 +66,12 @@ export default function App() {
       .finally(() => SplashScreen.hideAsync().catch(() => {}))
   }, [])
 
+  // the system's bar at the bottom stays hidden (a swipe from the edge brings it back for a moment): a reader wants the screen
+  useEffect(() => {
+    if (Platform.OS !== 'android') return
+    NavigationBar.setVisibilityAsync('hidden').catch(() => {})
+  }, [])
+
   // the page follows the system's theme through here: its own media query follows the app's theme, not the system's
   useEffect(() => {
     web.current?.injectJavaScript(`window.__estanteriaScheme && window.__estanteriaScheme(${JSON.stringify(system || 'light')}); true;`)
@@ -104,6 +113,16 @@ export default function App() {
       else deactivateKeepAwake().catch(() => {})
     } else if (msg.type === 'open-url' && typeof msg.url === 'string') {
       Linking.openURL(msg.url).catch(() => {})
+    } else if (msg.type === 'download' && typeof msg.url === 'string') {
+      // a file of the service, fetched through the host: saved in the app's cache and handed to the system (save, open with…)
+      const name = String(msg.name || 'archivo').replace(/[\\/:*?"<>|]+/g, '_')
+      const target = `${FileSystem.cacheDirectory}${name}`
+      FileSystem.downloadAsync(msg.url, target)
+        .then(async ({ status, uri }) => {
+          if (status >= 400) throw new Error(`HTTP ${status}`)
+          if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { dialogTitle: name })
+        })
+        .catch((err) => web.current?.injectJavaScript(`window.__estanteriaNotify && window.__estanteriaNotify(${JSON.stringify(`No se pudo descargar: ${err?.message || err}`)}, true); true;`))
     }
   }, [open])
 

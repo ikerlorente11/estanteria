@@ -24,6 +24,8 @@ export interface Store {
   offline?: Offline
   /** The files and folders of this device, when the app can read them (the desktop). */
   shelf?: LocalShelf
+  /** Saves a file of the service where the host wants (Android: through the app); without it, the browser downloads it. */
+  saveFile?: (path: string, name: string) => void
 }
 
 export const STORE: InjectionKey<Store> = Symbol('estanteria')

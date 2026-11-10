@@ -86,7 +86,7 @@
 import { computed, onMounted, provide, reactive, ref, shallowRef, watch } from 'vue'
 import { Api, CatalogView, CatalogsView, Cover, DownloadsView, HomeView, LocalShelf, Offline, ImageCache, ItemView, LibraryView, ReaderView, SeriesView, SourcesView, STORE,
          createState, queryFromView, viewFromQuery, type Item, type Store, type View } from 'estanteria-viewer'
-import { HOST_BASE, TOKEN, forgetToken, hostBackend, hostShelf, info, loadConnection, saveConnection, tellApp, type Connection } from './lib/host'
+import { HOST_BASE, TOKEN, forgetToken, hostBackend, hostShelf, hostUrl, info, loadConnection, saveConnection, tellApp, type Connection } from './lib/host'
 
 /**
  * The Android shell of La Estantería: the same library and readers as the web and the desktop, served
@@ -171,7 +171,9 @@ function makeStore(): Store {
   current = new Api(HOST_BASE, () => `Host ${TOKEN}`)
   const covers = new ImageCache(current, 400)
   const pages = new ImageCache(current, 24)
-  const s: Store = { api: current, covers, pages, readingRoot: 'Lectura', state, refresh, go: go as any, back, notify, read }
+  const s: Store = { api: current, covers, pages, readingRoot: 'Lectura', state, refresh, go: go as any, back, notify, read,
+    // the app downloads the file (through the host, with the token in the URL) and offers to share or open it
+    saveFile: (path, name) => { tellApp({ type: 'download', url: new URL(hostUrl(path), window.location.href).toString(), name }); notify(`Descargando ${name}…`) } }
   if (hostInfo.offline) {
     const keeper = offline.value || new Offline(hostBackend())
     keeper.attach(current)
@@ -262,6 +264,7 @@ async function openLocal(uris: string[]) {
   }
 }
 ;(window as any).__estanteriaOpen = (uri: string) => openLocal([uri])
+;(window as any).__estanteriaNotify = (text: string, error = false) => notify(text, error)
 watch(connected, (ok) => { if (ok && waiting.length) { const uris = waiting; waiting = []; openLocal(uris) } })
 
 // without connection, look again every so often (and when Android says the network is back)

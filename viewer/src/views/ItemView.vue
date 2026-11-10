@@ -24,7 +24,8 @@
             <button v-if="item.progress && !item.progress.finished && item.progress.percent > 0" class="es-btn" @click="go({ v: 'read', id: item.id, page: 0 })">Desde el principio</button>
             <button v-if="!item.progress?.finished" class="es-btn" @click="mark(true)">Marcar como leído</button>
             <button v-else class="es-btn" @click="mark(false)">Marcar como no leído</button>
-            <a v-if="item.format !== 'folder'" class="es-btn" href="#" @click.prevent="download"><i class="es-i es-i-download" aria-hidden="true"></i> Descargar</a>
+            <OfflineButton v-if="store.offline" :items="[item]" />
+            <a v-if="item.format !== 'folder'" class="es-btn" href="#" :title="store.offline ? 'Bajar el archivo original a donde elijas' : ''" @click.prevent="download"><i class="es-i es-i-download" aria-hidden="true"></i> {{ store.offline ? 'Archivo' : 'Descargar' }}</a>
             <button v-if="item.source_id && item.format !== 'folder'" class="es-btn" :disabled="saving" title="Copiar el archivo a la carpeta Lectura de tu Archivador" @click="toCloud">
               <span v-if="saving" class="es-spin"></span><i v-else class="es-i es-i-cloud" aria-hidden="true"></i> Guardar en El Archivador
             </button>
@@ -70,6 +71,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { ItemDetail } from '../lib/api'
 import { kindLabel, sizeLabel, sourceName, useStore } from '../lib/store'
 import Cover from './Cover.vue'
+import OfflineButton from './OfflineButton.vue'
 
 const props = defineProps<{ id: number }>()
 const store = useStore()

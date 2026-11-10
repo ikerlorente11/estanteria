@@ -6,6 +6,9 @@
         <span v-else-if="item.state === 'error'" class="es-card-bad" :title="item.error || 'No se pudo abrir'"><i class="es-i es-i-info" aria-hidden="true"></i></span>
         <span v-if="percent > 0 && !done" class="es-card-bar"><span :style="{ width: `${Math.round(percent * 100)}%` }"></span></span>
         <span v-if="done" class="es-card-check" title="Leído"><i class="es-i es-i-check" aria-hidden="true"></i></span>
+        <span v-if="kept" class="es-card-kept" :title="kept === 'done' ? 'Disponible sin conexión' : 'Descargando…'">
+          <span v-if="kept !== 'done'" class="es-spin"></span><i v-else class="es-i es-i-download" aria-hidden="true"></i>
+        </span>
       </Cover>
     </a>
     <div class="es-card-text">
@@ -27,6 +30,8 @@ const props = withDefaults(defineProps<{ item: Item; showSeries?: boolean }>(), 
 const emit = defineEmits<{ read: []; open: [] }>()
 const store = useStore()
 const origin = computed(() => sourceName(props.item, store.state.status?.sources))
+/** 'done' when kept on this device, 'running'/'waiting' while downloading, '' else */
+const kept = computed(() => { const s = store.offline?.status(props.item.id) || ''; return s === 'error' ? '' : s })
 
 const percent = computed(() => percentOf(props.item))
 const done = computed(() => !!props.item.progress?.finished)

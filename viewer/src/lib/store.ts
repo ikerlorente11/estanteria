@@ -2,6 +2,7 @@
 import { inject, reactive, type InjectionKey } from 'vue'
 import type { Api, Item, LibraryStatus, Series, Source } from './api.ts'
 import type { ImageCache } from './images.ts'
+import type { Offline } from './offline.ts'
 import type { View } from './views.ts'
 
 export { queryFromView, viewFromQuery, type View } from './views.ts'
@@ -18,6 +19,8 @@ export interface Store {
   notify: (text: string, error?: boolean) => void
   /** Opens a comic or a book where it was left. */
   read: (item: Item) => void
+  /** Reading without connection, when the app can keep files (the desktop, Android); not on the web. */
+  offline?: Offline
 }
 
 export const STORE: InjectionKey<Store> = Symbol('estanteria')

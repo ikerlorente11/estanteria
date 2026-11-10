@@ -8,13 +8,14 @@ export type View =
   | { v: 'item'; id: number }
   | { v: 'sources' }
   | { v: 'catalogs' }
+  | { v: 'downloads' }
   | { v: 'catalog'; kind: string; path?: string; q?: string }
 
 /** The view a route's query stands for (the app keeps its place in the URL). */
 export function viewFromQuery(query: Record<string, unknown>): View {
   const v = String(query.v || 'home')
   const id = Number(query.id)
-  if (v === 'catalogs') return { v }
+  if (v === 'catalogs' || v === 'downloads') return { v }
   if (v === 'catalog' && query.kind) {
     const view: View = { v, kind: String(query.kind) }
     if (query.path) view.path = String(query.path)

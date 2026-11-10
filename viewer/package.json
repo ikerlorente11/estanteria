@@ -12,7 +12,7 @@
   },
   "files": ["src", "README.md"],
   "scripts": {
-    "test": "node --experimental-strip-types test/layout.test.ts && node --experimental-strip-types test/views.test.ts"
+    "test": "node --experimental-strip-types test/layout.test.ts && node --experimental-strip-types test/views.test.ts && node --experimental-strip-types test/offline.test.ts"
   },
   "dependencies": {
     "epubjs": "^0.3.93"

@@ -195,29 +195,101 @@ export interface ProgressUpdate {
   device?: string
 }
 
+/** What an app that keeps items for reading offline plugs into the API (see offline.ts). */
+export interface ApiOffline {
+  /** a URL of a kept image or file, fetched instead of the service's */
+  local(path: string): string | null
+  /** the answer to a GET when the service does not answer (undefined: none) */
+  fallback(path: string): unknown
+  /** a change made when the service does not answer, kept for later (undefined: cannot) */
+  write(method: string, path: string, body: unknown): unknown
+  /** what the service answered */
+  seen(method: string, path: string, data: unknown): void
+  /** whether the service answers */
+  online(ok: boolean): void
+}
+
+/** Answers that mean the service is not there (the proxy in front answers instead). */
+const UNREACHABLE = new Set([502, 503, 504, 520, 521, 522, 523, 524, 530])
+
+function unreachable(cause?: unknown): Error {
+  const err: any = new Error('Sin conexión con La Estantería')
+  err.offline = true
+  err.status = 0
+  err.cause = cause
+  return err
+}
+
 export class Api {
+  /** Set by an app that keeps items for reading offline. */
+  offline?: ApiOffline
+
   /** `authorization`: the Authorization header to send; `mintAppToken`: how to get an app token of the
    * user for the indexer (only the OpenCloud web app can; the others already hold one). */
-  constructor(readonly baseUrl: string, private authorization: () => string, private mintAppToken?: () => Promise<string>) {}
+  readonly baseUrl: string
+  private authorization: () => string
+  private mintAppToken?: () => Promise<string>
+
+  constructor(baseUrl: string, authorization: () => string, mintAppToken?: () => Promise<string>) {
+    this.baseUrl = baseUrl
+    this.authorization = authorization
+    this.mintAppToken = mintAppToken
+  }
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
     return { Authorization: this.authorization(), ...extra }
   }
 
+  /** Without the service: the answer kept for it, if there is one. */
+  private withoutService<T>(path: string, init: RequestInit, cause: unknown): T {
+    this.offline?.online(false)
+    const method = (init.method || 'GET').toUpperCase()
+    const kept = !this.offline ? undefined
+      : method === 'GET' ? this.offline.fallback(path)
+      : this.offline.write(method, path, init.body ? JSON.parse(String(init.body)) : undefined)
+    if (kept !== undefined) return kept as T
+    throw unreachable(cause)
+  }
+
   private async call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const res = await fetch(this.baseUrl + path, { ...init, headers: this.headers({ 'Content-Type': 'application/json', ...((init.headers as any) || {}) }) })
+    let res: Response
+    try {
+      res = await fetch(this.baseUrl + path, { ...init, headers: this.headers({ 'Content-Type': 'application/json', ...((init.headers as any) || {}) }) })
+    } catch (err) {
+      return this.withoutService<T>(path, init, err)
+    }
+    if (UNREACHABLE.has(res.status)) return this.withoutService<T>(path, init, res.status)
+    this.offline?.online(true)
     if (!res.ok) {
       const detail = await res.json().then((b) => b.detail).catch(() => res.statusText)
       const err: any = new Error(typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((d) => d.msg).join('; ') : res.statusText)
       err.status = res.status
       throw err
     }
-    return res.json()
+    const data = await res.json()
+    this.offline?.seen((init.method || 'GET').toUpperCase(), path, data)
+    return data
   }
 
-  /** A binary answer (a page, a cover, a book) fetched with the session's credential. */
+  /** A binary answer (a page, a cover, a book): the copy kept on this device if there is one, else
+   * fetched with the session's credential. */
   async blob(path: string, signal?: AbortSignal): Promise<Blob> {
-    const res = await fetch(this.baseUrl + path, { headers: this.headers(), signal })
+    const local = this.offline?.local(path)
+    if (local) {
+      try {
+        const kept = await fetch(local, { signal })
+        if (kept.ok) return kept.blob()
+      } catch (err) { if ((err as any)?.name === 'AbortError') throw err }
+    }
+    let res: Response
+    try {
+      res = await fetch(this.baseUrl + path, { headers: this.headers(), signal })
+    } catch (err) {
+      if ((err as any)?.name === 'AbortError') throw err
+      this.offline?.online(false)
+      throw unreachable(err)
+    }
+    if (UNREACHABLE.has(res.status)) { this.offline?.online(false); throw unreachable(res.status) }
     if (!res.ok) {
       const detail = await res.json().then((b) => b.detail).catch(() => res.statusText)
       const err: any = new Error(typeof detail === 'string' ? detail : res.statusText)

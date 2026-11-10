@@ -14,7 +14,7 @@ assert.deepEqual(viewFromQuery({ v: 'catalog' }), { v: 'home' })
 assert.deepEqual(viewFromQuery({ v: 'catalog', kind: 'mangadex', path: 'manga=1&offset=0' }), { v: 'catalog', kind: 'mangadex', path: 'manga=1&offset=0' })
 
 for (const view of [{ v: 'home' }, { v: 'read', id: 3, page: 0 }, { v: 'read', id: 3 }, { v: 'series', name: 'A/B' }, { v: 'library', q: 'x', sort: 'added' }, { v: 'item', id: 9 }, { v: 'sources' },
-                    { v: 'catalogs' }, { v: 'catalog', kind: 'gutenberg' }, { v: 'catalog', kind: 'archive', q: 'quijote', path: 'q=x&page=2' }] as const) {
+                    { v: 'catalogs' }, { v: 'downloads' }, { v: 'catalog', kind: 'gutenberg' }, { v: 'catalog', kind: 'archive', q: 'quijote', path: 'q=x&page=2' }] as const) {
   assert.deepEqual(viewFromQuery(queryFromView(view)), view)
 }
 console.log('views ok')

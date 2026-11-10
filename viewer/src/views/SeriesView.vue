@@ -13,6 +13,7 @@
           <button v-if="next" class="es-btn es-primary" @click="store.read(next)">
             <i class="es-i es-i-book-open" aria-hidden="true"></i> {{ next.progress && next.progress.page ? `Seguir por el nº ${next.number ?? ''}` : finished ? `Leer el nº ${next.number ?? ''}` : 'Empezar a leer' }}
           </button>
+          <OfflineButton v-if="store.offline && items.length" :items="items" what="la serie" />
         </div>
       </div>
     </div>
@@ -29,6 +30,7 @@ import type { Item } from '../lib/api'
 import { useStore } from '../lib/store'
 import Cover from './Cover.vue'
 import ItemCard from './ItemCard.vue'
+import OfflineButton from './OfflineButton.vue'
 
 const props = defineProps<{ name: string }>()
 const store = useStore()

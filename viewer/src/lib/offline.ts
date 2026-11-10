@@ -1,0 +1,352 @@
+/** Reading without connection, shared by the apps that can keep files (the desktop, Android): which
+ * items are kept, the queue of downloads, and what the API answers when the service cannot be reached.
+ *
+ * A kept item is its pages as the service rendered them (or the file, for a book) plus what the
+ * service said of it; the host stores them (`OfflineBackend`) and gives a URL for each part. The API
+ * asks here first for an image or a file, so a kept item opens from disk even with connection, and
+ * falls back here for its JSON when the service does not answer. Reading progress made offline waits
+ * here (in this device's storage) and is sent when the service answers again. */
+import { reactive } from 'vue'
+import type { Api, ApiOffline, Item, ItemDetail, Progress, Series } from './api.ts'
+
+export interface OfflineEntry {
+  item: ItemDetail
+  /** the width the pages were asked in */
+  width: number
+  /** when it finished (seconds) */
+  added: number
+  bytes: number
+}
+
+export interface OfflineProgress {
+  id: number
+  done: number
+  total: number
+  bytes: number
+  error: string | null
+  finished: boolean
+  cancelled: boolean
+}
+
+export interface OfflineJob {
+  id: number
+  title: string
+  state: 'waiting' | 'running' | 'error'
+  done: number
+  total: number
+  bytes: number
+  error: string | null
+}
+
+/** What the host does with the files. */
+export interface OfflineBackend {
+  list(): Promise<OfflineEntry[]>
+  /** starts the download in the background: progress comes through `onProgress` */
+  start(job: { id: number; pages: number; file: boolean; width: number; meta: ItemDetail }): Promise<void>
+  /** stops a download going on (and deletes what it got), or deletes a finished one */
+  remove(id: number): Promise<void>
+  /** a URL the web view fetches without credentials: part is 'cover', 'file' or 'p/<n>' */
+  url(id: number, part: string): string
+  onProgress(handler: (p: OfflineProgress) => void): void
+  /** where the files are, to show it */
+  where?(): Promise<string>
+}
+
+export const OFFLINE_WIDTHS = [1200, 1600, 2000, 2560]
+const WIDTH_KEY = 'estanteria.offline.width'
+const PENDING_KEY = 'estanteria.offline.pending'
+const KNOWN_KEY = 'estanteria.offline.progress'
+
+function read<T>(key: string, fallback: T): T {
+  try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch (_) { return fallback }
+}
+function write(key: string, value: unknown): void {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch (_) { /* storage full or off: only this session */ }
+}
+
+/** A book is kept as its file; anything else as its pages. */
+export function keptAsFile(item: Item): boolean {
+  return item.kind === 'book'
+}
+
+type Pending = { clear?: boolean; body?: Record<string, unknown>; at: number }
+
+export class Offline implements ApiOffline {
+  readonly state = reactive({
+    loaded: false,
+    /** false while the service does not answer */
+    online: true,
+    entries: {} as Record<number, OfflineEntry>,
+    jobs: {} as Record<number, OfflineJob>,
+    width: Number(read(WIDTH_KEY, 1600)) || 1600,
+  })
+  private order: number[] = []
+  private running = false
+  private flushing = false
+  private pending: Record<number, Pending> = read(PENDING_KEY, {})
+  private known: Record<number, Progress> = read(KNOWN_KEY, {})
+  private api: Api | null = null
+
+  private backend: OfflineBackend
+
+  constructor(backend: OfflineBackend) {
+    this.backend = backend
+    backend.onProgress((p) => this.progressed(p))
+  }
+
+  /** The API it works for (to fetch what to download and to send progress made offline). */
+  attach(api: Api): void {
+    this.api = api
+    api.offline = this
+  }
+
+  async load(): Promise<void> {
+    try {
+      const entries = await this.backend.list()
+      const next: Record<number, OfflineEntry> = {}
+      for (const e of entries) if (e?.item?.id) next[e.item.id] = e
+      this.state.entries = next
+    } catch (err) { console.warn('offline list', err) }
+    this.state.loaded = true
+  }
+
+  setWidth(width: number): void {
+    this.state.width = width
+    write(WIDTH_KEY, width)
+  }
+
+  has(id: number): boolean { return !!this.state.entries[id] }
+  /** 'done', 'running', 'waiting', 'error' or '' (not kept). */
+  status(id: number): string { return this.state.entries[id] ? 'done' : this.state.jobs[id]?.state || '' }
+  get count(): number { return Object.keys(this.state.entries).length }
+  get bytes(): number { return Object.values(this.state.entries).reduce((sum, e) => sum + (e.bytes || 0), 0) }
+  where(): Promise<string> { return this.backend.where ? this.backend.where() : Promise.resolve('') }
+
+  /** Puts items in the queue (those already kept or queued are left as they are); how many went in. */
+  add(items: Item[]): number {
+    let added = 0
+    for (const item of items) {
+      if (this.state.entries[item.id] || (this.state.jobs[item.id] && this.state.jobs[item.id].state !== 'error')) continue
+      if (item.format === 'folder' && !item.pages) continue
+      this.state.jobs[item.id] = { id: item.id, title: item.series && item.number !== null ? `${item.series} ${item.number}` : item.title,
+                                   state: 'waiting', done: 0, total: item.pages || 1, bytes: 0, error: null }
+      this.order.push(item.id)
+      added += 1
+    }
+    this.pump()
+    return added
+  }
+
+  /** Stops (and forgets) a download, or deletes a kept item. */
+  async remove(id: number): Promise<void> {
+    const job = this.state.jobs[id]
+    this.order = this.order.filter((x) => x !== id)
+    if (job && job.state !== 'running') delete this.state.jobs[id]
+    await this.backend.remove(id)
+    delete this.state.entries[id]
+  }
+
+  async removeAll(ids: number[]): Promise<void> {
+    for (const id of ids) await this.remove(id)
+  }
+
+  private async pump(): Promise<void> {
+    if (this.running || !this.api) return
+    const id = this.order.shift()
+    if (id === undefined) return
+    const job = this.state.jobs[id]
+    if (!job) return this.pump()
+    this.running = true
+    job.state = 'running'
+    try {
+      const item = await this.api.item(id)        // also makes the service open it, if it had not
+      if (item.state !== 'ready') throw new Error(item.state === 'error' ? item.error || 'no se puede abrir' : 'aún se está abriendo; prueba en un momento')
+      job.total = keptAsFile(item) ? 1 : item.pages
+      await this.backend.start({ id, pages: keptAsFile(item) ? 0 : item.pages, file: keptAsFile(item), width: this.state.width, meta: item })
+      // the backend tells when it is done (progressed)
+    } catch (err: any) {
+      job.state = 'error'
+      job.error = err?.message || String(err)
+      this.running = false
+      this.pump()
+    }
+  }
+
+  private progressed(p: OfflineProgress): void {
+    const job = this.state.jobs[p.id]
+    if (p.cancelled) {
+      delete this.state.jobs[p.id]
+      this.running = false
+      this.pump()
+      return
+    }
+    if (job) {
+      job.done = p.done
+      job.total = p.total || job.total
+      job.bytes = p.bytes
+    }
+    if (p.error) {
+      if (job) { job.state = 'error'; job.error = p.error }
+      this.running = false
+      this.pump()
+    } else if (p.finished) {
+      delete this.state.jobs[p.id]
+      this.running = false
+      this.load().then(() => this.pump())
+    }
+  }
+
+  // ---- for the API (ApiOffline) ----
+  private match(path: string): [number, string] | null {
+    const m = path.match(/^\/api\/items\/(\d+)\/(cover|file|pages\/(\d+))/)
+    return m ? [Number(m[1]), m[3] !== undefined ? `p/${m[3]}` : m[2]] : null
+  }
+
+  local(path: string): string | null {
+    const found = this.match(path)
+    if (!found) return null
+    const [id, part] = found
+    const entry = this.state.entries[id]
+    if (!entry) return null
+    if (part === 'file' && !keptAsFile(entry.item)) return null
+    return this.backend.url(id, part)
+  }
+
+  private withProgress(item: ItemDetail): ItemDetail {
+    const known = this.known[item.id]
+    return known === undefined ? item : { ...item, progress: known }
+  }
+
+  private items(): ItemDetail[] {
+    return Object.values(this.state.entries).map((e) => this.withProgress(e.item))
+  }
+
+  fallback(path: string): unknown {
+    if (!this.count) return undefined
+    const [base, qs] = path.split('?')
+    const params = new URLSearchParams(qs || '')
+    const all = this.items()
+    if (base === '/api/cloud') return { connected: true, username: '' }
+    if (base === '/api/library') {
+      const counts = { total: all.length, pending: 0, errors: 0 }
+      return { connected: true, username: '', scanned: null, scan_error: null, ...counts, folders: [], archivador: counts, sources: [] }
+    }
+    if (base === '/api/series') return this.series(all)
+    if (base === '/api/continue') {
+      return all.filter((i) => i.progress && !i.progress.finished && i.progress.percent > 0)
+        .sort((a, b) => (b.progress!.updated || 0) - (a.progress!.updated || 0)).slice(0, Number(params.get('limit') || 20))
+    }
+    if (base === '/api/recent') {
+      return Object.values(this.state.entries).sort((a, b) => b.added - a.added).slice(0, Number(params.get('limit') || 20)).map((e) => this.withProgress(e.item))
+    }
+    if (base === '/api/items') return this.filter(all, params)
+    const one = base.match(/^\/api\/items\/(\d+)$/)
+    if (one) {
+      const entry = this.state.entries[Number(one[1])]
+      return entry ? this.withProgress(entry.item) : undefined
+    }
+    if (base === '/api/sources' || base === '/api/catalogs' || base === '/api/sources/kinds') return []
+    return undefined
+  }
+
+  private filter(all: ItemDetail[], params: URLSearchParams): ItemDetail[] {
+    const q = (params.get('q') || '').toLowerCase()
+    const source = params.get('source')
+    let out = all.filter((i) =>
+      (!q || [i.title, i.series, i.author, i.name].some((t) => (t || '').toLowerCase().includes(q))) &&
+      (!params.get('series') || i.series === params.get('series')) &&
+      (!params.get('kind') || i.kind === params.get('kind')) &&
+      (!source || (source === 'archivador' ? !i.source_id : source === 'external' ? !!i.source_id : String(i.source_id) === source)))
+    const sort = params.get('sort') || 'series'
+    const text = (s: string | null) => (s || '').toLocaleLowerCase()
+    out = out.sort((a, b) => sort === 'title' ? text(a.title).localeCompare(text(b.title))
+      : sort === 'added' ? b.added - a.added : sort === 'modified' ? b.modified - a.modified
+      : (text(a.series) || '￿').localeCompare(text(b.series) || '￿') || (a.number ?? 0) - (b.number ?? 0) || text(a.title).localeCompare(text(b.title)))
+    const offset = Number(params.get('offset') || 0)
+    return out.slice(offset, offset + Number(params.get('limit') || 200))
+  }
+
+  private series(all: ItemDetail[]): Series[] {
+    const by = new Map<string, ItemDetail[]>()
+    for (const i of all) if (i.series) by.set(i.series, [...(by.get(i.series) || []), i])
+    return [...by.entries()].map(([series, items]) => {
+      const first = [...items].sort((a, b) => (a.number ?? 0) - (b.number ?? 0))[0]
+      return { series, items: items.length, finished: items.filter((i) => i.progress?.finished).length, cover_item: first.id, cover: first.cover,
+               modified: Math.max(...items.map((i) => i.modified)), added: Math.max(...items.map((i) => i.added)),
+               last_read: Math.max(0, ...items.map((i) => i.progress?.updated || 0)) || null }
+    }).sort((a, b) => a.series.localeCompare(b.series))
+  }
+
+  /** A change made while the service does not answer: kept to send later, answered from here. */
+  write(method: string, path: string, body: unknown): unknown {
+    const m = path.match(/^\/api\/items\/(\d+)\/progress$/)
+    if (!m || this.flushing) return undefined        // while sending what was kept, a failure is a failure
+    const id = Number(m[1])
+    const now = Date.now() / 1000
+    if (method === 'DELETE') {
+      this.pending[id] = { clear: true, at: now }
+      delete this.known[id]
+      this.save()
+      return { ok: true }
+    }
+    if (method !== 'PUT') return undefined
+    const b = (body || {}) as Record<string, any>
+    const progress: Progress = { page: b.page ?? null, location: b.location ?? null, percent: b.percent ?? 0, finished: !!b.finished,
+                                 device: b.device ?? null, updated: now }
+    this.pending[id] = { body: b, at: now }
+    this.known[id] = progress
+    this.save()
+    return progress
+  }
+
+  /** What the service answered, to remember the progress of kept items for when it does not. */
+  seen(method: string, path: string, data: unknown): void {
+    const base = path.split('?')[0]
+    let changed = false
+    const remember = (item: any) => {
+      if (item && typeof item.id === 'number' && this.state.entries[item.id] && item.progress !== undefined && !this.pending[item.id]) {
+        if (item.progress) this.known[item.id] = item.progress
+        else delete this.known[item.id]
+        changed = true
+      }
+    }
+    if (method === 'GET' && Array.isArray(data)) data.forEach(remember)
+    else if (method === 'GET' && /^\/api\/items\/\d+$/.test(base)) remember(data)
+    else if (method === 'PUT' && /^\/api\/items\/\d+\/progress$/.test(base)) {
+      const id = Number(base.split('/')[3])
+      if (this.state.entries[id]) { this.known[id] = data as Progress; changed = true }
+    }
+    if (changed) write(KNOWN_KEY, this.known)
+  }
+
+  /** The service answers (`true`) or not; when it comes back, what was read offline is sent. */
+  online(ok: boolean): void {
+    const was = this.state.online
+    this.state.online = ok
+    if (ok && (!was || Object.keys(this.pending).length)) this.flush()
+  }
+
+  async flush(): Promise<void> {
+    if (this.flushing || !this.api || !Object.keys(this.pending).length) return
+    this.flushing = true
+    try {
+      for (const [key, p] of Object.entries(this.pending)) {
+        const id = Number(key)
+        try {
+          if (p.clear) await this.api.clearProgress(id)
+          else await this.api.setProgress(id, p.body as any)
+          if (this.pending[id]?.at === p.at) delete this.pending[id]
+        } catch (err: any) {
+          if (err?.offline) break                   // still without connection: next time
+          if (err?.status === 404) delete this.pending[id]
+        }
+      }
+      this.save()
+    } finally { this.flushing = false }
+  }
+
+  private save(): void {
+    write(PENDING_KEY, this.pending)
+    write(KNOWN_KEY, this.known)
+  }
+}

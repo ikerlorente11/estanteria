@@ -9,6 +9,7 @@
         <h1 class="es-h1">{{ folderMode && crumbs.length ? crumbs[crumbs.length - 1].name : 'Biblioteca' }}</h1>
       </div>
       <span class="es-grow"></span>
+      <OfflineButton v-if="store.offline && folderMode && crumbs.length && inFolder.length" :items="inFolder" what="la carpeta" />
       <input ref="searchEl" :value="q" class="es-search" type="search" placeholder="Buscar por título, serie o autor" aria-label="Buscar"
              @input="typed(($event.target as HTMLInputElement).value)" />
     </header>
@@ -74,6 +75,7 @@ import type { Item, Kind } from '../lib/api'
 import { useStore } from '../lib/store'
 import Cover from './Cover.vue'
 import ItemCard from './ItemCard.vue'
+import OfflineButton from './OfflineButton.vue'
 
 interface Subfolder { name: string; path: string; folders: number; coverItem: number | null; coverHas: boolean }
 
@@ -84,6 +86,8 @@ const store = useStore()
 const { state, go } = store
 const items = ref<Item[]>([])
 const external = ref<Item[]>([])
+/** everything under the folder shown (its subfolders too), for «Descargar la carpeta» */
+const inFolder = ref<Item[]>([])
 const subfolders = ref<Subfolder[]>([])
 const loading = ref(true)
 const loadingMore = ref(false)
@@ -135,6 +139,9 @@ async function load() {
       wantExternal ? store.api.items({ ...query(0, 'external'), folder: undefined, direct: undefined, source: 'external' }) : Promise.resolve([] as Item[]),
       Promise.all(folders.map((f) => store.api.items({ folder: f.path, source: 'archivador', limit: 1, sort: 'series' }).catch(() => [] as Item[]))),
     ])
+    if (mine !== request) return
+    inFolder.value = store.offline && folder.value
+      ? await store.api.items({ folder: folder.value, source: 'archivador', limit: 1000 }).catch(() => [] as Item[]) : []
     if (mine !== request) return
     folders.forEach((f, i) => { const first = covers[i][0]; if (first) { f.coverItem = first.id; f.coverHas = first.cover } })
     subfolders.value = folders

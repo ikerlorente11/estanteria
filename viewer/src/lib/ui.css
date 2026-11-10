@@ -341,3 +341,17 @@
 .es-folder .es-cover-box { background: linear-gradient(160deg, var(--es-surface-3), var(--es-surface-2)); border: 1px solid var(--es-line); }
 .es-folder .es-cover-box img { opacity: .92; }
 .es-folder-mark { color: var(--es-accent); width: 14px; height: 14px; }
+
+/* ---- reading without connection ---- */
+.es-card-kept { position: absolute; left: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; background: rgba(20,20,24,.78); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+.es-card-kept .es-i { width: 12px; height: 12px; }
+.es-card-kept .es-spin { width: 10px; height: 10px; }
+.es-offline-on { border-color: var(--es-accent); color: var(--es-accent-2); }
+.es-jobs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-width: 720px; }
+.es-job { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--es-surface-2); }
+.es-job-bad small { color: #c62f42; }
+.es-job-text { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.es-job-bar { display: block; height: 4px; border-radius: 2px; background: var(--es-surface-3); overflow: hidden; }
+.es-job-bar span { display: block; height: 100%; background: var(--es-accent); transition: width .2s; }
+.es-offline-banner { display: flex; align-items: center; gap: 10px; margin: 0; padding: 9px 14px; border-radius: 10px; background: var(--es-surface-2); font-size: 13.5px; }

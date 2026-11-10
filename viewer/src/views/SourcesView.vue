@@ -62,11 +62,8 @@
     <template v-if="shelf">
       <header class="es-page-head es-subhead">
         <h2 class="es-h2">Carpetas de este PC</h2>
-        <span class="es-grow"></span>
-        <button class="es-btn" :disabled="shelfBusy" @click="addFiles"><i class="es-i es-i-add" aria-hidden="true"></i> Añadir archivos</button>
-        <button class="es-btn es-primary" :disabled="shelfBusy" @click="addFolders"><i class="es-i es-i-add" aria-hidden="true"></i> Añadir carpeta</button>
       </header>
-      <p class="es-muted">Los cómics, PDF y libros (cbz, cbr, cb7, pdf, epub) de las carpetas que elijas aparecen en tu biblioteca con sus subcarpetas, como los de El Archivador. Se leen aquí mismo, sin copiarlos; el progreso y las notas se guardan en este PC. Lo que abras desde el Explorador o arrastres a la ventana también se queda, en «Archivos sueltos».</p>
+      <p class="es-muted">Los cómics, PDF y libros (cbz, cbr, cb7, pdf, epub) de las carpetas que añadas aparecen en tu biblioteca con sus subcarpetas, como los de El Archivador. Se leen aquí mismo, sin copiarlos; el progreso y las notas se guardan en este PC. Añade carpetas o archivos con el botón <strong>+</strong> de abajo a la derecha; lo que abras desde el Explorador o arrastres a la ventana también se queda, en «Archivos sueltos».</p>
       <p v-if="shelf.state.error" class="es-banner es-banner-error">{{ shelf.state.error }}</p>
       <ul class="es-sources">
         <li v-for="s in shelfSources" :key="s.id" class="es-source">
@@ -83,7 +80,7 @@
             <button v-if="s.id !== -1" class="es-btn es-small" title="Quitar de la estantería (la carpeta no se toca)" @click="removeRoot(s)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
           </span>
         </li>
-        <li v-if="!shelfSources.length" class="es-source es-muted">Ninguna todavía.</li>
+        <li v-if="!shelfSources.length" class="es-source es-muted">Ninguna todavía: añade una con el botón +.</li>
       </ul>
       <p class="es-muted es-small es-cache">
         Lo abierto de cbr, cb7 y PDF se guarda descomprimido para pasar de página al instante: ocupa {{ sizeLabel(shelf.state.cacheBytes) }} de un máximo de
@@ -94,6 +91,7 @@
         <button class="es-btn es-small" @click="clearCache">Vaciar</button>
       </p>
     </template>
+    <AddButton />
   </section>
 </template>
 
@@ -101,9 +99,12 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { Source, SourceKind, SourceKindInfo } from '../lib/api'
 import { CACHE_LIMITS } from '../lib/local'
+import AddButton from './AddButton.vue'
 import { sizeLabel, useStore } from '../lib/store'
 
 /** Other people's libraries: add one (the service checks it enters), see how each is doing, scan, edit, pause or remove it. */
+/** `add`: open with the form to add a library (the «+» menu) */
+const props = defineProps<{ add?: boolean }>()
 const store = useStore()
 const { state, go } = store
 const kinds = ref<SourceKindInfo[]>([])
@@ -126,18 +127,6 @@ async function shelfDo(work: () => Promise<unknown>, done?: string) {
     if (done) store.notify(done)
   } catch (err: any) { store.notify(err?.message || String(err), true) }
   shelfBusy.value = false
-}
-function addFolders() {
-  return shelfDo(async () => {
-    const n = await shelf.value!.addFolders()
-    if (n) store.notify(n === 1 ? 'Carpeta añadida.' : `${n} carpetas añadidas.`)
-  })
-}
-function addFiles() {
-  return shelfDo(async () => {
-    const added = await shelf.value!.pickFiles()
-    if (added.length) store.notify(added.length === 1 ? `«${added[0].title}» está en Archivos sueltos.` : `${added.length} archivos en Archivos sueltos.`)
-  })
 }
 function rescan() { return shelfDo(() => shelf.value!.scan()) }
 function removeRoot(s: Source) {
@@ -227,7 +216,8 @@ async function remove(s: Source) {
     await store.refresh()
   } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
-onMounted(load)
+onMounted(() => { load(); if (props.add) startAdd() })
+watch(() => props.add, (now) => { if (now) startAdd() })
 watch(() => state.connected, load)
 watch(() => state.status?.sources?.map((s) => `${s.id}:${s.scanned}:${s.items}`).join(','), load)
 </script>

@@ -17,13 +17,9 @@
              @input="typed(($event.target as HTMLInputElement).value)" />
     </header>
     <div class="es-filters">
-      <div class="es-chips" role="tablist" aria-label="Tipo">
-        <button v-for="k in KINDS" :key="k.id" class="es-chip" :class="{ on: (kind || '') === k.id }" @click="setKind(k.id)">{{ k.label }}</button>
-      </div>
-      <div v-if="sources.length" class="es-chips" role="tablist" aria-label="Biblioteca">
-        <button class="es-chip" :class="{ on: !source }" @click="setSource('')">Todas</button>
-        <button class="es-chip" :class="{ on: source === 'archivador' }" @click="setSource('archivador')">El Archivador</button>
-        <button v-for="s in sources" :key="s.id" class="es-chip" :class="{ on: source === String(s.id) }" @click="setSource(String(s.id))">{{ s.name }}</button>
+      <!-- what: one of four, as a segmented control -->
+      <div class="es-seg" role="tablist" aria-label="Qué mostrar">
+        <button v-for="k in KINDS" :key="k.id" class="es-seg-btn" role="tab" :aria-selected="(kind || '') === k.id" :class="{ on: (kind || '') === k.id }" @click="setKind(k.id)">{{ k.label }}</button>
       </div>
       <span class="es-grow"></span>
       <label class="es-muted es-small">Orden
@@ -34,6 +30,14 @@
           <option value="modified">Última modificación</option>
         </select>
       </label>
+    </div>
+    <!-- where from: the libraries, apart -->
+    <div v-if="sources.length" class="es-libbar" role="tablist" aria-label="Biblioteca">
+      <span class="es-libbar-label">Biblioteca</span>
+      <button class="es-chip" :class="{ on: !source }" @click="setSource('')">Todas</button>
+      <button class="es-chip" :class="{ on: source === 'archivador' }" @click="setSource('archivador')"><i class="es-i es-i-cloud" aria-hidden="true"></i> El Archivador</button>
+      <button v-for="s in sources" :key="s.id" class="es-chip" :class="{ on: source === String(s.id) }" :title="s.id < 0 ? `En este PC: ${s.url || s.name}` : s.label"
+              @click="setSource(String(s.id))"><i class="es-i" :class="s.id < 0 ? 'es-i-computer' : 'es-i-server'" aria-hidden="true"></i> {{ s.name }}</button>
     </div>
 
     <p v-if="loading" class="es-muted"><span class="es-spin"></span> Cargando…</p>
@@ -81,6 +85,7 @@
         </button>
       </section>
     </template>
+    <AddButton />
   </section>
 </template>
 
@@ -89,6 +94,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { Item, Kind } from '../lib/api'
 import { isLocalSource } from '../lib/local'
 import { useStore } from '../lib/store'
+import AddButton from './AddButton.vue'
 import Cover from './Cover.vue'
 import ItemCard from './ItemCard.vue'
 import OfflineButton from './OfflineButton.vue'

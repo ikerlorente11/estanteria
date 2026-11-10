@@ -154,12 +154,13 @@ export class LocalShelf {
     this.state.scanning = false
   }
 
-  /** Asks for folders and adds them; how many. */
-  async addFolders(): Promise<number> {
+  /** Asks for folders and adds them; the libraries they became. */
+  async addFolders(): Promise<LocalRoot[]> {
     const paths = await this.backend.pickFolders()
-    for (const path of paths) await this.backend.addRoot(path)
+    const roots: LocalRoot[] = []
+    for (const path of paths) roots.push(await this.backend.addRoot(path))
     if (paths.length) { await this.refreshConfig(); await this.scan() }
-    return paths.length
+    return roots
   }
 
   /** Asks for files and adds them; their items. */

@@ -6,7 +6,7 @@ export type View =
   | { v: 'series'; name: string }
   | { v: 'read'; id: number; page?: number; as?: 'doc' | 'pages' }
   | { v: 'item'; id: number }
-  | { v: 'sources' }
+  | { v: 'sources'; add?: boolean }
   | { v: 'catalogs' }
   | { v: 'downloads' }
   | { v: 'catalog'; kind: string; path?: string; q?: string }
@@ -39,7 +39,7 @@ export function viewFromQuery(query: Record<string, unknown>): View {
     return view
   }
   if (v === 'item' && id > 0) return { v, id }
-  if (v === 'sources') return { v }
+  if (v === 'sources') return query.add ? { v, add: true } : { v }
   return { v: 'home' }
 }
 
@@ -62,6 +62,7 @@ export function queryFromView(view: View): Record<string, string> {
     return q
   }
   if (view.v === 'item') return { v: 'item', id: String(view.id) }
+  if (view.v === 'sources') return view.add ? { v: 'sources', add: '1' } : { v: 'sources' }
   if (view.v === 'catalog') {
     const q: Record<string, string> = { v: 'catalog', kind: view.kind }
     if (view.path) q.path = view.path

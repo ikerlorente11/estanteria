@@ -373,6 +373,11 @@ export class Api {
   }
   /** Copies an item of an outside library or a catalogue into the reading folder of the cloud. */
   saveItem(id: number) { return this.call<{ path: string }>(`/api/items/${id}/save`, { method: 'POST' }) }
+  /** Rebuilds a PDF with text as an EPUB next to it (the new book comes back already listed). */
+  convertToEpub(id: number) {
+    return this.call<{ path: string; stats: { chapters: number; paragraphs: number; images: number; title: string }; item: Item | null }>(
+      `/api/items/${id}/convert`, { method: 'POST' })
+  }
   /** Takes an entry kept from a catalogue off the shelf. */
   removeItem(id: number) { return this.call<{ ok: boolean }>(`/api/items/${id}`, { method: 'DELETE' }) }
 }

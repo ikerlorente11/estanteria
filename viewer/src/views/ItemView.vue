@@ -24,6 +24,12 @@
             <button v-if="item.progress && !item.progress.finished && item.progress.percent > 0" class="es-btn" @click="go({ v: 'read', id: item.id, page: 0 })">Desde el principio</button>
             <button v-if="!item.progress?.finished" class="es-btn" @click="mark(true)">Marcar como leído</button>
             <button v-else class="es-btn" @click="mark(false)">Marcar como no leído</button>
+            <button v-if="item.format === 'pdf'" class="es-btn" :disabled="converting"
+                    title="Rehacer este PDF como libro EPUB (texto que se adapta a la pantalla, con su índice), junto al PDF en tu Archivador. Solo para PDF con texto, no escaneados."
+                    @click="convert">
+              <span v-if="converting" class="es-spin"></span><i v-else class="es-i es-i-book" aria-hidden="true"></i>
+              {{ converting ? 'Convirtiendo…' : 'Convertir a EPUB' }}
+            </button>
             <OfflineButton v-if="store.offline" :items="[item]" />
             <a v-if="item.format !== 'folder'" class="es-btn" href="#" :title="store.offline ? 'Bajar el archivo original a donde elijas' : ''" @click.prevent="download"><i class="es-i es-i-download" aria-hidden="true"></i> {{ store.offline ? 'Archivo' : 'Descargar' }}</a>
             <button v-if="item.source_id && item.format !== 'folder'" class="es-btn" :disabled="saving" title="Copiar el archivo a la carpeta Lectura de tu Archivador" @click="toCloud">
@@ -91,6 +97,19 @@ async function toCloud() {
     store.refresh()
   } catch (err: any) { store.notify(err?.message || String(err), true) }
   saving.value = false
+}
+const converting = ref(false)
+async function convert() {
+  if (!item.value) return
+  converting.value = true
+  store.notify('Convirtiendo a EPUB: puede tardar unos segundos…')
+  try {
+    const r = await store.api.convertToEpub(item.value.id)
+    store.notify(`Hecho: «${r.stats.title}», ${r.stats.chapters} capítulos. Lo tienes junto al PDF.`)
+    store.refresh()
+    if (r.item) go({ v: 'item', id: r.item.id })
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  converting.value = false
 }
 async function remove() {
   if (!item.value) return

@@ -1,0 +1,23 @@
+{
+  "name": "estanteria-android-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "La Estantería para Android: la página que la app enseña en su WebView (el visor compartido más la conexión y el host nativo)",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "epubjs": "^0.3.93",
+    "estanteria-viewer": "file:../../viewer",
+    "pdfjs-dist": "4.10.38",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.3",
+    "typescript": "^5.6.0",
+    "vite": "^6.3.5"
+  }
+}

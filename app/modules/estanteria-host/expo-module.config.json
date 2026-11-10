@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["com.ikerlorente11.estanteria.host.EstanteriaHostModule"]
+  }
+}

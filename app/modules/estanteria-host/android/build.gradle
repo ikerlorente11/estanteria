@@ -1,0 +1,31 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.ikerlorente11.estanteria.host'
+version = '0.1.0'
+
+android {
+  namespace "com.ikerlorente11.estanteria.host"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // the local server the web view talks to (the viewer's page, the service proxied, the files of this device)
+  implementation 'org.nanohttpd:nanohttpd:2.3.1'
+  // the app password, encrypted with a key of the Android keystore
+  implementation 'androidx.security:security-crypto:1.1.0'
+  // folders chosen with the system picker (Storage Access Framework)
+  implementation 'androidx.documentfile:documentfile:1.0.1'
+  // comics of this device: cbz with random access, cb7 (needs xz for LZMA), cbr
+  implementation 'org.apache.commons:commons-compress:1.27.1'
+  implementation 'org.tukaani:xz:1.10'
+  implementation 'com.github.junrar:junrar:7.5.5'
+}

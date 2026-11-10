@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "La Estantería",
+    "slug": "estanteria",
+    "version": "0.1.0",
+    "orientation": "default",
+    "scheme": "estanteria",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#141417"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "android": {
+      "package": "com.ikerlorente11.estanteria",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1c1c20"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.INTERNET", "android.permission.WAKE_LOCK"],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["DEFAULT", "BROWSABLE"],
+          "data": [
+            { "mimeType": "application/vnd.comicbook+zip" },
+            { "mimeType": "application/vnd.comicbook-rar" },
+            { "mimeType": "application/x-cbz" },
+            { "mimeType": "application/x-cbr" },
+            { "mimeType": "application/x-cb7" },
+            { "mimeType": "application/epub+zip" },
+            { "mimeType": "application/pdf" },
+            { "mimeType": "application/zip" },
+            { "mimeType": "application/x-rar-compressed" },
+            { "mimeType": "application/vnd.rar" },
+            { "mimeType": "application/x-7z-compressed" }
+          ]
+        }
+      ]
+    },
+    "plugins": [
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
+          }
+        }
+      ]
+    ],
+    "runtimeVersion": { "policy": "appVersion" },
+    "owner": "ikerlorente11"
+  }
+}

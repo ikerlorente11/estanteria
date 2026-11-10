@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Appearance, Dimensions, BackHandler, Linking, Platform, StyleSheet, Text, View, useColorScheme } from 'react-native'
+import { ActivityIndicator, Appearance, Dimensions, BackHandler, Linking, Platform, StatusBar as RNStatusBar, StyleSheet, Text, View, useColorScheme } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import * as SplashScreen from 'expo-splash-screen'
@@ -235,8 +234,7 @@ export default function App() {
 
   const background = scheme === 'dark' ? DARK : LIGHT
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={[styles.root, { backgroundColor: background }]} edges={['top', 'left', 'right']}>
+    <View style={[styles.root, { backgroundColor: background, paddingTop: RNStatusBar.currentHeight || 0 }]}>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         {error ? (
           <View style={styles.center}><Text style={styles.error}>{error}</Text></View>
@@ -268,8 +266,7 @@ export default function App() {
             }}
           />
         )}
-      </SafeAreaView>
-    </SafeAreaProvider>
+    </View>
   )
 }
 

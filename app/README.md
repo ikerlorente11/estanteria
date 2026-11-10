@@ -24,6 +24,10 @@ cd android && ./gradlew assembleDebug                # dev client: android/app/b
 ```
 
 MIUI cancela `adb install` sin diálogo: copiar el APK con `adb push … /sdcard/Download/` e instalarlo desde Archivos.
+En Windows, CMake se ahoga con rutas de más de 260 caracteres (`ninja: error: Stat(...)`): compilar desde una unidad corta
+(`subst S: C:\...\estanteria` y `cd S:\app\android`; el proyecto no puede ser la raíz de la unidad, el autolinking de Expo no
+encontraría su package.json), y para una dev build basta `reactNativeArchitectures=arm64-v8a` en
+`android/gradle.properties` (tarda la mitad). Expo SDK 58 compila contra Android 16: `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"`.
 
 Con el dev client instalado, el día a día es sin recompilar:
 

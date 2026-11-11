@@ -10,6 +10,7 @@
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
     "web:build": "npm --prefix web run build",
+    "eas-build-post-install": "npm --prefix ../viewer install --no-audit --no-fund && npm --prefix web install --no-audit --no-fund && npm run web:build",
     "ios": "expo run:ios"
   },
   "dependencies": {

@@ -21,7 +21,7 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1c1c20"
+        "backgroundColor": "#261e1b"
       },
       "permissions": [
         "android.permission.INTERNET",
@@ -314,6 +314,14 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "owner": "ikerlorente11"
+    "owner": "ikerlorente11",
+    "extra": {
+      "eas": {
+        "projectId": "4f9f7dcd-dd1d-4a92-945c-6df5207b11fd"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4f9f7dcd-dd1d-4a92-945c-6df5207b11fd"
+    }
   }
 }

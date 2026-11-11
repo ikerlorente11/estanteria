@@ -43,10 +43,11 @@ Se rehacen con `make_icon.py` (el icono de la app, el adaptativo, el splash y el
 > • Abre archivos sueltos desde cualquier otra app.
 > • Sigue leyendo donde lo dejaste.
 > • Guarda una copia donde quieras, compártela o bórrala.
+> • Desliza hacia abajo para buscar lo nuevo.
 >
 > CATÁLOGOS Y BIBLIOTECAS (opcional)
-> • Añade catálogos OPDS públicos (como Project Gutenberg) y descarga lo que quieras leer; las series se descargan enteras, cada una en su carpeta.
-> • Conecta tus propios servidores con su dirección y tus credenciales.
+> • Añade catálogos públicos (como Project Gutenberg o cualquier catálogo OPDS) y descarga lo que quieras leer; las series se descargan enteras, cada una en su carpeta.
+> • Conecta tus propios servidores con su dirección y tus credenciales, y sube a ellos tus archivos o carpetas enteras.
 >
 > PRIVACIDAD
 > • Sin cuentas ni registro. La app no recoge datos: tu progreso y tus notas se guardan en el dispositivo.

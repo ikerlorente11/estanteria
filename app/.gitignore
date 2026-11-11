@@ -13,3 +13,5 @@ modules/estanteria-host/android/src/main/assets/viewer/
 credentials.json
 credentials/
 devhost/settings.json
+# the viewer packed for EAS Update (npm run web:build makes it)
+assets/viewer.zip

@@ -6,6 +6,8 @@ declare class EstanteriaHostModule extends NativeModule<EstanteriaHostModuleEven
   /** starts the local server the web view loads the viewer from (or finds it running) */
   start(): Promise<HostStarted>
   stop(): void
+  /** serves the viewer the JS bundle brings (a zip: an update brings a new one) instead of the APK's; its folder or null */
+  useViewer?(uri: string, hash: string): Promise<string | null>
   /** while on, the volume keys turn pages (the `onVolumeKey` event) instead of changing the volume */
   setVolumeKeys(on: boolean): void
   /** why a download of the app's own may not start now («solo con wifi» on mobile data), or null */

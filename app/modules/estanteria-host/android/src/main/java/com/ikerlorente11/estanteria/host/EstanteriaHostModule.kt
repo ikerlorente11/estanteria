@@ -43,6 +43,13 @@ class EstanteriaHostModule : Module() {
             throw IllegalStateException("No se pudo abrir el servidor local: ${last?.message}")
         }
 
+        /** The viewer the app's JavaScript brings (a zip among its assets: an update brings a new one), served from
+         * now on instead of the APK's; its folder, or null when it could not be used (the APK's goes on). */
+        AsyncFunction("useViewer") { uri: String, hash: String ->
+            val context = appContext.reactContext?.applicationContext ?: return@AsyncFunction null
+            Viewer.use(context, uri, hash)
+        }
+
         /** While on, the volume keys turn pages (onVolumeKey) instead of changing the volume. */
         Function("setVolumeKeys") { on: Boolean ->
             volumeKeys.on = on

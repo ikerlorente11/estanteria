@@ -109,7 +109,8 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
     // ---- the page: the viewer built into the assets ----
     private fun page(path: String): Response {
         val name = if (path == "/") "index.html" else path.trimStart('/')
-        val stream = try { context.assets.open("viewer/$name") } catch (_: Exception) {
+        // the viewer an update brought (see Viewer), else the APK's own
+        val stream = Viewer.file(name)?.inputStream() ?: try { context.assets.open("viewer/$name") } catch (_: Exception) {
             return json(Response.Status.NOT_FOUND, JSONObject().put("detail", "no existe $path"))
         }
         val response = newChunkedResponse(Response.Status.OK, mimeOf(name), stream)

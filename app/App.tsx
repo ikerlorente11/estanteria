@@ -8,6 +8,7 @@ import * as NavigationBar from 'expo-navigation-bar'
 import * as IntentLauncher from 'expo-intent-launcher'
 import * as SystemUI from 'expo-system-ui'
 import * as FileSystem from 'expo-file-system/legacy'
+import { Asset } from 'expo-asset'
 
 import EstanteriaHost from './modules/estanteria-host'
 
@@ -61,6 +62,20 @@ async function remember(path: string, name: string): Promise<void> {
   await FileSystem.writeAsStringAsync(INDEX, JSON.stringify(index)).catch(() => {})
 }
 
+/** The viewer this JavaScript brings (scripts/zip-viewer.mjs): an EAS Update carries a new one, which the host
+ * then serves instead of the APK's. Out of development only (there the page comes from Vite); when anything
+ * fails the APK's viewer is served, as before. */
+async function adoptBundledViewer(): Promise<void> {
+  if (__DEV__ || !EstanteriaHost?.useViewer) return
+  try {
+    const asset = Asset.fromModule(require('./assets/viewer.zip'))
+    await asset.downloadAsync()
+    if (asset.localUri) await EstanteriaHost.useViewer(asset.localUri, asset.hash || '')
+  } catch (err) {
+    console.warn('visor del APK:', err)
+  }
+}
+
 export default function App() {
   const system = useColorScheme()
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system')
@@ -75,7 +90,7 @@ export default function App() {
   useEffect(() => {
     // Without the native module (Expo Go) the host is the development one on the PC (devhost/, through adb reverse).
     const started: Promise<{ url: string; token: string }> = EstanteriaHost
-      ? EstanteriaHost.start()
+      ? adoptBundledViewer().then(() => EstanteriaHost!.start())
       : process.env.EXPO_PUBLIC_HOST_URL
         ? Promise.resolve({ url: `${process.env.EXPO_PUBLIC_HOST_URL.replace(/\/+$/, '')}/`, token: process.env.EXPO_PUBLIC_HOST_TOKEN || 'dev' })
         : Promise.reject(new Error('Esta app necesita su módulo nativo (o EXPO_PUBLIC_HOST_URL en desarrollo).'))

@@ -60,8 +60,10 @@ Se rehacen con `make_icon.py` (el icono de la app, el adaptativo, el splash y el
 
 ## Política de privacidad
 
-Play la pide siempre, aunque la app no recoja datos. Texto propuesto (hay que publicarlo en una URL pública,
-por ejemplo un archivo `PRIVACY.md` en un repositorio público o una página del portfolio):
+Play la pide siempre, aunque la app no recoja datos. Publicada (repo `privacy_policies`, GitHub Pages):
+https://ikerlorente11.github.io/privacy_policies/estanteria/privacy-policy.html
+
+En resumen:
 
 > La Estantería no recoge, guarda ni comparte datos personales. Los archivos que lees, tu progreso, tus notas y tus ajustes se quedan en tu dispositivo. La app solo se conecta a internet cuando tú lo pides: para leer los catálogos que añades o los servidores que conectas, con la dirección y las credenciales que tú escribes, que se guardan cifradas en el dispositivo. No hay anuncios ni analíticas.
 

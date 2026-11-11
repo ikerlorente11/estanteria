@@ -36,6 +36,12 @@
           ],
           "data": [
             {
+              "scheme": "content"
+            },
+            {
+              "scheme": "file"
+            },
+            {
               "mimeType": "application/vnd.comicbook+zip"
             },
             {
@@ -51,10 +57,7 @@
               "mimeType": "application/x-cb7"
             },
             {
-              "mimeType": "application/epub+zip"
-            },
-            {
-              "mimeType": "application/pdf"
+              "mimeType": "application/x-cbt"
             },
             {
               "mimeType": "application/zip"
@@ -67,6 +70,228 @@
             },
             {
               "mimeType": "application/x-7z-compressed"
+            },
+            {
+              "mimeType": "application/x-tar"
+            },
+            {
+              "mimeType": "application/pdf"
+            },
+            {
+              "mimeType": "application/epub+zip"
+            },
+            {
+              "mimeType": "application/x-mobipocket-ebook"
+            },
+            {
+              "mimeType": "application/vnd.amazon.ebook"
+            },
+            {
+              "mimeType": "application/vnd.amazon.mobi8-ebook"
+            },
+            {
+              "mimeType": "application/x-mobi8-ebook"
+            },
+            {
+              "mimeType": "application/x-fictionbook+xml"
+            },
+            {
+              "mimeType": "application/x-fictionbook"
+            },
+            {
+              "mimeType": "text/fb2+xml"
+            },
+            {
+              "mimeType": "application/x-zip-compressed-fb2"
+            },
+            {
+              "mimeType": "application/x-fictionbook+zip"
+            },
+            {
+              "mimeType": "text/plain"
+            },
+            {
+              "mimeType": "image/vnd.djvu"
+            },
+            {
+              "mimeType": "image/x-djvu"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": [
+            {
+              "scheme": "content"
+            },
+            {
+              "scheme": "file"
+            },
+            {
+              "host": "*"
+            },
+            {
+              "mimeType": "*/*"
+            },
+            {
+              "pathPattern": ".*\\\\.cbz"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.cbz"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.cbz"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.cbz"
+            },
+            {
+              "pathPattern": ".*\\\\.cbr"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.cbr"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.cbr"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.cbr"
+            },
+            {
+              "pathPattern": ".*\\\\.cb7"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.cb7"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.cb7"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.cb7"
+            },
+            {
+              "pathPattern": ".*\\\\.cbt"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.cbt"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.cbt"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.cbt"
+            },
+            {
+              "pathPattern": ".*\\\\.mobi"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.mobi"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.mobi"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.mobi"
+            },
+            {
+              "pathPattern": ".*\\\\.azw"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.azw"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.azw"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.azw"
+            },
+            {
+              "pathPattern": ".*\\\\.azw3"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.azw3"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.azw3"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.azw3"
+            },
+            {
+              "pathPattern": ".*\\\\.prc"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.prc"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.prc"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.prc"
+            },
+            {
+              "pathPattern": ".*\\\\.fb2"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.fb2"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.fb2"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.fb2"
+            },
+            {
+              "pathPattern": ".*\\\\.fbz"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.fbz"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.fbz"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.fbz"
+            },
+            {
+              "pathPattern": ".*\\\\.fb2\\\\.zip"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.fb2\\\\.zip"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.fb2\\\\.zip"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.fb2\\\\.zip"
+            },
+            {
+              "pathPattern": ".*\\\\.djvu"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.djvu"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.djvu"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.djvu"
+            },
+            {
+              "pathPattern": ".*\\\\.djv"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\.djv"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\.djv"
+            },
+            {
+              "pathPattern": ".*\\\\..*\\\\..*\\\\..*\\\\.djv"
             }
           ]
         }

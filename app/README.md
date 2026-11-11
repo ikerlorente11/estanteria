@@ -13,6 +13,13 @@ para leer sin conexión. Todo lo que no sea la propia página exige el token que
   `modules/estanteria-host/android/src/main/assets/viewer/` (no va a git: se construye antes de compilar).
 - `modules/estanteria-host/android/.../HostServer.kt`: las rutas del host; `Settings.kt`: dirección, usuario
   y contraseña (cifrada con el keystore); `Events.kt`: progreso de descargas y subidas por SSE.
+- `Shelf.kt`: los archivos del dispositivo (carpetas y «Abrir con»): cómics cbz/zip, cbr/rar, cb7/7z y cbt/tar, PDF, DjVu
+  y libros epub, mobi (azw, azw3, prc), fb2, fbz (.fb2.zip) y txt. Los libros (foliate-js) y el DjVu (djvu-rs) los pinta el
+  visor con el archivo entero: el host solo los lista y saca la portada (`Books.kt`: MOBI por EXTH 201, FB2 por
+  `<coverpage>`; TXT y DjVu sin portada). Las páginas AVIF y JPEG XL salen como JPEG: AVIF lo decodifica Android 12+,
+  JPEG XL `jxl-coder` (libjxl, ~5 MB de .so por arquitectura).
+- `app.json`: «Abrir con» por tipo MIME y, para lo que los exploradores mandan como `application/octet-stream`, por el
+  final del nombre (`pathPattern` no retrocede: un patrón por cada punto antes de la extensión).
 
 ## Desarrollo
 

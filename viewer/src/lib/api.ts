@@ -1,8 +1,12 @@
 /** La Estantería's API (see service/app.py). The host says how each call is authorised: the OpenCloud web
  * app with its session's bearer token, the desktop and Android apps with HTTP basic (user + app token). */
 
+import { t } from './i18n.ts'
+
 export type Kind = 'comic' | 'pdf' | 'book'
-export type Format = 'cbz' | 'cbr' | 'cb7' | 'folder' | 'pdf' | 'epub' | 'mobi' | 'fb2'
+/** comics: cbz, cbr, cb7, cbt and folders of images; documents by pages: pdf and djvu (djvu only from the service);
+ * books: epub, mobi (also azw, azw3, prc), fb2, fbz and txt */
+export type Format = 'cbz' | 'cbr' | 'cb7' | 'cbt' | 'folder' | 'pdf' | 'djvu' | 'epub' | 'mobi' | 'fb2' | 'fbz' | 'txt'
 export type Direction = 'ltr' | 'rtl'
 
 export interface Progress {
@@ -201,8 +205,9 @@ export interface ProgressUpdate {
 export interface ApiOffline {
   /** a URL of a kept image or file, fetched instead of the service's */
   local(path: string): string | null
-  /** the answer to a GET when the service does not answer (undefined: none) */
-  fallback(path: string): unknown
+  /** the answer to a GET when the service does not answer (undefined: none); `always`: answer even with nothing kept
+   * (an app without a server: an empty shelf is still an answer) */
+  fallback(path: string, always?: boolean): unknown
   /** a change made when the service does not answer, kept for later (undefined: cannot) */
   write(method: string, path: string, body: unknown): unknown
   /** what the service answered */
@@ -220,8 +225,27 @@ export interface ApiOffline {
 /** Answers that mean the service is not there (the proxy in front answers instead). */
 const UNREACHABLE = new Set([502, 503, 504, 520, 521, 522, 523, 524, 530])
 
+/** What a library with nothing in it answers (an app with no library and no files of its own yet). */
+function emptyAnswer(path: string): unknown {
+  const base = path.split('?')[0]
+  if (base === '/api/library') {
+    return { connected: false, username: '', scanned: null, scan_error: null, total: 0, pending: 0, errors: 0, folders: [], archivador: { total: 0, pending: 0, errors: 0 }, sources: [] }
+  }
+  if (['/api/series', '/api/continue', '/api/recent', '/api/items', '/api/sources', '/api/sources/kinds', '/api/catalogs'].includes(base)) return []
+  return undefined
+}
+
+/** What only a server of its own does (its catalogs, outside libraries, scanning the Archivador…), asked
+ * without one. */
+export function noServer(): Error {
+  const err: any = new Error(t('Para esto hace falta conectar un servidor propio (en Bibliotecas).'))
+  err.status = 0
+  err.noServer = true
+  return err
+}
+
 function unreachable(cause?: unknown): Error {
-  const err: any = new Error('Sin conexión con La Estantería')
+  const err: any = new Error(t('Sin conexión con el servidor'))
   err.offline = true
   err.status = 0
   err.cause = cause
@@ -238,10 +262,33 @@ export class Api {
   private authorization: () => string
   private mintAppToken?: () => Promise<string>
 
+  /** No server: the app reads what this device has (its shelf, what it kept) and asks nobody. */
+  readonly standalone: boolean
+
   constructor(baseUrl: string, authorization: () => string, mintAppToken?: () => Promise<string>) {
     this.baseUrl = baseUrl
     this.authorization = authorization
     this.mintAppToken = mintAppToken
+    this.standalone = false
+  }
+
+  /** The API of an app with no server connected: answered by `offline` (the shelf of this device and what
+   * was kept from a server before), never over the network. */
+  static onDevice(): Api {
+    const api = new Api('', () => '')
+    ;(api as { standalone: boolean }).standalone = true
+    return api
+  }
+
+  /** Without a server at all: this device's answer, or an error that says a server is needed. */
+  private onDeviceOnly<T>(path: string, init: RequestInit): T {
+    const method = (init.method || 'GET').toUpperCase()
+    let kept = !this.offline ? undefined
+      : method === 'GET' ? this.offline.fallback(path, true)
+      : this.offline.write(method, path, init.body ? JSON.parse(String(init.body)) : undefined)
+    if (kept === undefined && method === 'GET') kept = emptyAnswer(path)
+    if (kept === undefined) throw noServer()
+    return (this.offline?.merge ? this.offline.merge(method, path, kept) : kept) as T
   }
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
@@ -262,6 +309,7 @@ export class Api {
   private async call<T>(path: string, init: RequestInit = {}): Promise<T> {
     const mine = this.offline?.own?.((init.method || 'GET').toUpperCase(), path, init.body ? JSON.parse(String(init.body)) : undefined)
     if (mine !== undefined) return mine as T
+    if (this.standalone) return this.onDeviceOnly<T>(path, init)
     let res: Response
     try {
       res = await fetch(this.baseUrl + path, { ...init, headers: this.headers({ 'Content-Type': 'application/json', ...((init.headers as any) || {}) }) })
@@ -292,6 +340,7 @@ export class Api {
         if (kept.ok) return kept.blob()
       } catch (err) { if ((err as any)?.name === 'AbortError') throw err }
     }
+    if (this.standalone) throw noServer()
     let res: Response
     try {
       res = await fetch(this.baseUrl + path, { headers: this.headers(), signal })
@@ -313,6 +362,7 @@ export class Api {
   /** Makes sure the service holds an app token of this user (so its indexer can work alone): mints
    * one in OpenCloud the first time, when the host can; else just checks the credential works. */
   async ensureConnected(): Promise<void> {
+    if (this.standalone) return
     const status = await this.call<{ connected: boolean }>('/api/cloud')
     if (status.connected || !this.mintAppToken) return
     const token = await this.mintAppToken()

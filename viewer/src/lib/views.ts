@@ -10,6 +10,10 @@ export type View =
   | { v: 'catalogs' }
   | { v: 'downloads' }
   | { v: 'catalog'; kind: string; path?: string; q?: string }
+  /** a chapter of a catalog read page by page, without downloading it */
+  | { v: 'chapter'; catalog: string; chapter: string; title?: string }
+  /** the extensions of a Suwayomi library */
+  | { v: 'extensions'; library: string }
 
 /** The view a route's query stands for (the app keeps its place in the URL). */
 export function viewFromQuery(query: Record<string, unknown>): View {
@@ -39,6 +43,12 @@ export function viewFromQuery(query: Record<string, unknown>): View {
     return view
   }
   if (v === 'item' && id > 0) return { v, id }
+  if (v === 'extensions' && query.library) return { v, library: String(query.library) }
+  if (v === 'chapter' && query.catalog && query.chapter) {
+    const view: View = { v, catalog: String(query.catalog), chapter: String(query.chapter) }
+    if (query.title) view.title = String(query.title)
+    return view
+  }
   if (v === 'sources') return query.add ? { v, add: true } : { v }
   return { v: 'home' }
 }
@@ -62,6 +72,8 @@ export function queryFromView(view: View): Record<string, string> {
     return q
   }
   if (view.v === 'item') return { v: 'item', id: String(view.id) }
+  if (view.v === 'extensions') return { v: 'extensions', library: view.library }
+  if (view.v === 'chapter') return view.title ? { v: 'chapter', catalog: view.catalog, chapter: view.chapter, title: view.title } : { v: 'chapter', catalog: view.catalog, chapter: view.chapter }
   if (view.v === 'sources') return view.add ? { v: 'sources', add: '1' } : { v: 'sources' }
   if (view.v === 'catalog') {
     const q: Record<string, string> = { v: 'catalog', kind: view.kind }

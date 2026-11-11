@@ -1,24 +1,27 @@
 <template>
   <div class="es-reader-shell">
-    <div v-if="loading" class="es-reader-loading"><span class="es-spin"></span> Abriendo…</div>
+    <div v-if="loading" class="es-reader-loading"><span class="es-spin"></span> {{ t('Abriendo…') }}</div>
     <div v-else-if="error" class="es-reader-loading">
       <p>{{ error }}</p>
-      <button class="es-btn" @click="store.back()">Volver</button>
+      <button class="es-btn" @click="store.back()">{{ t('Volver') }}</button>
     </div>
     <PdfReader v-else-if="item && item.kind === 'pdf' && asDoc" :item="item" :start-page="startPage" @changed="changed" />
-    <ComicReader v-else-if="item && item.kind !== 'book'" :item="item" :start-page="startPage" @changed="changed" />
-    <BookReader v-else-if="item && item.format === 'epub'" :item="item" @changed="changed" />
+    <ComicReader v-else-if="item && item.kind !== 'book'" :item="item" :start-page="startPage" :source="djvu ? (p, w) => djvu!.image(p, w) : undefined" @changed="changed" />
+    <BookReader v-else-if="item && BOOK_FORMATS.includes(item.format)" :item="item" @changed="changed" />
     <div v-else-if="item" class="es-reader-loading">
       <p><strong>{{ item.title }}</strong></p>
-      <p>Los {{ item.format.toUpperCase() }} aún no se leen aquí; puedes descargarlo y abrirlo con otra app.</p>
-      <p><button class="es-btn es-primary" @click="download">Descargar</button> <button class="es-btn" @click="store.back()">Volver</button></p>
+      <p>{{ t('Los {format} aún no se leen aquí; puedes descargarlo y abrirlo con otra app.', { format: item.format.toUpperCase() }) }}</p>
+      <p><button class="es-btn es-primary" @click="download">{{ t('Descargar') }}</button> <button class="es-btn" @click="store.back()">{{ t('Volver') }}</button></p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import type { ItemDetail } from '../lib/api'
+import { BOOK_FORMATS } from '../lib/books'
+import type { DjvuBook } from '../lib/djvu'
+import { t } from '../lib/i18n'
 import { loadSettings, useStore } from '../lib/store'
 import ComicReader from './ComicReader.vue'
 import BookReader from './BookReader.vue'
@@ -26,21 +29,29 @@ import BookReader from './BookReader.vue'
 // pdf.js only loads when a PDF is read as a document
 const PdfReader = defineAsyncComponent(() => import('./PdfReader.vue'))
 
-/** Opens an item and hands it to the reader of its kind: pages (comics, PDF) or text (EPUB). */
+/** Opens an item and hands it to the reader of its kind: pages (comics, PDF, DjVu) or text (EPUB, MOBI, FB2, TXT…). */
 const props = defineProps<{ id: number; startPage?: number; as?: 'doc' | 'pages' }>()
 /** a PDF: as a document (pdf.js), or its pages as images in the comic reader; the reader's setting unless asked */
 const store = useStore()
 const item = ref<ItemDetail | null>(null)
 // never for a PDF without text (a comic, a scan): the service says
-const asDoc = computed(() => item.value?.meta?.text !== false && (props.as ? props.as === 'doc' : loadSettings().pdf === 'doc'))
+// a DjVu is always pages: pdf.js cannot read it
+const asDoc = computed(() => item.value?.format === 'pdf' && item.value?.meta?.text !== false && (props.as ? props.as === 'doc' : loadSettings().pdf === 'doc'))
 const loading = ref(true)
+const djvu = shallowRef<DjvuBook | null>(null)
 const error = ref('')
 
 async function load() {
   try {
     const got = await store.api.item(props.id)
-    if (got.state === 'error') error.value = `No se pudo abrir: ${got.error || 'archivo ilegible'}`
-    else if (got.state === 'listed') error.value = 'Este archivo aún se está abriendo; prueba en un momento.'
+    if (got.state === 'error') error.value = t('No se pudo abrir: {error}', { error: got.error || t('archivo ilegible') })
+    else if (got.state === 'listed') error.value = t('Este archivo aún se está abriendo; prueba en un momento.')
+    else if (got.format === 'djvu') {
+      // drawn here, from the whole file: its pages and their sizes are the file's own
+      const { DjvuBook } = await import('../lib/djvu')
+      djvu.value = await DjvuBook.open(await store.api.blob(store.api.filePath(got.id)))
+      item.value = { ...got, pages: djvu.value.pages, page_sizes: djvu.value.sizes }
+    }
     else item.value = got
   } catch (err: any) { error.value = err?.message || String(err) }
   loading.value = false
@@ -61,4 +72,5 @@ async function download() {
   } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
 onMounted(load)
+onBeforeUnmount(() => djvu.value?.close())
 </script>

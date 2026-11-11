@@ -20,12 +20,28 @@ class Settings(context: Context) {
     }
 
     var url: String
-        get() = (plain.getString("url", null) ?: DEFAULT_URL).trimEnd('/')
+        get() = (plain.getString("url", null) ?: "").trimEnd('/')
         set(value) { plain.edit().putString("url", value.trimEnd('/')).apply() }
 
     var username: String
         get() = plain.getString("username", "") ?: ""
         set(value) { plain.edit().putString("username", value).apply() }
+
+    /** what the user called the server */
+    var name: String
+        get() = plain.getString("name", "") ?: ""
+        set(value) { plain.edit().putString("name", value).apply() }
+
+    /** downloads only on Wi-Fi (or another network that is not metered): see Wifi */
+    var wifiOnly: Boolean
+        get() = plain.getBoolean("wifiOnly", false)
+        set(value) { plain.edit().putBoolean("wifiOnly", value).apply() }
+
+    /** Forgets the server: its password, address, user and name (what was downloaded stays). */
+    fun forget() {
+        forgetToken()
+        plain.edit().remove("url").remove("username").remove("name").apply()
+    }
 
     /** the app password of `username` ('' when none is kept) */
     fun token(): String = if (username.isEmpty()) "" else (secret.getString("token:$username", "") ?: "")
@@ -46,9 +62,6 @@ class Settings(context: Context) {
         return "$username@$host".replace(Regex("[^A-Za-z0-9-]"), "_")
     }
 
-    fun describe(): JSONObject = JSONObject().put("url", url).put("username", username).put("hasToken", token().isNotEmpty())
+    fun describe(): JSONObject = JSONObject().put("url", url).put("username", username).put("name", name).put("hasToken", token().isNotEmpty())
 
-    companion object {
-        const val DEFAULT_URL = "https://estanteria.pistation.dev"
-    }
 }

@@ -9,6 +9,7 @@
 import { reactive } from 'vue'
 import type { Api, ApiOffline, Bookmark, Item, ItemDetail, LibraryStatus, Progress, Series } from './api.ts'
 import { isLocal, isLocalSource, type LocalShelf } from './local.ts'
+import { t } from './i18n.ts'
 
 export interface OfflineEntry {
   item: ItemDetail
@@ -184,7 +185,7 @@ export class Offline implements ApiOffline {
     job.state = 'running'
     try {
       const item = await this.api.item(id)        // also makes the service open it, if it had not
-      if (item.state !== 'ready') throw new Error(item.state === 'error' ? item.error || 'no se puede abrir' : 'aún se está abriendo; prueba en un momento')
+      if (item.state !== 'ready') throw new Error(item.state === 'error' ? item.error || t('no se puede abrir') : t('aún se está abriendo; prueba en un momento'))
       job.total = keptAsFile(item) ? 1 : item.pages
       await this.backend.start({ id, pages: keptAsFile(item) ? 0 : item.pages, file: keptAsFile(item), width: this.state.width, meta: item })
       // the backend tells when it is done (progressed)
@@ -232,7 +233,9 @@ export class Offline implements ApiOffline {
     const [id, part] = found
     if (isLocal(id) && this.shelf?.has(id)) {
       const w = path.match(/[?&]w=(\d+)/)
-      return this.shelf.url(id, part === 'cover' ? 'c' : part === 'file' ? 'f' : part) + (w && part.startsWith('p/') ? `?w=${w[1]}` : '')
+      const url = this.shelf.url(id, part === 'cover' ? 'c' : part === 'file' ? 'f' : part)
+      // the host's URL may carry its own query already (Android's token: ?t=…)
+      return w && part.startsWith('p/') ? `${url}${url.includes('?') ? '&' : '?'}w=${w[1]}` : url
     }
     const entry = this.state.entries[id]
     if (!entry) return null
@@ -278,8 +281,8 @@ export class Offline implements ApiOffline {
     return Object.values(this.state.entries).map((e) => this.withProgress(e.item))
   }
 
-  fallback(path: string): unknown {
-    if (!this.count && !this.shelf?.count) return undefined
+  fallback(path: string, always = false): unknown {
+    if (!always && !this.count && !this.shelf?.count) return undefined
     const [base, qs] = path.split('?')
     const params = new URLSearchParams(qs || '')
     const all = this.items()
@@ -347,7 +350,7 @@ export class Offline implements ApiOffline {
     if (m && isLocal(Number(m[1]))) {
       const id = Number(m[1])
       const rest = m[2] || ''
-      if (!this.shelf?.has(id)) throw Object.assign(refused('Ese archivo ya no está en tu PC (¿se movió o se borró?).'), { status: 404 })
+      if (!this.shelf?.has(id)) throw Object.assign(refused(t('Ese archivo ya no está en este dispositivo (¿se movió o se borró?).')), { status: 404 })
       if (!rest && method === 'GET') return this.shelf.detail(id).then((d) => ({ ...this.withProgress(d), bookmarks: this.marksOf(id) }))
       if (rest === '/progress' && method === 'DELETE') {
         delete this.known[id]
@@ -373,13 +376,13 @@ export class Offline implements ApiOffline {
       const one = rest.match(/^\/bookmarks\/(-?\d+)$/)
       if (one && method === 'PUT') {
         const was = this.marksBase(id).find((x) => x.id === Number(one[1]))
-        if (!was) throw refused('Esa nota ya no está.')
+        if (!was) throw refused(t('Esa nota ya no está.'))
         const changed = { ...was, ...b, updated: now }
         this.knownMarks[id] = this.marksBase(id).map((x) => (x.id === was.id ? changed : x))
         write(KNOWN_MARKS_KEY, this.knownMarks)
         return changed
       }
-      throw refused('Esto solo se puede con lo que está en El Archivador; este es un archivo de este PC.')
+      throw refused(t('Esto solo se puede con lo que está en el servidor; este es un archivo de este dispositivo.'))
     }
     const gone = base.match(/^\/api\/bookmarks\/(-?\d+)$/)
     if (gone && method === 'DELETE') {

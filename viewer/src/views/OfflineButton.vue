@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Item } from '../lib/api'
+import { t } from '../lib/i18n'
 import { sizeLabel, useStore } from '../lib/store'
 
 /** Makes one item, or a whole series or folder, available without connection (or stops / undoes it).
@@ -38,22 +39,22 @@ const percent = computed(() => {
 })
 
 const label = computed(() => {
-  if (busy.value) return single.value ? `Descargando ${percent.value} %` : `Descargando ${done.value} de ${props.items.length}`
-  if (allDone.value) return single.value ? 'Disponible sin conexión' : `Todo${props.what ? ` ${props.what}` : ''} sin conexión`
-  if (failed.value && single.value) return 'Reintentar la descarga'
-  if (!single.value && done.value) return `Descargar el resto (${props.items.length - done.value})`
-  return single.value ? 'Descargar para leer sin conexión' : `Descargar${props.what ? ` ${props.what}` : ''} (${props.items.length})`
+  if (busy.value) return single.value ? t('Descargando {percent} %', { percent: percent.value }) : t('Descargando {done} de {total}', { done: done.value, total: props.items.length })
+  if (allDone.value) return single.value ? t('Disponible sin conexión') : props.what ? t('Todo {what} sin conexión', { what: props.what }) : t('Todo sin conexión')
+  if (failed.value && single.value) return t('Reintentar la descarga')
+  if (!single.value && done.value) return t('Descargar el resto ({n})', { n: props.items.length - done.value })
+  return single.value ? t('Descargar para leer sin conexión') : props.what ? t('Descargar {what} ({n})', { what: props.what, n: props.items.length }) : t('Descargar ({n})', { n: props.items.length })
 })
 const hint = computed(() => {
   const o = offline.value
   if (!o) return ''
-  if (busy.value) return 'Pulsa para pararla'
+  if (busy.value) return t('Pulsa para pararla')
   if (allDone.value) {
     const bytes = props.items.reduce((sum, i) => sum + (o.state.entries[i.id]?.bytes || 0), 0)
-    return `Ocupa ${sizeLabel(bytes)} en este equipo. Pulsa para quitar la copia.`
+    return t('Ocupa {size} en este equipo. Pulsa para quitar la copia.', { size: sizeLabel(bytes) })
   }
   const error = props.items.map((i) => o.state.jobs[i.id]?.error).find(Boolean)
-  return error ? `No se pudo: ${error}` : 'Guarda una copia en este equipo para leerla sin conexión'
+  return error ? t('No se pudo: {error}', { error }) : t('Guarda una copia en este equipo para leerla sin conexión')
 })
 
 async function act() {
@@ -65,10 +66,10 @@ async function act() {
   }
   if (allDone.value) {
     await o.removeAll(props.items.map((i) => i.id))
-    store.notify(single.value ? 'Copia quitada de este equipo.' : `${props.items.length} copias quitadas de este equipo.`)
+    store.notify(single.value ? t('Copia quitada de este equipo.') : t('{n} copias quitadas de este equipo.', { n: props.items.length }))
     return
   }
   const added = o.add(props.items)
-  if (!single.value) store.notify(added ? `${added} en la cola de descargas.` : 'Ya estaba todo en la cola.')
+  if (!single.value) store.notify(added ? t('{n} en la cola de descargas.', { n: added }) : t('Ya estaba todo en la cola.'))
 }
 </script>

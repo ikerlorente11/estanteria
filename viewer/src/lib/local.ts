@@ -7,12 +7,18 @@
  * Their items' ids start at LOCAL_BASE (the service's count from 1); each folder is a library
  * whose source id is below 0 (−its id), so the library's filters and folder browsing work as for
  * the Archivador. Files added on their own make the library «Archivos sueltos» (root 1). */
+import { catalogMeta } from './catalogdownloads.ts'
 import { reactive } from 'vue'
 import type { Item, ItemDetail, ItemQuery, Series, Source } from './api.ts'
+import { appSettings } from './appsettings.ts'
+import { t } from './i18n.ts'
 
 export const LOCAL_BASE = 2 ** 50
 /** the root of the files added on their own */
 export const LOOSE_ROOT = 1
+/** What was downloaded from the catalogs: a library of its own, «Descargas», a folder per series (a root of
+ * the viewer's, not a folder the host knows: the files are loose ones of the host, in its catalog folder). */
+export const DOWNLOADS_ROOT = 2 ** 30
 
 export function isLocal(id: number): boolean {
   return id >= LOCAL_BASE
@@ -29,7 +35,7 @@ export interface LocalRoot {
   name: string
 }
 
-export type LocalFormat = 'cbz' | 'cbr' | 'cb7' | 'epub' | 'pdf'
+export type LocalFormat = 'cbz' | 'cbr' | 'cb7' | 'cbt' | 'pdf' | 'djvu' | 'epub' | 'mobi' | 'fb2' | 'fbz' | 'txt'
 
 /** A file of the shelf, as the host lists it (nothing opened). */
 export interface LocalFile {
@@ -85,7 +91,19 @@ export interface ShelfBackend {
   upload(id: number, dest: string, progress: (sent: number, total: number) => void): Promise<UploadDone>
 }
 
-export const LOCAL_FORMATS: LocalFormat[] = ['cbz', 'cbr', 'cb7', 'epub', 'pdf']
+export const LOCAL_FORMATS: LocalFormat[] = ['cbz', 'cbr', 'cb7', 'cbt', 'pdf', 'djvu', 'epub', 'mobi', 'fb2', 'fbz', 'txt']
+const LOCAL_BOOKS: LocalFormat[] = ['epub', 'mobi', 'fb2', 'fbz', 'txt']
+/** The folders of the reading folder by what is in them (the service files there what it copies, too). */
+export const SHELF_FOLDERS = { manga: 'Manga', comic: 'Comics', book: 'Libros', pdf: 'Documentos' } as const
+type Place = keyof typeof SHELF_FOLDERS
+const SHELF_ALIASES: Record<Place, string[]> = {
+  manga: ['manga', 'mangas'], comic: ['comics', 'comic'], book: ['libros', 'libro', 'books'], pdf: ['documentos', 'documents', 'pdf'],
+}
+/** What a folder's name says it holds (Cómics, comics, Manga…), if it says. */
+function placeOf(name: string): Place | undefined {
+  const plain = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  return (Object.keys(SHELF_ALIASES) as Place[]).find((p) => SHELF_ALIASES[p].includes(plain))
+}
 export const CACHE_LIMITS = [1, 2, 5, 10, 20].map((gb) => gb * 2 ** 30)
 
 /** Series, title and number from where the file is, like the service does for Lectura:
@@ -97,12 +115,33 @@ export function guess(file: Pick<LocalFile, 'folder' | 'name'>): { title: string
   const title = stem.replace(/_/g, ' ').split(/\s+/).filter(Boolean).join(' ')
   let rest = title
   if (series && rest.toLowerCase().startsWith(series.toLowerCase())) rest = rest.slice(series.length)
-  const m = rest.match(/(?<![\d.])(\d+(?:[.,]\d+)?)/)
+  // a chapter's number before any other («Vol. 15 · Cap. 114» is 114), then the first number
+  const m = rest.match(/\b(?:cap(?:[ií]tulo)?|ch(?:apter)?)\.?\s*(\d+(?:[.,]\d+)?)/i) || rest.match(/(?<![\d.])(\d+(?:[.,]\d+)?)/)
   return { title, series, number: m ? Number(m[1].replace(',', '.')) : null }
 }
 
+/** The root a file shows under: its own; one downloaded from a catalog, «Descargas». */
+function rootOf(f: LocalFile): number {
+  return f.root === LOOSE_ROOT && catalogMeta[f.id] ? DOWNLOADS_ROOT : f.root
+}
+
+/** The series a title is of, when nothing says it: the title without its number («The Flash 012», «The Flash
+ * #12», «The Flash vol. 2» are of «The Flash»); the title itself when it has none. */
+export function seriesOfTitle(title: string): string {
+  const cut = title.replace(/\s*(?:[-–—·:,(#]|\b(?:vol(?:umen|ume)?|tomo|t|cap(?:[ií]tulo)?|ch(?:apter)?|n\.?º|no|issue|parte|part)\b\.?)?\s*\d[\s\S]*$/i, '').trim()
+  return cut || title.trim()
+}
+
+/** Where a file shows on the shelf: its folder; something downloaded from a catalog in a folder of its series
+ * (or of its title, without a series), inside «Descargas». */
+function shelfFolder(f: LocalFile): string {
+  if (rootOf(f) !== DOWNLOADS_ROOT) return f.folder
+  const meta = catalogMeta[f.id]!
+  return (meta.series || seriesOfTitle(meta.title)).replace(/[\\/]+/g, ' ').trim()
+}
+
 function kindOf(format: LocalFormat): Item['kind'] {
-  return format === 'epub' ? 'book' : format === 'pdf' ? 'pdf' : 'comic'
+  return LOCAL_BOOKS.includes(format) ? 'book' : format === 'pdf' || format === 'djvu' ? 'pdf' : 'comic'
 }
 
 export class LocalShelf {
@@ -210,29 +249,32 @@ export class LocalShelf {
   }
 
   rootName(root: number): string {
-    if (root === LOOSE_ROOT) return 'Archivos sueltos'
-    return this.state.roots.find((r) => r.id === root)?.name || 'Este PC'
+    if (root === LOOSE_ROOT) return t('Archivos sueltos')
+    if (root === DOWNLOADS_ROOT) return t('Descargas')
+    return this.state.roots.find((r) => r.id === root)?.name || t('Este dispositivo')
   }
 
   /** The item a file of the shelf is (pages known once it was prepared). */
   item(id: number): Item | null {
     const f = this.state.files[id]
     if (!f) return null
-    const g = guess(f)
+    const folder = shelfFolder(f)
+    const g = guess({ folder, name: f.name })
     const prepared = this.prepared.get(id)
     return {
-      id, source_id: -f.root, path: f.path, folder: f.folder, name: f.name, format: f.format, kind: kindOf(f.format), size: f.size,
-      modified: f.modified, title: g.title, series: g.series, number: g.number, author: null, year: null, summary: null,
+      id, source_id: -rootOf(f), path: f.path, folder, name: f.name, format: f.format, kind: kindOf(f.format), size: f.size,
+      modified: f.modified, title: (rootOf(f) === DOWNLOADS_ROOT && catalogMeta[f.id]?.title) || g.title, series: g.series, number: g.number, author: null, year: null, summary: null,
       pages: prepared?.pages || 0, direction: 'ltr', cover: true, state: 'ready', error: null, added: f.modified, updated: f.modified,
-      meta: { local: true, root: f.root, rootName: this.rootName(f.root) }, progress: null,
+      meta: { local: true, root: rootOf(f), rootName: this.rootName(rootOf(f)) }, progress: null,
     }
   }
 
   /** The item ready to read: its pages counted (once). */
   async detail(id: number): Promise<ItemDetail> {
     const base = this.item(id)
-    if (!base) throw Object.assign(new Error('Ese archivo ya no está en tu PC (¿se movió o se borró?).'), { status: 404 })
-    if (base.kind === 'book') return { ...base, page_sizes: [], bookmarks: [] }
+    if (!base) throw Object.assign(new Error(t('Ese archivo ya no está en este dispositivo (¿se movió o se borró?).')), { status: 404 })
+    // books and DjVu are read from the whole file (the reader counts their pages): nothing to prepare
+    if (base.kind === 'book' || base.format === 'djvu') return { ...base, page_sizes: [], bookmarks: [] }
     let prepared = this.prepared.get(id)
     if (!prepared) {
       let going = this.waiting.get(id)
@@ -251,11 +293,12 @@ export class LocalShelf {
   /** The libraries of the shelf, as the library's filters show them. */
   sources(): Source[] {
     const counts = new Map<number, number>()
-    for (const f of Object.values(this.state.files)) counts.set(f.root, (counts.get(f.root) || 0) + 1)
+    for (const f of Object.values(this.state.files)) counts.set(rootOf(f), (counts.get(rootOf(f)) || 0) + 1)
     const roots: { id: number; name: string; path: string }[] = [...this.state.roots]
-    if (counts.get(LOOSE_ROOT)) roots.push({ id: LOOSE_ROOT, name: 'Archivos sueltos', path: '' })
+    if (counts.get(DOWNLOADS_ROOT)) roots.push({ id: DOWNLOADS_ROOT, name: t('Descargas'), path: '' })
+    if (counts.get(LOOSE_ROOT)) roots.push({ id: LOOSE_ROOT, name: t('Archivos sueltos'), path: '' })
     return roots.map((r) => ({
-      id: -r.id, kind: 'local' as any, catalog: false, label: 'Este PC', name: r.name, url: r.path, username: '', config: {}, enabled: true,
+      id: -r.id, kind: 'local' as any, catalog: false, label: t('Este dispositivo'), name: r.name, url: r.path, username: '', config: {}, enabled: true,
       scanned: null, scan_error: null, info: {}, items: counts.get(r.id) || 0, supports_progress: false, created: 0, updated: 0,
     }))
   }
@@ -265,15 +308,18 @@ export class LocalShelf {
     const root = -source
     const out = new Set<string>()
     for (const f of Object.values(this.state.files)) {
-      if (f.root !== root || !f.folder) continue
-      const parts = f.folder.split('/')
+      const folder = shelfFolder(f)
+      if (rootOf(f) !== root || !folder) continue
+      const parts = folder.split('/')
       for (let i = 1; i <= parts.length; i++) out.add(parts.slice(0, i).join('/'))
     }
     return [...out]
   }
 
+  /** Everything listed (the formats hidden in the settings are not). */
   all(): Item[] {
-    return Object.keys(this.state.files).map((id) => this.item(Number(id))!)
+    const hidden = appSettings.hiddenFormats
+    return Object.values(this.state.files).filter((f) => !hidden.includes(f.format)).map((f) => this.item(f.id)!)
   }
 
   /** What /api/items would answer for the shelf. */
@@ -309,10 +355,26 @@ export class LocalShelf {
   }
 
   /** Where a file would go in the reading folder of the Archivador: its library's name and its folder. */
-  uploadPath(id: number): string {
+  /** Where in the server's reading folder a file goes, like the rest there: `Manga`, `Comics`, `Libros` or
+   * `Documentos` (spelled as the server already has it, when it has one), then its series (its folders
+   * here), then the file. What it is: what the catalog said, else what its folders say («Cómics/…»,
+   * «Manga/…»), else its format. `existing`: the server's folders, to follow how they are spelled. */
+  uploadPath(id: number, existing: string[] = []): string {
     const f = this.state.files[id]
     if (!f) return ''
-    const root = f.root === LOOSE_ROOT ? 'Del PC' : this.rootName(f.root)
-    return [root, f.folder, f.name].filter(Boolean).join('/')
+    const meta = catalogMeta[id]
+    const segs = f.folder ? f.folder.split('/').filter(Boolean) : []
+    const named = [f.root === LOOSE_ROOT ? '' : this.rootName(f.root), ...segs].map(placeOf).find(Boolean)
+    const kind = kindOf(f.format)
+    const place: Place = meta ? (meta.kind === 'manga' ? 'manga' : meta.kind === 'book' ? 'book' : 'comic')
+      : named || (kind === 'book' ? 'book' : kind === 'pdf' ? 'pdf' : 'comic')
+    // the folder that says what it is is the top one there: not repeated below it
+    while (segs.length && placeOf(segs[0]) === place) segs.shift()
+    const tops = [...new Set(existing.map((p) => p.split('/')[0]).filter(Boolean))]
+    const top = tops.find((t) => placeOf(t) === place) || SHELF_FOLDERS[place]
+    const clean = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
+    const below = meta ? (meta.series ? [clean(meta.series)] : []) : segs
+    return [top, ...below, f.name].join('/')
   }
+
 }

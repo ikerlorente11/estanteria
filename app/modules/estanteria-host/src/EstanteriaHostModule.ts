@@ -6,6 +6,10 @@ declare class EstanteriaHostModule extends NativeModule<EstanteriaHostModuleEven
   /** starts the local server the web view loads the viewer from (or finds it running) */
   start(): Promise<HostStarted>
   stop(): void
+  /** while on, the volume keys turn pages (the `onVolumeKey` event) instead of changing the volume */
+  setVolumeKeys(on: boolean): void
+  /** why a download of the app's own may not start now («solo con wifi» on mobile data), or null */
+  downloadBlocked(): string | null
 }
 
 /** null in Expo Go (no native code there): the app then uses the development host on the PC, see devhost/. */

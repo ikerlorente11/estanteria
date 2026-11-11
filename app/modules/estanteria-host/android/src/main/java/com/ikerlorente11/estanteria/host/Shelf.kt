@@ -9,8 +9,8 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import android.util.Xml
 import androidx.documentfile.provider.DocumentFile
-import com.github.junrar.Archive
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.json.JSONArray
@@ -22,6 +22,8 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -29,11 +31,15 @@ import java.util.concurrent.ConcurrentHashMap
  * the system picker, kept as tree URIs) and files opened one by one («Abrir con», the file picker).
  * Nothing is copied when they are listed; the page reads them through the host:
  *
- * - `/shelf/c/<id>`: a small cover (the first page, 400 px wide, kept in `local-cache/covers/`);
- * - `/shelf/p/<id>/<n>?w=`: a page. A cbz is read straight from the archive; a cbr or cb7 is unpacked
- *   once into `local-cache/<id>/x/p/`, and a PDF page is rendered at the width asked and kept there too.
+ * - `/shelf/c/<id>`: a small cover (the first page, or the one a book declares; 400 px wide, kept in
+ *   `local-cache/covers/`). A TXT or a DjVu has none: the viewer shows its placeholder;
+ * - `/shelf/p/<id>/<n>?w=`: a page. A cbz is read straight from the archive and a cbt by the offsets of
+ *   its entries; a cbr or cb7 is unpacked once into `local-cache/<id>/x/p/`, and a PDF page is rendered at
+ *   the width asked and kept there too. AVIF and JPEG XL pages are served as JPEG (`local-cache/<id>/j/`).
  *   That cache has a size limit: what was opened longest ago goes first;
- * - `/shelf/f/<id>`: the file itself (an EPUB, or a PDF for the document reader).
+ * - `/shelf/f/<id>`: the file itself (the books, which the viewer lays out itself: EPUB, MOBI/AZW3, FB2,
+ *   FBZ and TXT; a DjVu, which the viewer renders itself, so it has no pages nor cover here; or a PDF for
+ *   the document reader).
  *
  * An item's id is `LOCAL_BASE` + a hash of its URI, so the same file is the same item (with its progress
  * and notes) every time, and never meets an id of the service (those count from 1).
@@ -47,6 +53,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
     private var cacheLimit = DEFAULT_CACHE
     private val known = ConcurrentHashMap<Long, Known>()
     private val zips = ConcurrentHashMap<Long, List<String>>()
+    private val tars = ConcurrentHashMap<Long, List<Tar.Entry>>()
 
     init { load() }
 
@@ -117,17 +124,41 @@ class Shelf(private val context: Context, private val settings: Settings, privat
     @Synchronized
     fun addFile(uri: String): JSONObject {
         val parsed = Uri.parse(uri)
-        val doc = DocumentFile.fromSingleUri(context, parsed) ?: throw IllegalArgumentException("no se encuentra el archivo")
+        val doc = single(parsed) ?: throw IllegalArgumentException("no se encuentra el archivo")
         val name = doc.name ?: nameOf(parsed) ?: "archivo"
-        val format = formatOf(name) ?: throw IllegalArgumentException("La Estantería abre cbz, cbr, cb7, epub y pdf")
+        val format = formatOf(name) ?: throw IllegalArgumentException(UNSUPPORTED)
         if (files.none { it == uri }) { files.add(uri); save() }
         return listed(LOOSE_ROOT, parsed, "", name, format, doc.length(), doc.lastModified() / 1000)
     }
 
+    /** Forgets a file added on its own; one downloaded from a catalog (it lives in the app's `catalogo/`, where
+     * nothing else would reach it) is deleted too. */
     @Synchronized
     fun removeFile(id: Long) {
+        files.filter { idOf(it) == id }.forEach { uri ->
+            catalogFile(Uri.parse(uri))?.let { f ->
+                f.delete()
+                // the series' folder goes with its last file
+                f.parentFile?.takeIf { it != Net.folder(context).canonicalFile && it.list()?.isEmpty() == true }?.delete()
+            }
+        }
         files.removeAll { idOf(it) == id }
+        save()
         File(cacheDir(), id.toString()).deleteRecursively()
+    }
+
+    /** A file of the shelf: a content:// URI (the system picker, «Abrir con») or a file:// one, which is only
+     * taken inside the folder of the catalog downloads (see Net): the page may not reach the app's other files. */
+    private fun single(uri: Uri): DocumentFile? =
+        if (uri.scheme == "file") catalogFile(uri)?.let { DocumentFile.fromFile(it) }
+        else DocumentFile.fromSingleUri(context, uri)
+
+    private fun catalogFile(uri: Uri): File? {
+        if (uri.scheme != "file") return null
+        val file = File(uri.path ?: return null)
+        val folder = Net.folder(context).canonicalFile
+        // in it, or in the folder of a series inside it
+        return file.canonicalFile.takeIf { it.parentFile == folder || it.parentFile?.parentFile == folder }
     }
 
     /** Everything on the shelf now: the files of every folder (and their subfolders) and those added alone. */
@@ -142,7 +173,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         for (uri in currentFiles) {
             val parsed = Uri.parse(uri)
             if (seen.contains(idOf(uri))) continue
-            val doc = DocumentFile.fromSingleUri(context, parsed) ?: continue
+            val doc = single(parsed) ?: continue
             if (!doc.exists()) continue
             val name = doc.name ?: continue
             val format = formatOf(name) ?: continue
@@ -183,6 +214,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
     fun clearCache() {
         cacheDir().listFiles()?.filter { it.isDirectory && it.name != "covers" }?.forEach { it.deleteRecursively() }
         zips.clear()
+        tars.clear()
     }
 
     /** Drops what was opened longest ago until the cache fits its limit (what is being read stays). */
@@ -205,14 +237,15 @@ class Shelf(private val context: Context, private val settings: Settings, privat
 
     private fun open(uri: Uri): InputStream = context.contentResolver.openInputStream(uri) ?: throw IllegalStateException("no se puede abrir el archivo")
 
-    /** What a comic archive really is (cbz, cbr or cb7), by its first bytes: many a .cbr is a zip inside. */
+    /** What a comic archive really is (cbz, cbr, cb7 or cbt), by its first bytes: many a .cbr is a zip inside. */
     private fun containerOf(uri: Uri, format: String): String {
-        if (format !in listOf("cbz", "cbr", "cb7")) return format
-        val head = try { open(uri).use { s -> ByteArray(8).let { b -> val n = s.read(b); b.copyOf(n.coerceAtLeast(0)) } } } catch (_: Exception) { return format }
+        if (format !in listOf("cbz", "cbr", "cb7", "cbt")) return format
+        val head = try { open(uri).use { s -> readUpTo(s, 512) } } catch (_: Exception) { return format }
         return when {
             head.size >= 6 && head.copyOf(6).contentEquals(byteArrayOf(0x52, 0x61, 0x72, 0x21, 0x1a, 0x07)) -> "cbr"
             head.size >= 4 && head.copyOf(4).contentEquals(byteArrayOf(0x50, 0x4b, 0x03, 0x04)) -> "cbz"
             head.size >= 6 && head.copyOf(6).contentEquals(byteArrayOf(0x37, 0x7a, 0xbc.toByte(), 0xaf.toByte(), 0x27, 0x1c)) -> "cb7"
+            Tar.isTar(head) -> "cbt"
             else -> format
         }
     }
@@ -227,6 +260,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
             try {
                 val json = JSONObject(kept.readText())
                 if (format == "cbz") zips.getOrPut(id) { zipPages(k.uri) }
+                if (format == "cbt") tars.getOrPut(id) { tarPages(k.uri) }
                 return json
             } catch (_: Exception) {}
         }
@@ -237,13 +271,20 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                 val names = zipPages(k.uri)
                 if (names.isEmpty()) throw IllegalStateException("no tiene imágenes")
                 zips[id] = names
-                withZip(k.uri) { zip -> names.forEach { n -> sizes.put(boundsOf(zip.getInputStream(zip.getEntry(n)))) } }
+                withZip(k.uri) { zip -> names.forEach { n -> sizes.put(boundsOf(zip.getInputStream(zip.getEntry(n)), n)) } }
                 pages = names.size
+            }
+            "cbt" -> {
+                val entries = tarPages(k.uri)
+                if (entries.isEmpty()) throw IllegalStateException("no tiene imágenes")
+                tars[id] = entries
+                withChannel(k.uri) { ch -> entries.forEach { e -> sizes.put(boundsOf(Tar.read(ch, e).inputStream(), e.name)) } }
+                pages = entries.size
             }
             "cbr", "cb7" -> {
                 pages = unpack(k.uri, format, File(dir, "x"))
                 val pagesDir = File(dir, "x/p")
-                for (n in 0 until pages) sizes.put(Offline.stem(pagesDir, n.toString())?.let { f -> boundsOf(FileInputStream(f)) } ?: JSONArray().put(0).put(0))
+                for (n in 0 until pages) sizes.put(Offline.stem(pagesDir, n.toString())?.let { f -> boundsOf(FileInputStream(f), f.name) } ?: JSONArray().put(0).put(0))
                 prune(keep = id)
             }
             "pdf" -> {
@@ -254,6 +295,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                     }
                 }
             }
+            "djvu" -> throw IllegalArgumentException("Un DjVu lo dibuja el visor con el archivo entero: el host no saca sus páginas.")
             else -> pages = 0
         }
         var complete = true
@@ -270,13 +312,18 @@ class Shelf(private val context: Context, private val settings: Settings, privat
             "cbz" -> {
                 val names = zips[id] ?: run { prepare(id); zips[id] ?: emptyList() }
                 val name = names.getOrNull(n) ?: throw IllegalArgumentException("esa página no existe")
-                return zipRead(k.uri, name) to mimeOf(name)
+                return viewable(id, n, name) { zipRead(k.uri, name) }
+            }
+            "cbt" -> {
+                val entries = tars[id] ?: run { prepare(id); tars[id] ?: emptyList() }
+                val entry = entries.getOrNull(n) ?: throw IllegalArgumentException("esa página no existe")
+                return viewable(id, n, entry.name) { withChannel(k.uri) { ch -> Tar.read(ch, entry) }.inputStream() }
             }
             "cbr", "cb7" -> {
                 val pagesDir = File(itemCache(id), "x/p")
                 val file = Offline.stem(pagesDir, n.toString()) ?: run { prepare(id); Offline.stem(pagesDir, n.toString()) }
                     ?: throw IllegalArgumentException("esa página no existe")
-                return FileInputStream(file) to mimeOf(file.name)
+                return viewable(id, n, file.name) { FileInputStream(file) }
             }
             "pdf" -> {
                 val w = (width ?: 1600).coerceIn(300, 3200)
@@ -300,26 +347,46 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         val covers = File(cacheDir(), "covers").also { it.mkdirs() }
         val file = File(covers, "$id.jpg")
         if (file.isFile) return FileInputStream(file) to "image/jpeg"
+        val avif = File(covers, "$id.avif")
+        if (avif.isFile) return FileInputStream(avif) to "image/avif"
         val k = item(id)
         val raw: ByteArray = when (val format = containerOf(k.uri, k.format)) {
             "cbz" -> {
                 val names = zipPages(k.uri)
                 zipRead(k.uri, names.firstOrNull() ?: throw IllegalStateException("no tiene imágenes")).use { s -> s.readBytes() }
             }
+            "cbt" -> {
+                val first = tarPages(k.uri).firstOrNull() ?: throw IllegalStateException("no tiene imágenes")
+                withChannel(k.uri) { ch -> Tar.read(ch, first) }
+            }
             "cbr", "cb7" -> firstImage(k.uri, format)
             "pdf" -> renderPdf(k.uri, 0, COVER_WIDTH)
             "epub" -> epubCover(k.uri) ?: throw IllegalStateException("sin portada")
-            else -> throw IllegalStateException("sin portada")
+            "mobi" -> mobiCover(k.uri) ?: throw IllegalStateException("sin portada")
+            "fb2" -> fb2Cover(k.uri) ?: throw IllegalStateException("sin portada")
+            "fbz" -> fbzCover(k.uri) ?: throw IllegalStateException("sin portada")
+            else -> throw IllegalStateException("sin portada")            // a TXT or a DjVu: the viewer keeps its placeholder
         }
-        val small = small(raw)
+        val small = try { small(raw) } catch (e: Exception) {
+            // an AVIF this Android cannot decode (before Android 14 that is up to the maker): the web view shows it as it is
+            if (!Images.isAvif(raw)) throw e
+            avif.writeBytes(raw)
+            return raw.inputStream() to "image/avif"
+        }
         file.writeBytes(small)
         return small.inputStream() to "image/jpeg"
     }
 
-    /** The file itself and its size (for the readers that want the whole thing: EPUB, PDF as a document). */
+    /** The file itself, to hand to another app: a catalog download (a File of the app's) or the document's Uri. */
+    fun original(id: Long): Any? {
+        val k = known[id] ?: return null
+        return if (k.uri.scheme == "file") catalogFile(k.uri) else k.uri
+    }
+
+    /** The file itself and its size (for the readers that want the whole thing: the books, PDF as a document). */
     fun file(id: Long): Triple<InputStream, String, Long> {
         val k = item(id)
-        val size = DocumentFile.fromSingleUri(context, k.uri)?.length() ?: -1L
+        val size = single(k.uri)?.length() ?: -1L
         return Triple(open(k.uri), mimeOfFormat(k.format), size)
     }
 
@@ -338,6 +405,28 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         val out = ByteArrayOutputStream()
         withZip(uri) { zip -> zip.getInputStream(zip.getEntry(name) ?: throw IllegalArgumentException("esa página no existe")).use { it.copyTo(out) } }
         return out.toByteArray().inputStream()
+    }
+
+    // ---- tar (cbt): its entries indexed once, each page read at its offset ----
+    private fun <T> withChannel(uri: Uri, block: (FileChannel) -> T): T = descriptor(uri).use { pfd ->
+        FileInputStream(pfd.fileDescriptor).use { stream -> block(stream.channel) }
+    }
+
+    private fun tarPages(uri: Uri): List<Tar.Entry> = withChannel(uri) { ch -> Tar.index(ch, ::isPage, NATURAL) }
+
+    /** A page as it is, or as JPEG if the web view cannot show it (AVIF, JPEG XL): made once, kept in the cache. */
+    private fun viewable(id: Long, n: Int, name: String, raw: () -> InputStream): Pair<InputStream, String> {
+        if (!Images.needsJpeg(name)) return raw() to mimeOf(name)
+        val dir = File(itemCache(id), "j").also { it.mkdirs() }
+        val file = File(dir, "$n.jpg")
+        if (!file.isFile) {
+            val jpeg = Images.toJpeg(raw().use { it.readBytes() })
+            val part = File(dir, "$n.part")
+            part.writeBytes(jpeg)
+            part.renameTo(file)
+            prune(keep = id)
+        }
+        return FileInputStream(file) to "image/jpeg"
     }
 
     // ---- rar and 7z: unpacked once ----
@@ -364,17 +453,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                     }
                 }
             } else {
-                Archive(source).use { rar ->
-                    while (true) {
-                        val header = rar.nextFileHeader() ?: break
-                        if (header.isDirectory) continue
-                        val name = header.fileName
-                        if (!isPage(name)) continue
-                        val out = ByteArrayOutputStream()
-                        rar.extractFile(header, out)
-                        keep(name, out.toByteArray().inputStream())
-                    }
-                }
+                Rar.forEach(source, ::isPage, ::keep)
             }
         } finally { source.delete() }
         if (names.isEmpty()) throw IllegalStateException("no tiene imágenes")
@@ -398,13 +477,8 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                     }
                 }
             } else {
-                Archive(tmp).use { rar ->
-                    val headers = rar.fileHeaders.filter { !it.isDirectory && isPage(it.fileName) }.sortedWith { a, b -> NATURAL.compare(a.fileName, b.fileName) }
-                    val first = headers.firstOrNull() ?: throw IllegalStateException("no tiene imágenes")
-                    val out = ByteArrayOutputStream()
-                    rar.extractFile(first, out)
-                    return out.toByteArray()
-                }
+                val first = Rar.names(tmp, ::isPage).sortedWith(NATURAL).firstOrNull() ?: throw IllegalStateException("no tiene imágenes")
+                return Rar.read(tmp, first) ?: throw IllegalStateException("no tiene imágenes")
             }
         } finally { tmp.delete() }
         throw IllegalStateException("no tiene imágenes")
@@ -449,20 +523,65 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         }
     } catch (_: Exception) { null }
 
+    // ---- MOBI / AZW3, FB2, FBZ: see Books ----
+    private fun mobiCover(uri: Uri): ByteArray? = try {
+        withChannel(uri) { ch ->
+            Books.mobiCover(ch.size()) { offset, length ->
+                val buf = ByteBuffer.allocate(length)
+                ch.position(offset)
+                while (buf.hasRemaining()) if (ch.read(buf) < 0) break
+                buf.array().copyOf(buf.position())
+            }
+        }
+    } catch (_: Exception) { null }
+
+    private fun fb2Cover(uri: Uri): ByteArray? = try {
+        open(uri).use { Books.fb2Cover(it.buffered(), Xml.newPullParser()) }
+    } catch (_: Exception) { null }
+
+    /** An FBZ (or .fb2.zip) is a zip with the FB2 inside: its first .fb2. */
+    private fun fbzCover(uri: Uri): ByteArray? = try {
+        withZip(uri) { zip ->
+            val entry = zip.entries.toList().filter { !it.isDirectory && it.name.lowercase().endsWith(".fb2") }
+                .minWithOrNull { a, b -> NATURAL.compare(a.name, b.name) } ?: return@withZip null
+            zip.getInputStream(entry).use { Books.fb2Cover(it.buffered(), Xml.newPullParser()) }
+        }
+    } catch (_: Exception) { null }
+
     // ---- uploading to the Archivador, a piece at a time (requests through Cloudflare carry at most 100 MB) ----
     fun upload(id: Long, dest: String): JSONObject {
         val k = item(id)
         val authorization = settings.authorization() ?: throw IllegalStateException("Conecta con tu Archivador primero.")
         val base = settings.url
-        val total = DocumentFile.fromSingleUri(context, k.uri)?.length() ?: throw IllegalStateException("no se encuentra el archivo")
-        fun call(method: String, url: String, type: String?, body: ByteArray?): JSONObject {
+        val total = single(k.uri)?.length() ?: throw IllegalStateException("no se encuentra el archivo")
+        // how it goes, told as the bytes leave (not only per piece of 32 MB: a small file would jump from 0 to 100)
+        var told = 0L
+        fun tell(at: Long, force: Boolean = false) {
+            val now = System.currentTimeMillis()
+            if (!force && now - told < 250) return
+            told = now
+            events.send("upload", JSONObject().put("id", id).put("sent", at).put("total", total))
+        }
+        fun call(method: String, url: String, type: String?, body: ByteArray?, written: ((Long) -> Unit)? = null): JSONObject {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = method
             conn.connectTimeout = 15_000
             conn.readTimeout = 900_000
             conn.setRequestProperty("Authorization", authorization)
             type?.let { t -> conn.setRequestProperty("Content-Type", t) }
-            if (body != null) { conn.doOutput = true; conn.setFixedLengthStreamingMode(body.size); conn.outputStream.use { o -> o.write(body) } }
+            if (body != null) {
+                conn.doOutput = true
+                conn.setFixedLengthStreamingMode(body.size)
+                conn.outputStream.use { o ->
+                    var off = 0
+                    while (off < body.size) {
+                        val n = minOf(1 shl 16, body.size - off)
+                        o.write(body, off, n)
+                        off += n
+                        written?.invoke(off.toLong())
+                    }
+                }
+            }
             val code = conn.responseCode
             val text = (if (code >= 400) conn.errorStream else conn.inputStream)?.use { s -> String(s.readBytes()) } ?: ""
             conn.disconnect()
@@ -490,7 +609,8 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                 while (true) {
                     attempt++
                     try {
-                        call("PUT", "$base/api/uploads/$upload?offset=$sent", "application/octet-stream", buf.copyOf(filled))
+                        val from = sent
+                        call("PUT", "$base/api/uploads/$upload?offset=$sent", "application/octet-stream", buf.copyOf(filled)) { w -> tell(from + w) }
                         break
                     } catch (e: IllegalStateException) {
                         if (e.cause is IllegalArgumentException && attempt > 1) break      // 409/413: the piece is there already
@@ -502,7 +622,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                     }
                 }
                 sent += filled
-                events.send("upload", JSONObject().put("id", id).put("sent", sent).put("total", total))
+                tell(sent, force = true)
             }
         }
         return call("POST", "$base/api/uploads/$upload/finish", null, null)
@@ -513,28 +633,25 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
     } catch (_: Exception) { null } ?: uri.lastPathSegment?.substringAfterLast('/')
 
-    private fun boundsOf(stream: InputStream): JSONArray = stream.use {
+    /** A page's width and height (a JPEG XL's from its header, through the decoder). */
+    private fun boundsOf(stream: InputStream, name: String): JSONArray = stream.use {
+        if (name.substringAfterLast('.', "").lowercase() == "jxl") {
+            val (w, h) = Images.size(it.readBytes())
+            return@use JSONArray().put(w).put(h)
+        }
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeStream(it, null, opts)
         JSONArray().put(opts.outWidth.coerceAtLeast(0)).put(opts.outHeight.coerceAtLeast(0))
     }
 
     /** The image no wider than COVER_WIDTH, as JPEG. */
-    private fun small(raw: ByteArray): ByteArray {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
-        if (bounds.outWidth <= 0) throw IllegalStateException("imagen ilegible")
-        val opts = BitmapFactory.Options().apply {
-            inSampleSize = 1
-            while (bounds.outWidth / (inSampleSize * 2) >= COVER_WIDTH) inSampleSize *= 2
-        }
-        val decoded = BitmapFactory.decodeByteArray(raw, 0, raw.size, opts) ?: throw IllegalStateException("imagen ilegible")
-        val scaled = if (decoded.width > COVER_WIDTH) Bitmap.createScaledBitmap(decoded, COVER_WIDTH, (decoded.height.toLong() * COVER_WIDTH / decoded.width).toInt().coerceAtLeast(1), true) else decoded
-        val out = ByteArrayOutputStream()
-        scaled.compress(Bitmap.CompressFormat.JPEG, 82, out)
-        if (scaled !== decoded) scaled.recycle()
-        decoded.recycle()
-        return out.toByteArray()
+    private fun small(raw: ByteArray): ByteArray = Images.toJpeg(raw, COVER_WIDTH, 82)
+
+    private fun readUpTo(stream: InputStream, n: Int): ByteArray {
+        val buf = ByteArray(n)
+        var filled = 0
+        while (filled < n) { val got = stream.read(buf, filled, n - filled); if (got <= 0) break; filled += got }
+        return buf.copyOf(filled)
     }
 
     companion object {
@@ -544,7 +661,8 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         const val COVER_WIDTH = 400
         const val DEFAULT_CACHE = 1L shl 30
         const val UPLOAD_CHUNK = 32 shl 20
-        private val IMAGES = setOf("jpg", "jpeg", "png", "webp", "gif", "avif", "bmp")
+        private val IMAGES = setOf("jpg", "jpeg", "png", "webp", "gif", "avif", "jxl", "bmp")
+        const val UNSUPPORTED = "La Estantería abre cómics (cbz, cbr, cb7, cbt), PDF, DjVu y libros (epub, mobi, azw3, fb2, fbz, txt)"
 
         fun idOf(uri: String): Long {
             var h = 0xcbf29ce484222325uL
@@ -552,21 +670,38 @@ class Shelf(private val context: Context, private val settings: Settings, privat
             return LOCAL_BASE + (h and ((1uL shl 40) - 1uL)).toLong()
         }
 
-        fun formatOf(name: String): String? = when (name.substringAfterLast('.', "").lowercase()) {
-            "cbz", "zip" -> "cbz"
-            "cbr", "rar" -> "cbr"
-            "cb7", "7z" -> "cb7"
-            "epub" -> "epub"
-            "pdf" -> "pdf"
-            else -> null
+        /** The format of a file by its name (the ids the viewer knows, see local.ts); null if it is not read here. */
+        fun formatOf(name: String): String? {
+            if (name.lowercase().endsWith(".fb2.zip")) return "fbz"          // before .zip, a comic
+            return when (name.substringAfterLast('.', "").lowercase()) {
+                "cbz", "zip" -> "cbz"
+                "cbr", "rar" -> "cbr"
+                "cb7", "7z" -> "cb7"
+                "cbt", "tar" -> "cbt"
+                "pdf" -> "pdf"
+                "epub" -> "epub"
+                "mobi", "azw", "azw3", "prc" -> "mobi"
+                "fb2" -> "fb2"
+                "fbz" -> "fbz"
+                "txt" -> "txt"
+                "djvu", "djv" -> "djvu"
+                else -> null
+            }
         }
 
+        /** What a file is said to be when served whole (foliate-js tells FB2 and FBZ apart by it). */
         fun mimeOfFormat(format: String) = when (format) {
             "cbz" -> "application/vnd.comicbook+zip"
             "cbr" -> "application/vnd.comicbook-rar"
             "cb7" -> "application/x-7z-compressed"
-            "epub" -> "application/epub+zip"
+            "cbt" -> "application/x-cbt"
             "pdf" -> "application/pdf"
+            "epub" -> "application/epub+zip"
+            "mobi" -> "application/x-mobipocket-ebook"
+            "fb2" -> "application/x-fictionbook+xml"
+            "fbz" -> "application/x-zip-compressed-fb2"
+            "txt" -> "text/plain"
+            "djvu" -> "image/vnd.djvu"
             else -> "application/octet-stream"
         }
 
@@ -576,6 +711,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
             "webp" -> "image/webp"
             "gif" -> "image/gif"
             "avif" -> "image/avif"
+            "jxl" -> "image/jxl"
             "bmp" -> "image/bmp"
             else -> "application/octet-stream"
         }

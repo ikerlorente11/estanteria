@@ -10,7 +10,6 @@
     "build": "vite build"
   },
   "dependencies": {
-    "epubjs": "^0.3.93",
     "estanteria-viewer": "file:../../viewer",
     "pdfjs-dist": "4.10.38",
     "vue": "^3.5.13"

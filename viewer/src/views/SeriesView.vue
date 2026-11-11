@@ -3,21 +3,21 @@
     <div class="es-hero">
       <Cover v-if="first" :id="first.id" :has="first.cover" class="es-hero-pic" />
       <div class="es-hero-text">
-        <p class="es-muted es-small es-crumbs"><a href="#" @click.prevent="go({ v: 'library' })">Biblioteca</a> › Serie</p>
+        <p class="es-muted es-small es-crumbs"><a href="#" @click.prevent="go({ v: 'library' })">{{ t('Estantería') }}</a> › {{ t('Serie') }}</p>
         <h1 class="es-h1 es-big">{{ name }}</h1>
         <p class="es-muted">
-          {{ items.length }} {{ items.length === 1 ? 'número' : 'números' }}<template v-if="finished"> · {{ finished }} {{ finished === 1 ? 'leído' : 'leídos' }}</template>
+          {{ plural(items.length, '{n} número', '{n} números') }}<template v-if="finished"> · {{ plural(finished, '{n} leído', '{n} leídos') }}</template>
           <template v-if="author"> · {{ author }}</template>
         </p>
         <div class="es-hero-actions">
           <button v-if="next" class="es-btn es-primary" @click="store.read(next)">
-            <i class="es-i es-i-book-open" aria-hidden="true"></i> {{ next.progress && next.progress.page ? `Seguir por el nº ${next.number ?? ''}` : finished ? `Leer el nº ${next.number ?? ''}` : 'Empezar a leer' }}
+            <i class="es-i es-i-book-open" aria-hidden="true"></i> {{ next.progress && next.progress.page ? t('Seguir por el nº {number}', { number: next.number ?? '' }) : finished ? t('Leer el nº {number}', { number: next.number ?? '' }) : t('Empezar a leer') }}
           </button>
-          <OfflineButton v-if="store.offline && items.length" :items="items" what="la serie" />
+          <OfflineButton v-if="store.offline && items.length" :items="items" :what="t('la serie')" />
         </div>
       </div>
     </div>
-    <p v-if="loading" class="es-muted"><span class="es-spin"></span> Cargando…</p>
+    <p v-if="loading" class="es-muted"><span class="es-spin"></span> {{ t('Cargando…') }}</p>
     <div v-else class="es-grid">
       <ItemCard v-for="i in items" :key="i.id" :item="i" :show-series="false" @read="store.read(i)" @open="go({ v: 'item', id: i.id })" />
     </div>
@@ -27,6 +27,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Item } from '../lib/api'
+import { plural, t } from '../lib/i18n'
 import { useStore } from '../lib/store'
 import Cover from './Cover.vue'
 import ItemCard from './ItemCard.vue'

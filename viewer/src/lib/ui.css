@@ -68,12 +68,68 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-section { display: block; }
 .es-banner { margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--es-surface-2); }
 .es-banner-error { color: #c62f42; background: rgba(214,69,69,.1); }
+.es-ext-read { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
 .es-empty { padding: 48px 20px; text-align: center; border-radius: 16px; background: var(--es-surface-2); display: grid; gap: 10px; justify-items: center; line-height: 1.6; }
 .es-empty p { margin: 0; max-width: 520px; }
 .es-empty-icon { font-size: 46px; color: var(--es-accent); }
-.es-crumbs { margin: 0; }
-.es-crumbs a { text-decoration: none; }
-.es-crumbs a:hover { text-decoration: underline; }
+.es-empty-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
+.es-home-empty { margin: min(12vh, 96px) auto 0; max-width: 560px; }
+/* the settings: a row per setting, a label and its choices */
+/* the settings: sections with a small title, their rows grouped in a rounded card (like a phone's settings) */
+.es-settings { max-width: 720px; display: block; }
+.es-settings > .es-page-head { margin-bottom: 4px; }
+.es-settings .es-h2 { margin: 28px 4px 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--es-muted); }
+.es-settings .es-page-head + .es-h2 { margin-top: 8px; }
+.es-setting { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 14px 16px; background: var(--es-surface-2); }
+.es-setting + .es-setting { border-top: 1px solid var(--es-line); }
+.es-h2 + .es-setting, .es-settings > .es-setting:first-child { border-top-left-radius: 14px; border-top-right-radius: 14px; }
+.es-setting:has(+ .es-h2), .es-setting:last-child { border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }
+.es-setting-label { flex: 1 1 180px; font-weight: 600; font-size: 14.5px; }
+.es-setting-block { display: grid; justify-content: stretch; gap: 8px; }
+.es-setting-block p { margin: 0; line-height: 1.5; }
+/* choices: a segmented control */
+.es-settings .es-seg { display: inline-flex; flex-wrap: wrap; padding: 3px; gap: 2px; border-radius: 11px; background: var(--es-surface-3); }
+.es-settings .es-seg .es-btn { padding: 6px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--es-muted); font-size: 13.5px; font-weight: 600; box-shadow: none; }
+.es-settings .es-seg .es-btn:hover { color: inherit; }
+.es-settings .es-seg .es-btn.on { background: var(--es-surface); color: var(--es-accent-2); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+.es-settings .es-seg .es-btn.on .es-i { background-color: currentColor; }
+/* yes / no: a switch on the right */
+.es-check { cursor: pointer; font-size: 14.5px; }
+.es-setting.es-check { flex-direction: row-reverse; flex-wrap: nowrap; justify-content: space-between; }
+.es-setting.es-check span { flex: 1; font-weight: 500; }
+.es-setting.es-check input { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 44px; height: 26px; margin: 0; border-radius: 13px;
+  background: var(--es-surface-3); border: 1px solid var(--es-line); cursor: pointer; transition: background .15s, border-color .15s; }
+.es-setting.es-check input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .15s; }
+.es-setting.es-check input:checked { background: var(--es-accent); border-color: var(--es-accent); }
+.es-setting.es-check input:checked::after { transform: translateX(18px); }
+.es-setting.es-check input:focus-visible { outline: 2px solid var(--es-accent); outline-offset: 2px; }
+/* the formats listed: chips that can be switched off */
+.es-formats { display: flex; flex-wrap: wrap; gap: 6px; }
+.es-format { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 999px; border: 1px solid var(--es-line); background: var(--es-surface); font-size: 13px; font-weight: 600; }
+.es-format input { width: 16px; height: 16px; margin: 0; accent-color: var(--es-accent); }
+.es-format:has(input:not(:checked)) { opacity: .55; }
+.es-licenses { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
+.es-licenses a { color: inherit; font-weight: 600; text-decoration: none; }
+.es-licenses a:hover { text-decoration: underline; }
+/* the app locked: everything covered until the device's lock lets it through */
+.es-lock { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 16px; padding: 24px; text-align: center;
+  background: var(--es-bg, var(--oc-role-background, #141417)); color: inherit; }
+.es-lock-mark { width: 72px; height: 72px; border-radius: 20px; display: grid; place-items: center; font-size: 34px; color: var(--es-on-accent); background: var(--es-accent); }
+.es-settings code.es-path { font-size: 13px; word-break: break-all; }
+/* where one is: big enough to tap, one pill per step */
+.es-crumbs { margin: 0 0 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 14px; }
+.es-crumbs a { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 12px; border-radius: 999px; background: var(--es-surface-2);
+  color: inherit; font-weight: 600; text-decoration: none; }
+.es-crumbs a:hover { background: var(--es-surface-3); }
+/* the bar over every page: «back» on the left, the settings on the right (a phone) */
+.es-topbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 10px 16px 4px;
+  background: var(--oc-role-background, var(--es-surface)); }
+.es-topbtn { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border: 0; border-radius: 12px;
+  background: var(--es-surface-2); color: inherit; cursor: pointer; font-size: 20px; }
+.es-topbtn:hover { background: var(--es-surface-3); }
+.es-topbtn.on { background: var(--es-accent); color: var(--es-on-accent); }
+.es-topbar + .es-page, .es-topbar ~ * .es-page:first-child { padding-top: 6px; }
 .es-summary { margin: 4px 0 0; max-width: 720px; line-height: 1.55; }
 .es-path { word-break: break-all; margin: 0; }
 
@@ -102,7 +158,7 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-cover-box { position: relative; display: block; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--es-surface-3); }
 .es-cover-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .es-cover-none { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-size: 30px; color: var(--es-muted); opacity: .6; }
-.es-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; }
+.es-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(150px * var(--es-cards, 1)), 1fr)); gap: 14px 12px; }
 .es-card { position: relative; display: grid; gap: 7px; min-width: 0; }
 .es-card-cover { display: block; text-decoration: none; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 6px 16px rgba(0,0,0,.10); transition: transform .15s, box-shadow .15s; }
 .es-card-cover:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,.14), 0 12px 26px rgba(0,0,0,.16); }
@@ -139,9 +195,13 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-source-icon { width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--es-surface-3); color: var(--es-accent); font-size: 18px; }
 .es-source-text { display: grid; min-width: 0; }
 
-.es-toast { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 200; padding: 10px 16px; border-radius: 10px; max-width: min(560px, 90%);
-  background: var(--oc-role-inverse-surface, #2b2b30); color: var(--oc-role-inverse-on-surface, #fff); font-size: 13.5px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
-.es-toast-error { background: #c62f42; color: #fff; }
+/* at the top, under the bar of «back» and the settings: at the bottom it would cover the navigation */
+/* in the app's own colours: a card of the theme (a failure says so in red) */
+.es-toast { position: fixed; left: 50%; top: 62px; transform: translateX(-50%); z-index: 200; animation: es-toast-in .18s ease-out; padding: 11px 16px;
+  border-radius: 12px; max-width: min(560px, calc(100% - 32px)); width: max-content;
+  background: var(--es-surface); color: inherit; border: 1px solid var(--es-line);
+  font-size: 14px; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+.es-toast-error { color: #e0566b; }
 
 /* ---- icons: OpenCloud's own set (Remix Icon, served from /icons), in the colour of the text ---- */
 .es-i { display: inline-block; flex: none; width: 1.15em; height: 1.15em; vertical-align: -.2em; background-color: currentColor;
@@ -162,6 +222,8 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-i-more { --es-i: url('/icons/more-2-line.svg'); }
 .es-i-pages { --es-i: url('/icons/pages-line.svg'); }
 .es-i-download { --es-i: url('/icons/download-2-line.svg'); }
+.es-i-share { --es-i: url('/icons/share-line.svg'); }
+.es-i-chevron { --es-i: url('/icons/arrow-down-s-line.svg'); }
 .es-i-bookmark { --es-i: url('/icons/bookmark-line.svg'); }
 .es-i-bookmark-fill { --es-i: url('/icons/bookmark-fill.svg'); }
 .es-i-settings { --es-i: url('/icons/settings-3-line.svg'); }
@@ -246,7 +308,7 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
   .es-back { padding: 8px; font-size: 0; }
   .es-back .es-i { font-size: 17px; }
   .es-page { padding: 14px 14px 32px; }
-  .es-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px 10px; }
+  .es-grid { grid-template-columns: repeat(auto-fill, minmax(calc(118px * var(--es-cards, 1)), 1fr)); gap: 12px 10px; }
   .es-rcount { min-width: 54px; font-size: 12px; }
   .es-rtitle small { display: none; }
   .es-rsep { display: none; }
@@ -327,6 +389,18 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-catalogs { display: grid; gap: 10px; max-width: 720px; }
 .es-catalog { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; background: var(--es-surface-2); text-decoration: none; color: inherit; transition: background .12s; }
 .es-catalog:hover { background: var(--es-surface-3); }
+/* an app's catalogs: the card opens it, the button on its side removes it */
+.es-catalog-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; text-decoration: none; color: inherit; }
+.es-catalog-remove { flex: none; }
+.es-langs { margin: 4px 0 14px; }
+.es-addcatalog { margin-bottom: 18px; }
+/* a manga's chapters */
+.es-chapters { display: grid; gap: 4px; max-width: 760px; }
+.es-chapter { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-radius: 10px; background: var(--es-surface-2); }
+.es-chapter-open { flex: 1; min-width: 0; display: grid; gap: 2px; text-decoration: none; color: inherit; }
+.es-chapter-actions { flex: none; display: flex; gap: 6px; }
+.es-chapter:hover { background: var(--es-surface-3); }
+.es-chapter-seen strong { font-weight: 500; color: var(--es-muted); }
 .es-catalog-mark { width: 46px; height: 46px; flex: none; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; color: #fff; background: var(--es-accent); }
 .es-catalog-gutenberg { background: #4a5a8a; }
 .es-catalog-archive { background: #3b3b3b; }
@@ -428,3 +502,46 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-folder-menu { position: fixed; top: auto; bottom: auto; left: auto; z-index: 160; }
 .es-folder-menu-title { margin: 4px 10px 6px; font-size: 12px; font-weight: 600; color: var(--es-muted); max-width: 280px; }
 .es-folder .es-card-info { bottom: 2px; }
+
+/* a Suwayomi's extensions */
+.es-ext-repos { margin: 4px 0 6px; }
+.es-ext-repos summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--es-muted); }
+.es-ext-addrepo { display: flex; gap: 8px; margin-top: 8px; }
+.es-ext-addrepo .es-search { flex: 1; }
+.es-ext-icon { width: 36px; height: 36px; flex: none; border-radius: 9px; object-fit: cover; background: var(--es-surface-3); }
+.es-ext-nsfw { font-size: 11px; font-weight: 700; color: #d64545; }
+.es-catalog-icon { object-fit: cover; padding: 0; background: var(--es-surface-3); }
+/* a made-up cover: the title on a plain colour, with a thin rule like a cloth binding */
+.es-cover-made { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; padding: 12% 10%; box-sizing: border-box;
+  color: #f5efe4; text-align: center; box-shadow: inset 6px 0 0 rgba(0,0,0,.18), inset 0 0 0 1px rgba(255,255,255,.08); }
+.es-cover-made-title { font-family: Georgia, 'Noto Serif', serif; font-weight: 600; font-size: clamp(11px, 1.2vw + 6px, 18px); line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; border-top: 1px solid rgba(255,255,255,.35); border-bottom: 1px solid rgba(255,255,255,.35); padding: 8px 0; }
+
+/* the file of an item: «Descargar», and once it is here, the menu of what to do with it */
+.es-filebtn { position: relative; display: inline-flex; }
+.es-file-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; transform-origin: top left; }
+.es-file-menu-end { left: auto; right: 0; transform-origin: top right; }
+.es-file-menu { max-width: calc(100vw - 32px); }
+.es-fab-danger .es-fab-icon { background: rgba(214,69,69,.12); color: #c62f42; }
+/* the pages of a catalog's list */
+.es-pager { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
+.es-refreshing { margin: -8px 0 0; }
+/* something that cannot be undone, asked right there */
+.es-confirm { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.es-confirm-q { font-size: 13px; font-weight: 600; }
+.es-btn-danger { color: #c62f42; }
+.es-btn-danger:hover { background: rgba(214,69,69,.1); }
+.es-saved-mark { margin-left: 6px; font-size: 14px; color: var(--es-accent-2); vertical-align: -2px; }
+.es-series-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.es-upload-run { display: grid; gap: 8px; }
+/* pull to refresh: the mark that comes down from the top of the page */
+.es-pull { display: flex; align-items: flex-end; justify-content: center; height: 0; margin: -18px 0 0; overflow: hidden; transition: height .18s ease; }
+.es-pull-on { transition: none; }
+.es-pull-dot { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; margin-bottom: 8px; border-radius: 50%;
+  background: var(--es-surface-2); color: var(--es-muted); font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.es-pull-dot.ready { background: var(--es-accent); color: var(--es-on-accent); }
+.es-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+/* a button for a mouse only: with touch, the page is pulled down instead */
+@media (hover: none) and (pointer: coarse) { .es-mouse-only { display: none !important; } }
+@keyframes es-toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.es-folder-menu-ask { padding: 8px 10px; }

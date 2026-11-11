@@ -1,13 +1,12 @@
 package com.ikerlorente11.estanteria.host
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.InputStream
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.SecureRandom
@@ -25,12 +24,17 @@ import java.util.TimerTask
  * The port is fixed (the page's localStorage, where the reader's settings and the pending progress
  * live, belongs to the origin, port included); the next ones are tried only if it is taken.
  */
-class HostServer(private val context: Context, port: Int, picker: Picker) : NanoHTTPD("127.0.0.1", port) {
+class HostServer(private val context: Context, port: Int, picker: Picker, activity: () -> Activity?) : NanoHTTPD("127.0.0.1", port) {
     val token: String = ByteArray(24).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
     val settings = Settings(context)
     val events = Events()
     private val shelf = Shelf(context, settings, events, picker)
     private val offline = Offline(context, settings, events)
+    private val net = Net(context, settings, events)
+    private val lock = Lock(context, activity)
+    private val files = Files(context, picker, activity, { listeningPort }, { token },
+        original = { path -> Regex("""^/shelf/f/(\d+)""").find(path)?.let { shelf.original(it.groupValues[1].toLong()) } },
+        keptPages = { id -> offline.itemDir(id).takeIf { d -> java.io.File(d, "item.json").isFile && java.io.File(d, "p").listFiles()?.isNotEmpty() == true } })
     private val pinger = Timer("estanteria-events", true)
 
     override fun start() {
@@ -40,8 +44,15 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
 
     override fun stop() {
         pinger.cancel()
+        events.closeAll()
         super.stop()
     }
+
+    /** Never gzip. NanoHTTPD decides it per response after [serve] (whatever `setGzipEncoding(false)` said):
+     * any `text/` or JSON type when the browser accepts gzip. On the loopback it only costs time, and it broke
+     * the event stream: a GZIPOutputStream keeps what it is given until the response ends, so the page got the
+     * headers (the EventSource opened) but no event ever came through. */
+    override fun useGzipWhenAccepted(r: Response): Boolean = false
 
     /** One connection per request: NanoHTTPD's keep-alive loses the odd request when the browser reuses a
      * connection it is closing (a «Failed to fetch» now and then); on the loopback a new one costs nothing. */
@@ -50,9 +61,9 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
     /** The page may come from another origin while developing (Vite on the PC): the token still guards everything. */
     private fun cors(response: Response) {
         response.addHeader("Access-Control-Allow-Origin", "*")
-        response.addHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Host-Token, Range")
-        response.addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-        response.addHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Range, Accept-Ranges")
+        response.addHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Host-Token, Range, X-Fetch-Headers")
+        response.addHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS, PROPFIND, PROPPATCH, MKCOL, MOVE, COPY")
+        response.addHeader("Access-Control-Expose-Headers", EXPOSED)
     }
 
     private fun answer(session: IHTTPSession): Response {
@@ -65,13 +76,19 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
                 path.startsWith("/api/") || path.startsWith("/opds/") -> proxy(session)
                 path == "/host/info" -> json(Response.Status.OK, info())
                 path == "/host/settings" -> settingsRoute(session)
+                path == "/host/prefs" -> prefsRoute(session)
+                path == "/host/lock" -> lockRoute(session)
+                path == "/host/file" -> fileRoute(session)
                 path == "/host/events" -> eventStream()
+                path == "/host/fetch" -> fetchRoute(session)
                 path.startsWith("/host/shelf") -> shelfRoute(session, path.removePrefix("/host/shelf").trimStart('/'))
                 path.startsWith("/shelf/") -> shelfFile(session, path.removePrefix("/shelf/"))
                 path.startsWith("/host/offline") -> offlineRoute(session, path.removePrefix("/host/offline").trimStart('/'))
                 path.startsWith("/offline/") -> offlineFile(path.removePrefix("/offline/"))
                 else -> json(Response.Status.NOT_FOUND, JSONObject().put("detail", "no existe $path"))
             }
+        } catch (e: WifiOnlyException) {
+            json(Response.Status.CONFLICT, JSONObject().put("detail", e.message))
         } catch (e: IllegalArgumentException) {
             json(Response.Status.BAD_REQUEST, JSONObject().put("detail", e.message ?: e.toString()))
         } catch (e: Exception) {
@@ -105,6 +122,11 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
         .put("version", version)
         .put("shelf", true)
         .put("offline", true)
+        .put("volumeKeys", true)
+        .put("wifiOnly", true)
+        .put("lock", true)
+        .put("saveAs", true)
+        .put("share", true)
 
     // ---- the files and folders of this device (see Shelf) ----
     private fun shelfRoute(session: IHTTPSession, rest: String): Response {
@@ -119,6 +141,11 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
             parts == listOf("roots") && m == Method.POST -> json(Response.Status.OK, shelf.addRoot(body.getString("path")))
             parts.size == 2 && parts[0] == "roots" && m == Method.DELETE -> { shelf.removeRoot(parts[1].toInt()); empty() }
             parts.size == 2 && parts[0] == "roots" && m == Method.PATCH -> { shelf.renameRoot(parts[1].toInt(), body.getString("name")); empty() }
+            parts == listOf("fetch") && m == Method.POST ->
+                json(Response.Status.OK, JSONObject().put("uri", net.download(body.optString("url"), body.optString("name"), body.optJSONObject("headers"), body.optString("folder"))))
+            parts == listOf("save") && m == Method.POST ->
+                json(Response.Status.OK, JSONObject().put("uri", net.save(session.parameters["name"]?.firstOrNull(), session.parameters["folder"]?.firstOrNull(), session.inputStream,
+                    session.headers["content-length"]?.toLongOrNull() ?: -1L)))
             parts == listOf("files") && m == Method.POST -> json(Response.Status.OK, shelf.addFile(body.getString("path")))
             parts.size == 2 && parts[0] == "files" && m == Method.DELETE -> { shelf.removeFile(parts[1].toLong()); empty() }
             parts.size == 2 && parts[0] == "prepare" && m == Method.POST -> json(Response.Status.OK, shelf.prepare(parts[1].toLong()))
@@ -216,20 +243,57 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
         Method.GET -> json(Response.Status.OK, settings.describe())
         Method.PUT -> {
             val body = JSONObject(readBody(session))
-            settings.url = body.optString("url", settings.url).ifBlank { Settings.DEFAULT_URL }
+            settings.url = body.optString("url", settings.url).trim()
             settings.username = body.optString("username", settings.username).trim()
+            settings.name = body.optString("name", settings.name).trim()
             val token = body.optString("token", "").trim()
             if (token.isNotEmpty()) settings.saveToken(token)
             json(Response.Status.OK, settings.describe())
         }
-        Method.DELETE -> { settings.forgetToken(); json(Response.Status.OK, settings.describe()) }
+        Method.DELETE -> { settings.forget(); json(Response.Status.OK, settings.describe()) }
+        else -> json(Response.Status.METHOD_NOT_ALLOWED, JSONObject().put("detail", "no"))
+    }
+
+    // ---- the app's own preferences the page sets (Ajustes): `{ wifiOnly }` ----
+    private fun prefsRoute(session: IHTTPSession): Response {
+        if (session.method == Method.PUT) {
+            val body = JSONObject(readBody(session))
+            if (body.has("wifiOnly")) settings.wifiOnly = body.optBoolean("wifiOnly", false)
+        } else if (session.method != Method.GET) {
+            return json(Response.Status.METHOD_NOT_ALLOWED, JSONObject().put("detail", "no"))
+        }
+        return json(Response.Status.OK, JSONObject().put("wifiOnly", settings.wifiOnly))
+    }
+
+    // ---- a file served here, saved where the person wants or shared (see Files) ----
+    // POST `{ action: "save" | "share", path, name, mime }`; a save answers `{ ok }` (false: they gave up)
+    private fun fileRoute(session: IHTTPSession): Response {
+        if (session.method != Method.POST) return json(Response.Status.METHOD_NOT_ALLOWED, JSONObject().put("detail", "solo POST"))
+        val body = JSONObject(readBody(session))
+        val path = body.optString("path")
+        val name = body.optString("name").ifBlank { "archivo" }
+        val mime = body.optString("mime")
+        return when (body.optString("action")) {
+            "save" -> json(Response.Status.OK, JSONObject().put("ok", files.save(path, name, mime)))
+            "share" -> { files.share(path, name, mime); json(Response.Status.OK, JSONObject().put("ok", true)) }
+            else -> json(Response.Status.BAD_REQUEST, JSONObject().put("detail", "¿guardar o compartir?"))
+        }
+    }
+
+    // ---- the device's lock (see Lock): GET whether there is one, POST `{ reason }` asks for it and answers `{ ok }` ----
+    private fun lockRoute(session: IHTTPSession): Response = when (session.method) {
+        Method.GET -> json(Response.Status.OK, JSONObject().put("available", lock.available()))
+        Method.POST -> {
+            val reason = JSONObject(readBody(session)).optString("reason", "")
+            json(Response.Status.OK, JSONObject().put("ok", lock.unlock(reason)))
+        }
         else -> json(Response.Status.METHOD_NOT_ALLOWED, JSONObject().put("detail", "no"))
     }
 
     // ---- the service of the Archivador, with the user's credential added here ----
     private fun proxy(session: IHTTPSession): Response {
-        val authorization = settings.authorization()
-            ?: return json(Response.Status.UNAUTHORIZED, JSONObject().put("detail", "Conecta con tu Archivador primero."))
+        val authorization = settings.authorization()?.takeIf { settings.url.isNotEmpty() }
+            ?: return json(Response.Status.UNAUTHORIZED, JSONObject().put("detail", "No hay ningún servidor propio conectado (Bibliotecas)."))
         val query = session.queryParameterString?.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: ""
         val conn = URL(settings.url + session.uri + query).openConnection() as HttpURLConnection
         conn.requestMethod = session.method.name
@@ -259,16 +323,36 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
         return response
     }
 
-    // ---- what happens (progress), as server-sent events ----
+    // ---- any server, for the page (see Net): `/host/fetch?url=`, the headers to send in X-Fetch-Headers (JSON) ----
+    private fun fetchRoute(session: IHTTPSession): Response {
+        val target = net.target(session.parameters["url"]?.firstOrNull())
+        val headers = session.headers["x-fetch-headers"]?.takeIf { it.isNotBlank() }?.let {
+            try { JSONObject(it) } catch (_: Exception) { throw IllegalArgumentException("X-Fetch-Headers tiene que ser un objeto JSON.") }
+        }
+        val method = session.method
+        val body = if (method == Method.GET || method == Method.HEAD) null else readBodyBytes(session)
+        val upstream = try { net.call(target, method.name, headers, body, session.headers["content-type"]) } catch (e: java.io.IOException) {
+            return json(status(502), JSONObject().put("detail", "Sin conexión con ${target.host}: ${e.message ?: e.javaClass.simpleName}"))
+                .also { it.addHeader("X-Fetch-Error", "1") }
+        }
+        val content = upstream.body
+        val stream: InputStream = content?.byteStream() ?: ByteArrayInputStream(ByteArray(0)).also { upstream.close() }
+        val length = content?.contentLength() ?: 0L
+        val type = upstream.header("Content-Type") ?: "application/octet-stream"
+        val response = if (length >= 0) newFixedLengthResponse(status(upstream.code), type, stream, length)
+            else newChunkedResponse(status(upstream.code), type, stream)
+        response.setGzipEncoding(false)
+        response.addHeader("X-Fetch-Url", upstream.request.url.toString())
+        for (name in FORWARDED) upstream.header(name)?.let { response.addHeader(name, it) }
+        return response
+    }
+
+    // ---- what happens (progress), as server-sent events (see Events) ----
     private fun eventStream(): Response {
-        val input = PipedInputStream(16 * 1024)
-        val output = PipedOutputStream(input)
-        events.attach(output)
-        output.write("retry: 3000\n\n".toByteArray())
-        output.flush()
-        val response = newChunkedResponse(Response.Status.OK, "text/event-stream", input)
+        val response = newChunkedResponse(Response.Status.OK, "text/event-stream; charset=utf-8", events.open())
         response.setGzipEncoding(false)
         response.addHeader("Cache-Control", "no-cache")
+        response.addHeader("X-Accel-Buffering", "no")
         return response
     }
 
@@ -319,5 +403,9 @@ class HostServer(private val context: Context, port: Int, picker: Picker) : Nano
         const val PORT = 48123
         const val SOCKET_READ_TIMEOUT = 30_000   // for reading a request; a response (the event stream) may take as long as it wants
         const val version = "0.1.0"
+        /** what a fetched answer brings back of the server's headers (besides type and length) */
+        private val FORWARDED = listOf("Content-Disposition", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified", "Cache-Control",
+            "WWW-Authenticate", "Link", "Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Retry-After", "DAV")
+        private val EXPOSED = (listOf("X-Fetch-Url", "X-Fetch-Error") + FORWARDED).joinToString(", ")
     }
 }

@@ -1,7 +1,12 @@
 /** What every page of the app shares: the API, the images, the library's state and how to move around. */
-import { inject, reactive, type InjectionKey } from 'vue'
+import { inject, reactive, type InjectionKey, type Ref } from 'vue'
 import type { Api, Item, LibraryStatus, Series, Source } from './api.ts'
+import { t } from './i18n.ts'
 import type { ImageCache } from './images.ts'
+import type { CatalogRegistry } from './catalogs.ts'
+import type { LibrariesBackend } from './libraries.ts'
+import type { NativeFeatures } from './native.ts'
+import type { NetBackend } from './net.ts'
 import type { LocalShelf } from './local.ts'
 import type { Offline } from './offline.ts'
 import type { View } from './views.ts'
@@ -13,7 +18,10 @@ export interface Store {
   covers: ImageCache
   pages: ImageCache
   readingRoot: string
-  state: { status: LibraryStatus | null; series: Series[]; loaded: boolean; connected: boolean; error: string }
+  /** `connected`: the store is ready and the pages can load (with or without a server); `server`: a server with
+   * the full reading API is connected (its library, catalogs and outside libraries); without one the app reads
+   * this device's own files. */
+  state: { status: LibraryStatus | null; series: Series[]; loaded: boolean; connected: boolean; server: boolean; error: string }
   refresh: () => Promise<void>
   go: (view: View, replace?: boolean) => void
   back: () => void
@@ -33,7 +41,27 @@ export interface Store {
   removeDownload?: (path: string) => void
   /** false when the host is already full screen (the Android app): the readers hide the button */
   canFullscreen?: boolean
+  /** The name the server is shown with (the web of a server: its own name; an app: the one the user gave it). */
+  serverName?: string
+  /** The libraries an app connects by itself (the desktop, Android); the web of a server has none. */
+  libraries?: LibrariesBackend
+  /** The app's theme, when it has its own (the web of a server follows the server's). */
+  appearance?: { theme: Ref<Theme>; setTheme: (theme: Theme) => void }
+  /** The app's version, for «Acerca de». */
+  version?: string
+  /** which app this is (what some settings apply to) */
+  platform?: 'android' | 'desktop' | 'web'
+  /** where the app keeps what it downloads, to show it */
+  downloadsFolder?: () => Promise<string>
+  /** what only the app's native side can do (volume keys, Wi-Fi only, the device's lock) */
+  native?: NativeFeatures
+  /** The network as the app sees it (no CORS) and the catalogs it reads by itself: the desktop and Android. */
+  net?: NetBackend
+  catalogs?: CatalogRegistry
 }
+
+/** The app's light or dark look: the system's, or one chosen. */
+export type Theme = 'system' | 'light' | 'dark'
 
 export interface DownloadState {
   state: 'downloading' | 'done' | 'error'
@@ -46,12 +74,12 @@ export interface DownloadState {
 export const STORE: InjectionKey<Store> = Symbol('estanteria')
 
 export function createState(): Store['state'] {
-  return reactive({ status: null, series: [], loaded: false, connected: false, error: '' })
+  return reactive({ status: null, series: [], loaded: false, connected: false, server: false, error: '' })
 }
 
 export function useStore(): Store {
   const store = inject(STORE)
-  if (!store) throw new Error('La Estantería: store not provided')
+  if (!store) throw new Error('estanteria-viewer: store not provided')
   return store
 }
 
@@ -66,9 +94,10 @@ export function numberLabel(n: number): string {
 }
 
 export function kindLabel(item: Item): string {
-  if (item.kind === 'book') return item.format === 'epub' ? 'EPUB' : item.format.toUpperCase()
-  if (item.kind === 'pdf') return 'PDF'
-  return item.format === 'folder' ? 'Carpeta' : item.format.toUpperCase()
+  // a book by its own extension (an AZW3 is read as a MOBI, but it is an AZW3)
+  if (item.kind === 'book') return (/\.(azw3?|prc)$/i.exec(item.name)?.[1] || item.format).toUpperCase()
+  if (item.kind === 'pdf') return item.format === 'djvu' ? 'DjVu' : 'PDF'
+  return item.format === 'folder' ? t('Carpeta') : item.format.toUpperCase()
 }
 
 export function percentOf(item: Item): number {
@@ -78,10 +107,15 @@ export function percentOf(item: Item): number {
   return Math.max(0, Math.min(1, p.percent || 0))
 }
 
-/** The name of the library an item comes from ('' for the user's own Archivador). */
+/** The name of the library an item comes from ('' for the server's own library). */
+/** How the server's own library is called on screen. */
+export function serverLabel(store: { serverName?: string }): string {
+  return store.serverName || t('Tu servidor')
+}
+
 export function sourceName(item: Item, sources: Source[] | undefined): string {
   if (!item.source_id) return ''
-  return sources?.find((s) => s.id === item.source_id)?.name || 'Biblioteca externa'
+  return sources?.find((s) => s.id === item.source_id)?.name || t('Biblioteca externa')
 }
 
 export function sizeLabel(bytes: number): string {
@@ -106,12 +140,24 @@ export interface ReaderSettings {
 export type Animation = 'none' | 'fade' | 'slide'
 
 const SETTINGS_KEY = 'estanteria.reader'
+/** How a page gives way to the next: one setting for every reader (comics, PDF, DjVu and books). */
+const TURN_KEY = 'estanteria.turn'
+function sharedTurn(): Partial<{ animation: Animation }> {
+  try {
+    const turn = localStorage.getItem(TURN_KEY) as Animation | null
+    return turn ? { animation: turn } : {}
+  } catch (_) { return {} }
+}
+function keepTurn(animation: Animation): void {
+  try { localStorage.setItem(TURN_KEY, animation) } catch (_) {}
+}
 export function loadSettings(): ReaderSettings {
   const base: ReaderSettings = { mode: 'single', fit: 'best', coverAlone: true, directions: {}, background: 'black', animation: 'fade', pdf: 'pages' }
-  try { return { ...base, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') } } catch (_) { return base }
+  try { return { ...base, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'), ...sharedTurn() } } catch (_) { return base }
 }
 export function saveSettings(settings: ReaderSettings): void {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch (_) {}
+  keepTurn(settings.animation)
 }
 
 export interface BookSettings {
@@ -169,9 +215,10 @@ export function loadBookSettings(): BookSettings {
   try {
     const saved = JSON.parse(localStorage.getItem(BOOK_KEY) || '{}')
     if (saved.margin !== undefined && saved.margin <= 3 && !saved.animation) saved.margin = saved.margin * 4   // the old 0–3 steps
-    return { ...base, ...saved }
+    return { ...base, ...saved, ...sharedTurn() }
   } catch (_) { return base }
 }
 export function saveBookSettings(settings: BookSettings): void {
   try { localStorage.setItem(BOOK_KEY, JSON.stringify(settings)) } catch (_) {}
+  keepTurn(settings.animation)
 }

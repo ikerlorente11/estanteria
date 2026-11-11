@@ -30,7 +30,9 @@ function mimeOf(name: string): string {
   const ext = name.toLowerCase().split('.').pop() || ''
   return { pdf: 'application/pdf', epub: 'application/epub+zip', cbz: 'application/vnd.comicbook+zip', cbr: 'application/vnd.comicbook-rar',
     cb7: 'application/x-7z-compressed', zip: 'application/zip', rar: 'application/vnd.rar', mobi: 'application/x-mobipocket-ebook',
-    azw3: 'application/vnd.amazon.mobi8-ebook', fb2: 'application/x-fictionbook+xml' }[ext] || 'application/octet-stream'
+    azw: 'application/vnd.amazon.ebook', azw3: 'application/vnd.amazon.mobi8-ebook', prc: 'application/x-mobipocket-ebook',
+    fb2: 'application/x-fictionbook+xml', fbz: 'application/x-zip-compressed-fb2', txt: 'text/plain', cbt: 'application/x-cbt',
+    tar: 'application/x-tar', djvu: 'image/vnd.djvu' }[ext] || 'application/octet-stream'
 }
 
 // In development the page's console and errors come out here (Metro): the web view does not log them itself.
@@ -139,6 +141,8 @@ export default function App() {
   }, [tell])
   const queue = useRef<{ url: string; name: string; path: string; quiet: boolean }[]>([])
   const busy = useRef(false)
+  /** «solo con wifi» on mobile data was already said in this run of the queue (once, not once per file) */
+  const pausedTold = useRef(false)
   const download = useCallback(async (url: string, rawName: string, path: string, quiet: boolean) => {
     const name = fileNameOf(rawName)
     const target = `${DOWNLOADS}${name}`
@@ -146,6 +150,13 @@ export default function App() {
       await FileSystem.makeDirectoryAsync(DOWNLOADS, { intermediates: true })
       const have = await FileSystem.getInfoAsync(target)
       if (have.exists && have.size > 0) { report(path, { state: 'done', name, bytes: have.size }); if (!quiet) await openFile(target, name); return }
+      // «solo con wifi» (Ajustes, kept by the host): on mobile data the download does not start, and says why
+      const blocked = typeof EstanteriaHost?.downloadBlocked === 'function' ? EstanteriaHost.downloadBlocked() : null
+      if (blocked) {
+        report(path, { state: 'error', error: blocked, name })
+        if (!pausedTold.current) { pausedTold.current = true; tell(blocked, true) }
+        return
+      }
       let shown = -1
       report(path, { state: 'downloading', percent: 0, name })
       const job = FileSystem.createDownloadResumable(url, `${target}.part`, {}, (p) => {
@@ -171,6 +182,7 @@ export default function App() {
     if (job.quiet) report(job.path, { state: 'downloading', percent: 0, name: fileNameOf(job.name) })
     if (busy.current) return
     busy.current = true
+    pausedTold.current = false
     ;(async () => {
       while (queue.current.length) {
         const next = queue.current.shift()!
@@ -202,6 +214,15 @@ export default function App() {
     } catch (_) { /* no downloads yet */ }
   }, [report])
 
+  // the volume keys turn pages while a reader is open (the page turns them on and off: {type: 'volume-keys'})
+  useEffect(() => {
+    if (!EstanteriaHost || typeof EstanteriaHost.addListener !== 'function') return
+    const sub = EstanteriaHost.addListener('onVolumeKey', ({ dir }) => {
+      web.current?.injectJavaScript(`window.__estanteriaKey && window.__estanteriaKey(${dir < 0 ? -1 : 1}); true;`)
+    })
+    return () => sub.remove()
+  }, [])
+
   // development: what the system leaves us (the gap under the bar is whatever the host app does not get)
   useEffect(() => {
     if (!__DEV__) return
@@ -229,6 +250,8 @@ export default function App() {
       enqueue({ url: String(msg.url), name: String(msg.name || 'archivo'), path: String(msg.path || msg.url), quiet: !!msg.quiet })
     } else if (msg.type === 'remove-download' && typeof msg.path === 'string') {
       removeDownload(msg.path)
+    } else if (msg.type === 'volume-keys') {
+      if (typeof EstanteriaHost?.setVolumeKeys === 'function') EstanteriaHost.setVolumeKeys(!!msg.on)
     }
   }, [open, announceDownloads, enqueue, removeDownload])
 
@@ -245,7 +268,7 @@ export default function App() {
             ref={web}
             source={{ uri: page }}
             style={[styles.web, { backgroundColor: background }]}
-            originWhitelist={['http://127.0.0.1:*', 'http://localhost:*']}
+            originWhitelist={['http://127.0.0.1:*', 'http://localhost:*', 'blob:*', 'about:*', 'data:*']}
             domStorageEnabled
             javaScriptEnabled
             allowsBackForwardNavigationGestures={false}
@@ -261,7 +284,9 @@ export default function App() {
             onNavigationStateChange={(s: { canGoBack: boolean }) => { canGoBack.current = s.canGoBack }}
             onShouldStartLoadWithRequest={(req: { url: string }) => {
               if (req.url.startsWith('http://127.0.0.1') || req.url.startsWith('http://localhost')) return true
-              Linking.openURL(req.url).catch(() => {})   // links out (a catalog's site, the Archivador) go to the browser
+              // the book reader (foliate-js) lays each chapter out in a frame loaded from a blob: URL
+              if (/^(blob|about|data):/.test(req.url)) return true
+              Linking.openURL(req.url).catch(() => {})   // links out (a catalog's site, a server's web) go to the browser
               return false
             }}
           />

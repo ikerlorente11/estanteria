@@ -161,6 +161,8 @@ assert.ok(!sent.slice(before).some((s) => s.includes(String(LOCAL_BASE).slice(0,
 const [added] = await shelf.addFiles(['E:\Otro.cbz'])
 assert.equal(added.source_id, -1)
 assert.ok((await api.items({ source: '-1' })).some((i) => i.id === added.id))
-assert.equal(shelf.uploadPath(L2), 'Cómics/Saga/Extra/Saga 02.pdf')
-assert.equal(shelf.uploadPath(L3), 'Del PC/Libro.epub')
+// uploaded where the rest is: by what it is (its folders say it: «Cómics»), its series folders, the file
+assert.equal(shelf.uploadPath(L2), 'Comics/Saga/Extra/Saga 02.pdf')
+assert.equal(shelf.uploadPath(L2, ['Cómics/Avatar', 'Libros']), 'Cómics/Saga/Extra/Saga 02.pdf')    // the server's spelling
+assert.equal(shelf.uploadPath(L3), 'Libros/Libro.epub')
 console.log('offline ok')

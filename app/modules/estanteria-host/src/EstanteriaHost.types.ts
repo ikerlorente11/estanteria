@@ -5,4 +5,7 @@ export type HostStarted = {
   token: string
 }
 
-export type EstanteriaHostModuleEvents = {}
+export type EstanteriaHostModuleEvents = {
+  /** a volume key while they turn pages (setVolumeKeys(true)): +1 volume down (next page), -1 volume up (previous) */
+  onVolumeKey: (event: { dir: 1 | -1 }) => void
+}

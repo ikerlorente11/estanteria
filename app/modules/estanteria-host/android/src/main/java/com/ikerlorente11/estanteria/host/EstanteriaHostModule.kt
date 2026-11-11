@@ -10,9 +10,14 @@ import java.net.BindException
 class EstanteriaHostModule : Module() {
     private var server: HostServer? = null
     private val picker = Picker { appContext.currentActivity }
+    private val volumeKeys = VolumeKeys { dir -> sendEvent("onVolumeKey", mapOf("dir" to dir)) }
+    private val settings: Settings? by lazy { appContext.reactContext?.applicationContext?.let { Settings(it) } }
 
     override fun definition() = ModuleDefinition {
         Name("EstanteriaHost")
+
+        /** a volume key pressed while they turn pages: `{ dir }`, +1 for volume down (next page), -1 for volume up */
+        Events("onVolumeKey")
 
         OnActivityResult { _, payload -> picker.onResult(payload.requestCode, payload.resultCode, payload.data) }
 
@@ -26,7 +31,7 @@ class EstanteriaHostModule : Module() {
             var last: Exception? = null
             for (port in HostServer.PORT until HostServer.PORT + 5) {
                 try {
-                    val candidate = HostServer(context.applicationContext, port, picker)
+                    val candidate = HostServer(context.applicationContext, port, picker) { appContext.currentActivity }
                     candidate.start()
                     server = candidate
                     Log.i("estanteria", "host en 127.0.0.1:$port")
@@ -37,6 +42,22 @@ class EstanteriaHostModule : Module() {
             }
             throw IllegalStateException("No se pudo abrir el servidor local: ${last?.message}")
         }
+
+        /** While on, the volume keys turn pages (onVolumeKey) instead of changing the volume. */
+        Function("setVolumeKeys") { on: Boolean ->
+            volumeKeys.on = on
+            if (on) volumeKeys.install(appContext.currentActivity)
+        }
+
+        /** Why a download of the app's own may not start now («solo con wifi» on mobile data), or null. */
+        Function("downloadBlocked") {
+            val context = appContext.reactContext?.applicationContext
+            val s = settings
+            if (context == null || s == null) null else Wifi.blocked(context, s)
+        }
+
+        // the window callback that takes the volume keys goes on every activity the app shows (a recreated one too)
+        OnActivityEntersForeground { volumeKeys.install(appContext.currentActivity) }
 
         Function("stop") {
             server?.stop()

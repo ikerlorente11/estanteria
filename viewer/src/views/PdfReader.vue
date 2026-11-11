@@ -1,28 +1,28 @@
 <template>
   <div ref="root" class="es-reader es-pdf-reader" :class="`es-bg-${settings.background}`" tabindex="0" @keydown="onKey">
     <header class="es-rtop">
-      <button class="es-rbtn" title="Volver (Esc)" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
+      <button class="es-rbtn" :title="t('Volver (Esc)')" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
         <strong class="es-ellipsis">{{ shortTitle(item) }}</strong>
-        <small class="es-ellipsis es-muted">{{ item.title !== shortTitle(item) ? item.title : item.series || '' }}<template v-if="total"> · <span class="es-rhere">pág. {{ page + 1 }} / {{ total }} · {{ Math.round(((page + 1) / total) * 100) }} %</span></template></small>
+        <small class="es-ellipsis es-muted">{{ item.title !== shortTitle(item) ? item.title : item.series || '' }}<template v-if="total"> · <span class="es-rhere">{{ t('pág. {page} / {total} · {percent} %', { page: page + 1, total, percent: Math.round(((page + 1) / total) * 100) }) }}</span></template></small>
       </div>
       <div class="es-rtools">
-        <label class="es-pdf-goto" title="Ir a la página">
-          <input type="number" min="1" :max="total || 1" :value="page + 1" aria-label="Página" @change="goTo(Number(($event.target as HTMLInputElement).value) - 1)" />
+        <label class="es-pdf-goto" :title="t('Ir a la página')">
+          <input type="number" min="1" :max="total || 1" :value="page + 1" :aria-label="t('Página')" @change="goTo(Number(($event.target as HTMLInputElement).value) - 1)" />
         </label>
         <span class="es-rsep"></span>
-        <button class="es-rbtn" title="Alejar (−)" @click="zoomBy(1 / 1.2)"><span class="es-pdf-zoomsign" aria-hidden="true">−</span></button>
-        <button class="es-rbtn es-pdf-zoom" :class="{ on: fit }" title="Ajustar al ancho (0)" @click="fitWidth">{{ fit ? 'Ancho' : `${Math.round(zoom * 100)} %` }}</button>
-        <button class="es-rbtn" title="Acercar (+)" @click="zoomBy(1.2)"><span class="es-pdf-zoomsign" aria-hidden="true">+</span></button>
+        <button class="es-rbtn" :title="t('Alejar (−)')" @click="zoomBy(1 / 1.2)"><span class="es-pdf-zoomsign" aria-hidden="true">−</span></button>
+        <button class="es-rbtn es-pdf-zoom" :class="{ on: fit }" :title="t('Ajustar al ancho (0)')" @click="fitWidth">{{ fit ? t('Ancho') : `${Math.round(zoom * 100)} %` }}</button>
+        <button class="es-rbtn" :title="t('Acercar (+)')" @click="zoomBy(1.2)"><span class="es-pdf-zoomsign" aria-hidden="true">+</span></button>
         <span class="es-rsep"></span>
-        <button class="es-rbtn es-rbtn-text" title="Leer como cómic: sus páginas como imágenes (doble página, manga, tira)" @click="asPages"><i class="es-i es-i-pages" aria-hidden="true"></i> Cómic</button>
-        <button v-if="store.canFullscreen !== false" class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
+        <button class="es-rbtn es-rbtn-text" :title="t('Leer como cómic: sus páginas como imágenes (doble página, manga, tira)')" @click="asPages"><i class="es-i es-i-pages" aria-hidden="true"></i> {{ t('Cómic') }}</button>
+        <button v-if="store.canFullscreen !== false" class="es-rbtn" :title="fullscreen ? t('Salir de pantalla completa (f)') : t('Pantalla completa (f)')" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
     </header>
 
     <div ref="stage" class="es-rstage es-pdf-stage" @scroll.passive="onScroll">
       <p v-if="error" class="es-reader-loading">{{ error }}</p>
-      <p v-else-if="!total" class="es-reader-loading"><span class="es-spin"></span> Abriendo el PDF…</p>
+      <p v-else-if="!total" class="es-reader-loading"><span class="es-spin"></span> {{ t('Abriendo el PDF…') }}</p>
       <div v-for="n in total" :key="n - 1" :ref="(el) => pageRef(el as HTMLElement | null, n - 1)" class="es-pdf-page" :data-page="n - 1"
            :style="{ width: `${pageWidth(n - 1)}px`, height: `${pageHeight(n - 1)}px` }">
         <span v-if="!drawn.has(n - 1)" class="es-pageload"><span class="es-spin"></span></span>
@@ -33,10 +33,12 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { TURN_EVENT } from '../lib/native'
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import type { ItemDetail } from '../lib/api'
+import { t } from '../lib/i18n'
 import { loadSettings, saveSettings, shortTitle, useStore } from '../lib/store'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
@@ -200,7 +202,10 @@ function onKey(event: KeyboardEvent) {
   else if ((k === 'ArrowLeft' || k === 'PageUp') && !event.ctrlKey) { goTo(page.value - 1); event.preventDefault() }
 }
 
+/** a page turn from outside (the volume keys) */
+function onTurn(e: Event) { goTo(page.value + ((e as CustomEvent).detail > 0 ? 1 : -1)) }
 onMounted(async () => {
+  window.addEventListener(TURN_EVENT, onTurn)
   root.value?.focus()
   document.addEventListener('fullscreenchange', () => { fullscreen.value = !!document.fullscreenElement })
   try {
@@ -221,11 +226,12 @@ onMounted(async () => {
     const start = props.startPage ?? (item.progress && !item.progress.finished ? item.progress.page ?? 0 : 0)
     page.value = Math.max(0, Math.min(total.value - 1, start))
     requestAnimationFrame(() => { scrollToPage(page.value); drawVisible() })
-  } catch (err: any) { error.value = `No se pudo abrir el PDF: ${err?.message || err}` }
+  } catch (err: any) { error.value = t('No se pudo abrir el PDF: {error}', { error: err?.message || err }) }
   window.addEventListener('resize', onResize)
 })
 function onResize() { if (fit.value) { clearTimeout(redrawTimer); redrawTimer = setTimeout(fitWidth, 200) } }
 onBeforeUnmount(() => {
+  window.removeEventListener(TURN_EVENT, onTurn)
   clearTimeout(saveTimer)
   observer?.disconnect()
   window.removeEventListener('resize', onResize)

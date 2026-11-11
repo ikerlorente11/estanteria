@@ -1,6 +1,6 @@
 <template>
   <div class="es-notes">
-    <p v-if="!items.length" class="es-muted es-small">Nada todavía. {{ hint }}</p>
+    <p v-if="!items.length" class="es-muted es-small">{{ t('Nada todavía.') }} {{ hint }}</p>
     <ul v-else class="es-notelist">
       <li v-for="b in items" :key="b.id" :class="`es-note-${b.kind}`">
         <a href="#" class="es-note-where" @click.prevent="emit('go', b)">
@@ -10,18 +10,18 @@
             <q v-if="b.kind !== 'bookmark' && b.excerpt" class="es-note-excerpt">{{ b.excerpt }}</q>
           </span>
         </a>
-        <textarea v-if="editing === b.id" v-model="draft" class="es-note-edit" rows="3" placeholder="Tu nota" @keydown.esc="editing = null" @keydown.ctrl.enter="save(b)"></textarea>
+        <textarea v-if="editing === b.id" v-model="draft" class="es-note-edit" rows="3" :placeholder="t('Tu nota')" @keydown.esc="editing = null" @keydown.ctrl.enter="save(b)"></textarea>
         <p v-else-if="b.note" class="es-note-body">{{ b.note }}</p>
         <div class="es-note-actions">
           <template v-if="editing === b.id">
-            <button class="es-chip" @click="save(b)">Guardar</button>
-            <button class="es-chip" @click="editing = null">Cancelar</button>
+            <button class="es-chip" @click="save(b)">{{ t('Guardar') }}</button>
+            <button class="es-chip" @click="editing = null">{{ t('Cancelar') }}</button>
           </template>
           <template v-else>
-            <button class="es-chip" @click="edit(b)">{{ b.note ? 'Editar' : 'Añadir nota' }}</button>
-            <button class="es-chip" @click="emit('remove', b)">Quitar</button>
+            <button class="es-chip" @click="edit(b)">{{ b.note ? t('Editar') : t('Añadir nota') }}</button>
+            <button class="es-chip" @click="emit('remove', b)">{{ t('Quitar') }}</button>
           </template>
-          <small class="es-muted es-tiny">{{ new Date(b.created * 1000).toLocaleDateString() }}</small>
+          <small class="es-muted es-tiny">{{ new Date(b.created * 1000).toLocaleDateString(locale()) }}</small>
         </div>
       </li>
     </ul>
@@ -31,6 +31,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Bookmark } from '../lib/api'
+import { locale, t } from '../lib/i18n'
 
 /** Bookmarks, notes and highlights of what is being read: go to one, edit its note, remove it. */
 const props = defineProps<{ items: Bookmark[]; hint: string; place: (b: Bookmark) => string }>()

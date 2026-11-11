@@ -1,0 +1,46 @@
+{
+  "name": "Catálogos libres",
+  "description": "Catálogos públicos y legales de libros, cómics y manga para leer gratis.",
+  "catalogs": [
+    {
+      "id": "gutenberg",
+      "name": "Project Gutenberg",
+      "description": "Más de 70.000 libros de dominio público en muchos idiomas.",
+      "languages": ["multi"],
+      "content": ["books"],
+      "protocol": "opds",
+      "url": "https://m.gutenberg.org/ebooks.opds/",
+      "site": "https://www.gutenberg.org"
+    },
+    {
+      "id": "textos-info",
+      "name": "textos.info",
+      "description": "Biblioteca digital de libros de dominio público en español.",
+      "languages": ["es"],
+      "content": ["books"],
+      "protocol": "opds",
+      "url": "https://www.textos.info/opds",
+      "site": "https://www.textos.info"
+    },
+    {
+      "id": "unglue-it",
+      "name": "unglue.it",
+      "description": "Libros gratuitos con licencias libres (Creative Commons y dominio público).",
+      "languages": ["en"],
+      "content": ["books"],
+      "protocol": "opds",
+      "url": "https://unglue.it/api/opds/",
+      "site": "https://unglue.it"
+    },
+    {
+      "id": "mangadex",
+      "name": "MangaDex",
+      "description": "Manga traducido por grupos de aficionados, en muchos idiomas.",
+      "languages": ["multi"],
+      "content": ["manga"],
+      "protocol": "mangadex",
+      "url": "https://api.mangadex.org",
+      "site": "https://mangadex.org"
+    }
+  ]
+}

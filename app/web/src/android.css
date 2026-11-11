@@ -39,17 +39,13 @@ html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, Roboto, sans-ser
 .es-version { opacity: .7; }
 .es-navcount { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
 .es-navcount .es-spin { width: 10px; height: 10px; }
-/* the gear: only on a phone (on a wide screen the account link lives at the bottom of the sidebar) */
-.es-gear { display: none; }
 @media (max-width: 760px) {
   .es { --es-bar: 76px; }
   .es-nav a { padding: 10px 4px; }
   .es-navcount { margin-left: 0; }
   .es-btn { min-height: 38px; }
   .es-back { display: none; }
-  .es-gear { display: inline-flex; align-items: center; justify-content: center; position: fixed; top: 10px; right: 12px; z-index: 120; width: 40px; height: 40px;
-    border: 0; border-radius: 12px; background: var(--es-surface-2); color: var(--es-muted); cursor: pointer; }
-  .es-gear .es-i { font-size: 19px; }
-  .es-gear.on { background: var(--es-accent); color: var(--es-on-accent); }
-  .es-page-head { padding-right: 48px; }
 }
+/* the settings button of the top bar: only on a phone (on a wide screen they are at the bottom of the sidebar) */
+.es-topbtn-settings { display: none; }
+@media (max-width: 760px) { .es-topbtn-settings { display: inline-flex; } }

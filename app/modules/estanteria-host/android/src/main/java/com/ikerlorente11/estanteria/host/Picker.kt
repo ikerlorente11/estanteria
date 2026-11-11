@@ -23,6 +23,13 @@ class Picker(private val activity: () -> Activity?) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
     }, FILES)
 
+    /** The system's «save as»: where and with what name; the new document's URI, null if cancelled. */
+    fun createDocument(name: String, mime: String): String? = ask(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = mime.ifBlank { "application/octet-stream" }
+        putExtra(Intent.EXTRA_TITLE, name)
+    }, CREATE).firstOrNull()
+
     @Synchronized
     private fun ask(intent: Intent, code: Int): List<String> {
         val current = activity() ?: throw IllegalStateException("la app no está delante")
@@ -35,7 +42,7 @@ class Picker(private val activity: () -> Activity?) {
 
     /** From the module's OnActivityResult. */
     fun onResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode != FOLDERS && requestCode != FILES) return
+        if (requestCode != FOLDERS && requestCode != FILES && requestCode != CREATE) return
         val future = waiting ?: return
         if (resultCode != Activity.RESULT_OK || data == null) { future.complete(emptyList()); return }
         val uris = mutableListOf<Uri>()
@@ -43,6 +50,7 @@ class Picker(private val activity: () -> Activity?) {
         data.clipData?.let { clip -> for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { uris.add(it) } }
         val resolver = activity()?.contentResolver
         for (uri in uris) {
+            if (requestCode == CREATE) break          // written once, now: nothing to keep
             try { resolver?.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
         }
         future.complete(uris.map { it.toString() })
@@ -51,5 +59,6 @@ class Picker(private val activity: () -> Activity?) {
     companion object {
         const val FOLDERS = 48101
         const val FILES = 48102
+        const val CREATE = 48103
     }
 }

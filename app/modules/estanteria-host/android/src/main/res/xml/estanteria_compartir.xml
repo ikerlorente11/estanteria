@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- what the share sheet may read: the copy made for it, and the catalog downloads (Files.share) -->
+<paths>
+  <cache-path name="compartir" path="compartir/" />
+  <files-path name="catalogo" path="catalogo/" />
+</paths>

@@ -2,22 +2,22 @@
   <div ref="root" class="es-reader" :class="[`es-bg-${settings.background}`, { 'es-ui-hidden': !uiShown, 'es-strip-mode': settings.mode === 'strip' }]"
        tabindex="0" @keydown="onKey" @mousemove="onMouseMove" @touchstart.passive="touchStart" @touchend.passive="touchEnd">
     <header class="es-rtop" :inert="!uiShown">
-      <button class="es-rbtn" title="Volver (Esc)" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
+      <button class="es-rbtn" :title="t('Volver (Esc)')" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
         <strong class="es-ellipsis">{{ shortTitle(item) }}</strong>
         <small class="es-ellipsis es-muted">{{ item.title !== shortTitle(item) ? item.title : item.series || '' }}<template v-if="hereLabel"> · <span class="es-rhere">{{ hereLabel }}</span></template></small>
       </div>
       <div class="es-rtools">
-        <button class="es-rbtn" :class="{ on: settings.mode === 'single' }" title="Una página (1)" @click="setMode('single')"><i class="es-i es-i-page" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :class="{ on: settings.mode === 'double' }" title="Dos páginas (2)" @click="setMode('double')"><i class="es-i es-i-double" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :class="{ on: settings.mode === 'strip' }" title="Tira vertical (3)" @click="setMode('strip')"><i class="es-i es-i-strip" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: settings.mode === 'single' }" :title="t('Una página (1)')" @click="setMode('single')"><i class="es-i es-i-page" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: settings.mode === 'double' }" :title="t('Dos páginas (2)')" @click="setMode('double')"><i class="es-i es-i-double" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: settings.mode === 'strip' }" :title="t('Tira vertical (3)')" @click="setMode('strip')"><i class="es-i es-i-strip" aria-hidden="true"></i></button>
         <span class="es-rsep"></span>
-        <button class="es-rbtn" :class="{ on: rtl }" :title="rtl ? 'Sentido manga: de derecha a izquierda (m)' : 'De izquierda a derecha (m)'" @click="toggleDirection"><i class="es-i es-i-lr" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :class="{ on: bookmarked }" :title="bookmarked ? 'Quitar el marcador (b)' : 'Marcar esta página (b)'" @click="toggleBookmark"><i class="es-i" :class="bookmarked ? 'es-i-bookmark-fill' : 'es-i-bookmark'" aria-hidden="true"></i></button>
-        <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="`Notas y marcadores (${bookmarks.length})`" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i><span v-if="bookmarks.length" class="es-rbadge">{{ bookmarks.length }}</span></button>
-        <button v-if="item.kind === 'pdf' && item.meta?.text !== false" class="es-rbtn es-rbtn-text" title="Leer como documento: texto que se puede seleccionar y zoom sin perder nitidez" @click="asDocument"><i class="es-i es-i-font" aria-hidden="true"></i> Documento</button>
-        <button class="es-rbtn" :class="{ on: panel === 'settings' }" title="Ajustes" @click="toggle('settings')"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
-        <button v-if="store.canFullscreen !== false" class="es-rbtn" :title="fullscreen ? 'Salir de pantalla completa (f)' : 'Pantalla completa (f)'" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: rtl }" :title="rtl ? t('Sentido manga: de derecha a izquierda (m)') : t('De izquierda a derecha (m)')" @click="toggleDirection"><i class="es-i es-i-lr" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: bookmarked }" :title="bookmarked ? t('Quitar el marcador (b)') : t('Marcar esta página (b)')" @click="toggleBookmark"><i class="es-i" :class="bookmarked ? 'es-i-bookmark-fill' : 'es-i-bookmark'" aria-hidden="true"></i></button>
+        <button class="es-rbtn" :class="{ on: panel === 'notes' }" :title="t('Notas y marcadores ({n})', { n: bookmarks.length })" @click="toggle('notes')"><i class="es-i es-i-note" aria-hidden="true"></i><span v-if="bookmarks.length" class="es-rbadge">{{ bookmarks.length }}</span></button>
+        <button v-if="item.format === 'pdf' && item.meta?.text !== false" class="es-rbtn es-rbtn-text" :title="t('Leer como documento: texto que se puede seleccionar y zoom sin perder nitidez')" @click="asDocument"><i class="es-i es-i-font" aria-hidden="true"></i> {{ t('Documento') }}</button>
+        <button class="es-rbtn" :class="{ on: panel === 'settings' }" :title="t('Ajustes')" @click="toggle('settings')"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
+        <button v-if="store.canFullscreen !== false" class="es-rbtn" :title="fullscreen ? t('Salir de pantalla completa (f)') : t('Pantalla completa (f)')" @click="toggleFullscreen"><i class="es-i" :class="fullscreen ? 'es-i-fs-exit' : 'es-i-fs'" aria-hidden="true"></i></button>
       </div>
     </header>
 
@@ -26,7 +26,7 @@
       <div v-if="settings.mode === 'strip'" class="es-strip" :style="{ width: stripWidth }">
         <div v-for="n in item.pages" :key="n - 1" :ref="(el) => stripRef(el as HTMLElement | null, n - 1)" class="es-strip-page" :data-page="n - 1"
              :style="{ aspectRatio: aspect(n - 1) }">
-          <img v-if="urls[n - 1]" :src="urls[n - 1]" :alt="`Página ${n}`" draggable="false" @load="loaded(n - 1, $event)" />
+          <img v-if="urls[n - 1]" :src="urls[n - 1]" :alt="t('Página {n}', { n })" draggable="false" @load="loaded(n - 1, $event)" />
           <span v-else class="es-pageload"><span class="es-spin"></span></span>
         </div>
       </div>
@@ -34,7 +34,7 @@
       <Transition v-else :name="transitionName" mode="out-in">
         <div :key="at" class="es-spread" :class="{ 'es-rtl': rtl }" :style="{ transform: zoom !== 1 ? `scale(${zoom})` : undefined }">
           <div v-for="p in current.pages" :key="p" class="es-pagebox" :style="boxStyle(p)">
-            <img v-if="urls[p]" :src="urls[p]" :alt="`Página ${p + 1}`" draggable="false" @load="loaded(p, $event)" />
+            <img v-if="urls[p]" :src="urls[p]" :alt="t('Página {n}', { n: p + 1 })" draggable="false" @load="loaded(p, $event)" />
             <span v-else class="es-pageload"><span class="es-spin"></span><small v-if="failed[p]" class="es-pagefail">{{ failed[p] }}</small></span>
           </div>
         </div>
@@ -42,54 +42,54 @@
     </div>
 
     <footer class="es-rbottom" :inert="!uiShown">
-      <button class="es-rbtn" :title="rtl ? 'Siguiente' : 'Anterior'" @click.stop="rtl ? next() : prev()"><i class="es-i es-i-prev" aria-hidden="true"></i></button>
+      <button class="es-rbtn" :title="rtl ? t('Siguiente') : t('Anterior')" @click.stop="rtl ? next() : prev()"><i class="es-i es-i-prev" aria-hidden="true"></i></button>
       <span class="es-rslider-wrap">
-        <input class="es-rslider" type="range" min="0" :max="Math.max(0, item.pages - 1)" :value="page" :dir="rtl ? 'rtl' : 'ltr'" :aria-label="`Página ${page + 1} de ${item.pages}`"
+        <input class="es-rslider" type="range" min="0" :max="Math.max(0, item.pages - 1)" :value="page" :dir="rtl ? 'rtl' : 'ltr'" :aria-label="t('Página {page} de {total}', { page: page + 1, total: item.pages })"
                @input="goPage(Number(($event.target as HTMLInputElement).value))" />
         <span v-for="t in ticks" :key="t.id" class="es-rtick" :class="`es-rtick-${t.kind}`" :style="{ left: `${t.at}%` }" :title="t.title" @click.stop="goPage(t.page)"></span>
       </span>
       <span class="es-rcount es-rcount-wide">{{ page + 1 }}<template v-if="current.pages.length > 1 && settings.mode !== 'strip'">–{{ current.pages[current.pages.length - 1] + 1 }}</template> / {{ item.pages }} · {{ Math.round(((current.pages[current.pages.length - 1] ?? page) + 1) / item.pages * 100) }} %</span>
-      <button class="es-rbtn" :title="rtl ? 'Anterior' : 'Siguiente'" @click.stop="rtl ? prev() : next()"><i class="es-i es-i-next" aria-hidden="true"></i></button>
+      <button class="es-rbtn" :title="rtl ? t('Anterior') : t('Siguiente')" @click.stop="rtl ? prev() : next()"><i class="es-i es-i-next" aria-hidden="true"></i></button>
     </footer>
 
     <aside v-if="panel === 'notes'" class="es-rpanel" @click.stop>
-      <h3>Notas y marcadores</h3>
+      <h3>{{ t('Notas y marcadores') }}</h3>
       <form v-if="noting" class="es-noteform" @submit.prevent="saveNote">
-        <span class="es-note-place">Nota en la página {{ page + 1 }}</span>
-        <textarea v-model="noting.text" class="es-note-edit" rows="4" placeholder="Tu nota" autofocus @keydown.esc="noting = null" @keydown.ctrl.enter="saveNote"></textarea>
+        <span class="es-note-place">{{ t('Nota en la página {page}', { page: page + 1 }) }}</span>
+        <textarea v-model="noting.text" class="es-note-edit" rows="4" :placeholder="t('Tu nota')" autofocus @keydown.esc="noting = null" @keydown.ctrl.enter="saveNote"></textarea>
         <div class="es-note-actions">
-          <button class="es-chip" type="submit">Guardar</button>
-          <button class="es-chip" type="button" @click="noting = null">Cancelar</button>
+          <button class="es-chip" type="submit">{{ t('Guardar') }}</button>
+          <button class="es-chip" type="button" @click="noting = null">{{ t('Cancelar') }}</button>
         </div>
       </form>
-      <button v-else class="es-chip" @click="startNote"><i class="es-i es-i-note" aria-hidden="true"></i> Nota en esta página (n)</button>
-      <NotesPanel :items="bookmarks" hint="El marcador (b) guarda la página; una nota se queda en la página donde la escribes." :place="placeOf"
+      <button v-else class="es-chip" @click="startNote"><i class="es-i es-i-note" aria-hidden="true"></i> {{ t('Nota en esta página (n)') }}</button>
+      <NotesPanel :items="bookmarks" :hint="t('El marcador (b) guarda la página; una nota se queda en la página donde la escribes.')" :place="placeOf"
                   @go="goToBookmark" @remove="removeBookmark" @save="saveBookmarkNote" />
     </aside>
 
     <aside v-if="panel === 'settings'" class="es-rpanel" @click.stop>
-      <h3>Ajustes</h3>
+      <h3>{{ t('Ajustes') }}</h3>
       <div class="es-rfield">
-        <span>Al pasar página</span>
+        <span>{{ t('Al pasar página') }}</span>
         <div class="es-chips">
-          <button v-for="a in ANIMATIONS" :key="a.id" class="es-chip" :class="{ on: settings.animation === a.id }" @click="set('animation', a.id)">{{ a.label }}</button>
+          <button v-for="a in ANIMATIONS" :key="a.id" class="es-chip" :class="{ on: settings.animation === a.id }" @click="set('animation', a.id)">{{ t(a.label) }}</button>
         </div>
       </div>
       <div class="es-rfield">
-        <span>Ajuste</span>
+        <span>{{ t('Ajuste') }}</span>
         <div class="es-chips">
-          <button v-for="f in FITS" :key="f.id" class="es-chip" :class="{ on: settings.fit === f.id }" @click="setFit(f.id)">{{ f.label }}</button>
+          <button v-for="f in FITS" :key="f.id" class="es-chip" :class="{ on: settings.fit === f.id }" @click="setFit(f.id)">{{ t(f.label) }}</button>
         </div>
       </div>
       <div class="es-rfield">
-        <span>Fondo</span>
+        <span>{{ t('Fondo') }}</span>
         <div class="es-chips">
-          <button v-for="b in BACKGROUNDS" :key="b.id" class="es-chip" :class="{ on: settings.background === b.id }" @click="set('background', b.id)">{{ b.label }}</button>
+          <button v-for="b in BACKGROUNDS" :key="b.id" class="es-chip" :class="{ on: settings.background === b.id }" @click="set('background', b.id)">{{ t(b.label) }}</button>
         </div>
       </div>
-      <label class="es-rcheck"><input type="checkbox" :checked="settings.coverAlone" @change="set('coverAlone', ($event.target as HTMLInputElement).checked)" /> La portada sola en el modo de dos páginas</label>
+      <label class="es-rcheck"><input type="checkbox" :checked="settings.coverAlone" @change="set('coverAlone', ($event.target as HTMLInputElement).checked)" /> {{ t('La portada sola en el modo de dos páginas') }}</label>
       <div class="es-rfield">
-        <span>Zoom</span>
+        <span>{{ t('Zoom') }}</span>
         <div class="es-chips">
           <button class="es-chip" @click="zoomBy(-0.25)">−</button>
           <span class="es-rzoom">{{ Math.round(zoom * 100) }} %</span>
@@ -97,14 +97,16 @@
           <button class="es-chip" @click="zoom = 1">1:1</button>
         </div>
       </div>
-      <p class="es-muted es-tiny es-rkeys">Teclas: ← → espacio · 1 2 3 modos · m sentido · b marcador · n nota · f pantalla completa · + − zoom · Esc volver</p>
+      <p class="es-muted es-tiny es-rkeys">{{ t('Teclas: ← → espacio · 1 2 3 modos · m sentido · b marcador · n nota · f pantalla completa · + − zoom · Esc volver') }}</p>
     </aside>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { TURN_EVENT } from '../lib/native'
 import type { Bookmark, ItemDetail } from '../lib/api'
+import { plural, t } from '../lib/i18n'
 import { widthFor } from '../lib/images'
 import { spreadOf, spreads, toPrefetch, type Mode } from '../lib/layout'
 import { loadSettings, saveSettings, shortTitle, useStore, type ReaderSettings } from '../lib/store'
@@ -115,7 +117,8 @@ import NotesPanel from './NotesPanel.vue'
  * (the cover and wide pages alone) or as a vertical strip. The next pages are fetched ahead; the
  * place is saved in the cloud a moment after every change and when leaving.
  */
-const props = defineProps<{ item: ItemDetail; startPage?: number }>()
+/** `source`: where the pages come from when it is not the service or the host (a DjVu, drawn here: see lib/djvu.ts) */
+const props = defineProps<{ item: ItemDetail; startPage?: number; source?: (page: number, width: number) => Promise<string> }>()
 const emit = defineEmits<{ changed: [] }>()
 const store = useStore()
 const { item } = props
@@ -165,7 +168,7 @@ const ticks = computed(() => {
   const span = Math.max(1, item.pages - 1)
   return bookmarks.value.filter((b) => b.page !== null && b.page !== undefined).map((b) => {
     const x = (b.page! / span) * 100
-    return { id: b.id, page: b.page!, kind: b.kind, at: rtl.value ? 100 - x : x, title: `${b.kind === 'bookmark' ? 'Marcador' : 'Nota'} en la página ${b.page! + 1}${b.note ? `: ${b.note}` : ''}` }
+    return { id: b.id, page: b.page!, kind: b.kind, at: rtl.value ? 100 - x : x, title: `${b.kind === 'bookmark' ? t('Marcador en la página {page}', { page: b.page! + 1 }) : t('Nota en la página {page}', { page: b.page! + 1 })}${b.note ? `: ${b.note}` : ''}` }
   })
 })
 /** What this page has: "marcada", "2 notas"… shown next to the title. */
@@ -173,8 +176,8 @@ const hereLabel = computed(() => {
   const here = bookmarks.value.filter((b) => current.value.pages.includes(b.page ?? -1))
   const notes = here.filter((b) => b.kind !== 'bookmark').length
   const parts: string[] = []
-  if (here.some((b) => b.kind === 'bookmark')) parts.push('marcada')
-  if (notes) parts.push(notes === 1 ? '1 nota' : `${notes} notas`)
+  if (here.some((b) => b.kind === 'bookmark')) parts.push(t('marcada'))
+  if (notes) parts.push(plural(notes, '{n} nota', '{n} notas'))
   return parts.join(', ')
 })
 function toggle(name: string) {
@@ -220,10 +223,10 @@ async function fetchPage(p: number) {
   if (p < 0 || p >= item.pages || urls[p] || fetching.has(p)) return
   fetching.add(p)
   try {
-    urls[p] = await store.pages.get(store.api.pagePath(item.id, p, wantedWidth(p)))
+    urls[p] = props.source ? await props.source(p, wantedWidth(p)) : await store.pages.get(store.api.pagePath(item.id, p, wantedWidth(p)))
     delete failed[p]
   } catch (err: any) {
-    failed[p] = err?.message || 'No se pudo cargar'
+    failed[p] = err?.message || t('No se pudo cargar')
   }
   fetching.delete(p)
 }
@@ -253,7 +256,7 @@ function next() {
     stage.value?.scrollTo({ top: 0 })
   } else if (!finishedSaved) {
     save(true)
-    store.notify('Fin. ¡Terminado!')
+    store.notify(t('Fin. ¡Terminado!'))
   }
 }
 function prev() {
@@ -404,15 +407,15 @@ async function toggleBookmark() {
     if (mine) {
       await store.api.deleteBookmark(mine.id)
       bookmarks.value = bookmarks.value.filter((b) => b.id !== mine.id)
-      store.notify('Marcador quitado.')
+      store.notify(t('Marcador quitado.'))
     } else {
       bookmarks.value = [...bookmarks.value, await store.api.addBookmark(item.id, { kind: 'bookmark', page: page.value })].sort((a, b) => (a.page ?? 0) - (b.page ?? 0))
-      store.notify(`Página ${page.value + 1} marcada.`)
+      store.notify(t('Página {page} marcada.', { page: page.value + 1 }))
     }
   } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
 function placeOf(b: Bookmark): string {
-  return b.page !== null && b.page !== undefined ? `Página ${b.page + 1}` : 'Sin página'
+  return b.page !== null && b.page !== undefined ? t('Página {n}', { n: b.page + 1 }) : t('Sin página')
 }
 function startNote() {
   noting.value = { text: '' }
@@ -426,7 +429,7 @@ async function saveNote() {
   try {
     bookmarks.value = [...bookmarks.value, await store.api.addBookmark(item.id, { kind: 'note', page: page.value, note: n.text.trim() })].sort((a, b) => (a.page ?? 0) - (b.page ?? 0))
     noting.value = null
-    store.notify('Nota guardada.')
+    store.notify(t('Nota guardada.'))
   } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
 async function removeBookmark(b: Bookmark) {
@@ -475,7 +478,10 @@ let resizeObserver: ResizeObserver | null = null
 watch(() => settings.mode, () => nextTick(() => { setupObserver(); measure(); show() }))
 watch(() => [settings.fit, settings.coverAlone], () => nextTick(() => { measure(); show() }))
 
+/** a page turn from outside (the volume keys) */
+function onTurn(e: Event) { if ((e as CustomEvent).detail > 0) next(); else prev() }
 onMounted(() => {
+  window.addEventListener(TURN_EVENT, onTurn)
   measure()
   resizeObserver = new ResizeObserver(() => { measure() })
   if (stage.value) resizeObserver.observe(stage.value)
@@ -488,6 +494,7 @@ onMounted(() => {
   if (item.progress?.finished && (props.startPage ?? 0) === 0) finishedSaved = false
 })
 onBeforeUnmount(() => {
+  window.removeEventListener(TURN_EVENT, onTurn)
   clearTimeout(uiTimer)
   clearTimeout(saveTimer)
   resizeObserver?.disconnect()

@@ -20,6 +20,8 @@ android {
 dependencies {
   // the local server the web view talks to (the viewer's page, the service proxied, the files of this device)
   implementation 'org.nanohttpd:nanohttpd:2.3.1'
+  // requests to any server for the page (catalogs, libraries; Net.kt): the OkHttp React Native already ships
+  implementation 'com.squareup.okhttp3:okhttp:4.9.2'
   // the app password, encrypted with a key of the Android keystore
   implementation 'androidx.security:security-crypto:1.1.0'
   // folders chosen with the system picker (Storage Access Framework)
@@ -28,4 +30,24 @@ dependencies {
   implementation 'org.apache.commons:commons-compress:1.27.1'
   implementation 'org.tukaani:xz:1.10'
   implementation 'com.github.junrar:junrar:7.5.5'
+  // RAR 5 (what WinRAR makes by default), which junrar does not read, and what junrar fails on (Rar.kt): libarchive
+  // (BSD; the Android binding is Apache 2.0, Maven Central), ~2 MB of .so per architecture. 1.1.7 (libarchive 3.8.8) asks
+  // for compileSdk 37.2: 1.1.6 (libarchive 3.8.1) until the project compiles against it
+  implementation 'me.zhanghai.android.libarchive:library:1.1.6'
+  // comic pages in JPEG XL (Android has no decoder; libjxl), served as JPEG. Only androidx.annotation is
+  // used of what it declares: appcompat and material stay out
+  implementation('io.github.awxkee:jxl-coder:2.6.0') {
+    exclude group: 'com.google.android.material'
+    exclude group: 'androidx.appcompat'
+  }
+
+  // the app's lock: the device's fingerprint, face or PIN (BiometricPrompt; Lock.kt). It brings androidx.fragment,
+  // whose FragmentActivity the React Native activity (AppCompatActivity) is
+  implementation 'androidx.biometric:biometric:1.1.0'
+  // FileProvider: «Compartir» hands the share sheet a copy in the cache (Files.kt)
+  implementation 'androidx.core:core:1.13.1'
+
+  // gradlew :estanteria-host:testDebugUnitTest (tar index, MOBI and FB2 covers; kxml2 is Android's XmlPullParser)
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'net.sf.kxml:kxml2:2.3.0'
 }

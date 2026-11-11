@@ -17,11 +17,11 @@ export default defineConfig({
   base: './',
   resolve: {
     alias: [{ find: 'estanteria-viewer/ui.css', replacement: `${viewer}/lib/ui.css` }, { find: 'estanteria-viewer', replacement: `${viewer}/index.ts` }],
-    // the viewer's own imports (vue, epubjs, pdfjs-dist) come from this project's node_modules
-    dedupe: ['vue', 'epubjs', 'pdfjs-dist']
+    // the viewer's own imports (vue, pdfjs-dist) come from this project's node_modules
+    dedupe: ['vue', 'pdfjs-dist']
   },
   // the viewer is raw .ts/.vue (never pre-bundled); its CommonJS dependencies must be, or the browser cannot import them
-  optimizeDeps: { include: ['epubjs', 'pdfjs-dist', '@xmldom/xmldom', 'jszip', 'localforage', 'marks-pane', 'lodash/debounce', 'lodash/throttle', 'path-webpack', 'event-emitter', 'core-js'] },
+  optimizeDeps: { include: ['pdfjs-dist'] },
   clearScreen: false,
   // in development the device reaches this server through `adb reverse tcp:5173 tcp:5173`
   server: { port: 5173, strictPort: true, fs: { allow: [searchForWorkspaceRoot(process.cwd()), viewer] } },

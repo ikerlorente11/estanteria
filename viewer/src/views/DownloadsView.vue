@@ -1,74 +1,97 @@
 <template>
   <section class="es-page">
     <header class="es-page-head">
-      <h1 class="es-h1">Descargas</h1>
+      <h1 class="es-h1">{{ t('Descargas') }}</h1>
       <span class="es-grow"></span>
-      <label v-if="offline" class="es-muted es-small" title="Ancho al que se guardan las páginas: más, más nitidez en pantallas grandes y más espacio">Calidad
+      <label v-if="offline" class="es-muted es-small" :title="t('Ancho al que se guardan las páginas: más, más nitidez en pantallas grandes y más espacio')">{{ t('Calidad') }}
         <select class="es-select" :value="offline.state.width" @change="offline.setWidth(Number(($event.target as HTMLSelectElement).value))">
-          <option v-for="w in OFFLINE_WIDTHS" :key="w" :value="w">{{ w }} px{{ w === 1600 ? ' (recomendada)' : '' }}</option>
+          <option v-for="w in OFFLINE_WIDTHS" :key="w" :value="w">{{ w === 1600 ? t('{w} px (recomendada)', { w }) : `${w} px` }}</option>
         </select>
       </label>
     </header>
 
     <template v-if="!offline && store.downloads">
-      <p class="es-muted es-intro">Los archivos que descargas quedan en esta app (su carpeta «descargas») y se abren con otra app. Lo que lees aquí sigue viniendo de tu Archivador.</p>
-      <p v-if="!files.length" class="es-muted">Nada todavía. En la ficha de un cómic o un libro, o en una carpeta, tienes «Descargar».</p>
+      <p class="es-muted es-intro">{{ t('Los archivos que descargas quedan en esta app (su carpeta «descargas») y se abren con otra app. Lo que lees aquí sigue viniendo de {server}.', { server: serverLabel(store) }) }}</p>
+      <p v-if="!files.length" class="es-muted">{{ t('Nada todavía. En la ficha de un cómic o un libro, o en una carpeta, tienes «Descargar».') }}</p>
       <ul v-else class="es-jobs">
         <li v-for="f in files" :key="f.path" class="es-job" :class="{ 'es-job-bad': f.state === 'error' }">
           <span class="es-job-text">
             <strong class="es-ellipsis">{{ f.name }}</strong>
-            <small class="es-muted">{{ f.state === 'downloading' ? `Descargando ${f.percent ?? 0} %` : f.state === 'error' ? `No se pudo: ${f.error}` : f.bytes ? sizeLabel(f.bytes) : 'Descargado' }}</small>
+            <small class="es-muted">{{ f.state === 'downloading' ? t('Descargando {percent} %', { percent: f.percent ?? 0 }) : f.state === 'error' ? t('No se pudo: {error}', { error: f.error ?? '' }) : f.bytes ? sizeLabel(f.bytes) : t('Descargado') }}</small>
             <span v-if="f.state === 'downloading'" class="es-job-bar"><span :style="{ width: `${f.percent ?? 0}%` }"></span></span>
           </span>
-          <button v-if="f.id" class="es-btn es-small" @click="go({ v: 'item', id: f.id })">Ficha</button>
-          <button v-if="f.state === 'done'" class="es-btn es-small" @click="store.saveFile?.(f.path, f.name)">Abrir</button>
-          <button class="es-mini" title="Borrar de este dispositivo" @click="store.removeDownload?.(f.path)"><i class="es-i es-i-close" aria-hidden="true"></i></button>
+          <button v-if="f.id" class="es-btn es-small" @click="go({ v: 'item', id: f.id })">{{ t('Ficha') }}</button>
+          <button v-if="f.state === 'done'" class="es-btn es-small" @click="store.saveFile?.(f.path, f.name)">{{ t('Abrir') }}</button>
+          <button class="es-mini" :title="t('Borrar de este dispositivo')" @click="store.removeDownload?.(f.path)"><i class="es-i es-i-close" aria-hidden="true"></i></button>
         </li>
       </ul>
-      <button v-if="files.length > 1" class="es-btn es-more" @click="removeDownloads"><i class="es-i es-i-delete" aria-hidden="true"></i> Borrar todas las descargas</button>
+      <button v-if="files.length > 1" class="es-btn es-more" @click="removeDownloads"><i class="es-i es-i-delete" aria-hidden="true"></i> {{ t('Borrar todas las descargas') }}</button>
     </template>
-    <p v-else-if="!offline" class="es-muted">Esta versión de La Estantería no guarda copias; usa la app de escritorio o la de Android.</p>
+    <p v-else-if="!offline" class="es-muted">{{ t('Esta versión no guarda copias; usa la app de escritorio o la de Android.') }}</p>
     <template v-else>
       <p class="es-muted es-intro">
-        Lo descargado se lee sin conexión y, aunque haya, se abre desde este equipo, al instante. El progreso que hagas sin conexión se envía en cuanto vuelva. Los cómics y libros de este equipo no hace falta descargarlos: están en la biblioteca, en «En este PC».
-        <template v-if="offline.count"> Ocupa {{ sizeLabel(offline.bytes) }}<template v-if="where"> en <span class="es-path">{{ where }}</span></template>.</template>
+        {{ t('Lo descargado se lee sin conexión y, aunque haya, se abre desde este equipo, al instante. El progreso que hagas sin conexión se envía en cuanto vuelva. Los cómics y libros de este dispositivo no hace falta descargarlos: ya están en tu estantería.') }}
+        <template v-if="offline.count"> <template v-if="where">{{ t('Ocupa {size} en', { size: sizeLabel(offline.bytes) }) }} <span class="es-path">{{ where }}</span>.</template><template v-else>{{ t('Ocupa {size}.', { size: sizeLabel(offline.bytes) }) }}</template></template>
       </p>
 
-      <section v-if="jobs.length" class="es-section">
-        <h2 class="es-h2">En curso</h2>
+      <section v-if="jobs.length || catalogRunning.length" class="es-section">
+        <h2 class="es-h2">{{ t('En curso') }}</h2>
         <ul class="es-jobs">
+          <!-- what comes from the catalogs (chapters, books) -->
+          <li v-for="j in catalogRunning" :key="j.key" class="es-job">
+            <span class="es-job-text">
+              <strong class="es-ellipsis">{{ j.title }}</strong>
+              <small class="es-muted">{{ jobLabel(j) || t('Empezando…') }}</small>
+              <span class="es-job-bar"><span :style="{ width: `${j.total ? Math.round((j.done / j.total) * 100) : 0}%` }"></span></span>
+            </span>
+          </li>
           <li v-for="j in jobs" :key="j.id" class="es-job" :class="{ 'es-job-bad': j.state === 'error' }">
             <span class="es-job-text">
               <strong class="es-ellipsis">{{ j.title }}</strong>
               <small class="es-muted">
-                <template v-if="j.state === 'waiting'">En cola</template>
-                <template v-else-if="j.state === 'running'">{{ j.done }} de {{ j.total }}<template v-if="j.bytes"> · {{ sizeLabel(j.bytes) }}</template></template>
-                <template v-else>No se pudo: {{ j.error }}</template>
+                <template v-if="j.state === 'waiting'">{{ t('En cola') }}</template>
+                <template v-else-if="j.state === 'running'">{{ t('{done} de {total}', { done: j.done, total: j.total }) }}<template v-if="j.bytes"> · {{ sizeLabel(j.bytes) }}</template></template>
+                <template v-else>{{ t('No se pudo: {error}', { error: j.error ?? '' }) }}</template>
               </small>
               <span v-if="j.state === 'running'" class="es-job-bar"><span :style="{ width: `${j.total ? Math.round((j.done / j.total) * 100) : 0}%` }"></span></span>
             </span>
-            <button v-if="j.state === 'error'" class="es-btn es-small" @click="retry(j.id)">Reintentar</button>
-            <button class="es-mini" :title="j.state === 'running' ? 'Parar' : 'Quitar de la cola'" @click="offline.remove(j.id)"><i class="es-i es-i-close" aria-hidden="true"></i></button>
+            <button v-if="j.state === 'error'" class="es-btn es-small" @click="retry(j.id)">{{ t('Reintentar') }}</button>
+            <button class="es-mini" :title="j.state === 'running' ? t('Parar') : t('Quitar de la cola')" @click="offline.remove(j.id)"><i class="es-i es-i-close" aria-hidden="true"></i></button>
           </li>
         </ul>
       </section>
 
       <section class="es-section">
-        <h2 v-if="jobs.length" class="es-h2">Descargado</h2>
-        <p v-if="!kept.length" class="es-muted">Nada todavía. En la ficha de un cómic o un libro, en una serie o en una carpeta tienes «Descargar».</p>
-        <div v-else class="es-grid">
+        <header class="es-page-head es-subhead">
+          <h2 class="es-h2">{{ t('Descargado') }}</h2>
+          <span class="es-grow"></span>
+          <ConfirmButton v-if="total" :label="t('Borrar todo')" icon="es-i-delete" :question="t('¿Borrar las {n} descargas?', { n: total })" :action="removeAll" />
+        </header>
+        <p v-if="!kept.length && !fromCatalogs.length" class="es-muted">{{ t('Nada todavía. En la ficha de un cómic o un libro, en una serie o en una carpeta tienes «Descargar».') }}</p>
+        <div v-if="kept.length" class="es-grid">
           <ItemCard v-for="i in kept" :key="i.id" :item="i" @read="store.read(i)" @open="go({ v: 'item', id: i.id })" />
         </div>
-        <button v-if="kept.length" class="es-btn es-more" @click="removeAll"><i class="es-i es-i-delete" aria-hidden="true"></i> Quitar todas las copias</button>
+      </section>
+
+      <!-- what came from the catalogs: files on this device's shelf, by series -->
+      <section v-if="fromCatalogs.length" class="es-section">
+        <h2 class="es-h2">{{ t('De los catálogos') }}</h2>
+        <div class="es-grid">
+          <ItemCard v-for="i in fromCatalogs" :key="i.id" :item="i" @read="store.read(i)" @open="go({ v: 'item', id: i.id })" />
+        </div>
       </section>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
+import ConfirmButton from './ConfirmButton.vue'
+import { catalogItemIds, catalogJobs, jobLabel } from '../lib/catalogdownloads'
+import { clearAllDownloads, downloadsCount } from '../lib/downloads'
 import { computed, onMounted, ref } from 'vue'
+import { plural, t } from '../lib/i18n'
 import { OFFLINE_WIDTHS } from '../lib/offline'
-import { sizeLabel, useStore } from '../lib/store'
+import { serverLabel, sizeLabel, useStore } from '../lib/store'
 import ItemCard from './ItemCard.vue'
 
 const store = useStore()
@@ -95,12 +118,20 @@ function retry(id: number) {
   delete o.state.jobs[id]
   o.add([{ id, title, series: null, number: null, pages: 0, format: 'cbz' } as any])
 }
+/** what was downloaded from the catalogs and is still on the shelf, by series and number */
+const fromCatalogs = computed(() => {
+  const shelf = store.shelf
+  if (!shelf) return []
+  void shelf.state.files                                  // listed again when the shelf changes
+  return catalogItemIds().map((id) => shelf.item(id)).filter((i): i is NonNullable<typeof i> => !!i)
+    .sort((a, b) => (a.series || a.title).localeCompare(b.series || b.title, 'es') || (a.number ?? 0) - (b.number ?? 0))
+})
+const total = computed(() => downloadsCount(store))
 async function removeAll() {
-  const o = offline.value
-  if (!o) return
-  const n = o.count
-  await o.removeAll(Object.keys(o.state.entries).map(Number))
-  store.notify(`${n} ${n === 1 ? 'copia quitada' : 'copias quitadas'} de este equipo.`)
+  const n = await clearAllDownloads(store)
+  store.notify(plural(n, '{n} descarga borrada.', '{n} descargas borradas.'))
+  store.refresh()
 }
 onMounted(async () => { try { where.value = (await offline.value?.where()) || '' } catch (_) {} })
+const catalogRunning = computed(() => Object.values(catalogJobs))
 </script>

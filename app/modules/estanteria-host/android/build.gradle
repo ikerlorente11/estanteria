@@ -9,6 +9,8 @@ version = '0.1.0'
 android {
   namespace "com.ikerlorente11.estanteria.host"
   defaultConfig {
+    // keep rules for the apps' release build (R8), see consumer-rules.pro
+    consumerProguardFiles 'consumer-rules.pro'
     versionCode 1
     versionName "0.1.0"
   }

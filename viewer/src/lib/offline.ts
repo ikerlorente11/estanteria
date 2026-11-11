@@ -282,8 +282,11 @@ export class Offline implements ApiOffline {
   }
 
   fallback(path: string, always = false): unknown {
-    if (!always && !this.count && !this.shelf?.count) return undefined
     const [base, qs] = path.split('?')
+    // the lists answer even with nothing kept (an empty shelf, not an error: the banner already says there
+    // is no connection); one item only when it is here
+    const listing = ['/api/cloud', '/api/library', '/api/series', '/api/continue', '/api/recent', '/api/items', '/api/sources', '/api/catalogs', '/api/sources/kinds'].includes(base)
+    if (!always && !listing && !this.count && !this.shelf?.count) return undefined
     const params = new URLSearchParams(qs || '')
     const all = this.items()
     if (base === '/api/cloud') return { connected: true, username: '' }

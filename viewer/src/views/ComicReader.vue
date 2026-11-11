@@ -132,9 +132,9 @@ function set<K extends keyof ReaderSettings>(key: K, value: ReaderSettings[K]) {
   settings[key] = value
   saveSettings(settings)
 }
-const rtl = computed(() => (settings.directions[item.id] || item.direction) === 'rtl')
+const rtl = computed(() => (settings.direction || item.direction) === 'rtl')
 function toggleDirection() {
-  settings.directions = { ...settings.directions, [item.id]: rtl.value ? 'ltr' : 'rtl' }
+  settings.direction = rtl.value ? 'ltr' : 'rtl'
   saveSettings(settings)
 }
 

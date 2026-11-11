@@ -34,7 +34,7 @@ function source(page: number): Promise<string> {
   return netImage(net, urls[page])
 }
 
-/** A stable id for the chapter, below 0 (the reader keeps its own settings by item, such as the direction). */
+/** A stable id for the chapter, below 0. */
 function idOf(text: string): number {
   let h = 0
   for (let i = 0; i < text.length; i++) h = (Math.imul(31, h) + text.charCodeAt(i)) | 0
@@ -50,7 +50,7 @@ onMounted(async () => {
     item.value = {
       id: idOf(`${props.catalog}:${props.chapter}`), source_id: null, path: '', folder: '', name: props.title || t('Capítulo'), format: 'cbz', kind: 'comic',
       size: 0, modified: now, title: props.title || t('Capítulo'), series: null, number: null, author: null, year: null, summary: null,
-      pages: urls.length, direction: 'rtl', cover: false, state: 'ready', error: null, added: now, updated: now, meta: {}, progress: null,
+      pages: urls.length, direction: 'ltr', cover: false, state: 'ready', error: null, added: now, updated: now, meta: {}, progress: null,
       page_sizes: [], bookmarks: [],
     }
   } catch (err: any) {

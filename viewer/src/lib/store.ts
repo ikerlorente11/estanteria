@@ -129,8 +129,8 @@ export interface ReaderSettings {
   mode: 'single' | 'double' | 'strip'
   fit: 'width' | 'height' | 'best' | 'original'
   coverAlone: boolean
-  /** per item: the reading direction chosen by hand (else the one the file says) */
-  directions: Record<string, 'ltr' | 'rtl'>
+  /** the reading direction chosen by hand, for everything read from then on (until chosen, the one each file says) */
+  direction?: 'ltr' | 'rtl'
   background: 'black' | 'dark' | 'white'
   /** how a page gives way to the next */
   animation: Animation
@@ -152,7 +152,7 @@ function keepTurn(animation: Animation): void {
   try { localStorage.setItem(TURN_KEY, animation) } catch (_) {}
 }
 export function loadSettings(): ReaderSettings {
-  const base: ReaderSettings = { mode: 'single', fit: 'best', coverAlone: true, directions: {}, background: 'black', animation: 'fade', pdf: 'pages' }
+  const base: ReaderSettings = { mode: 'single', fit: 'best', coverAlone: true, background: 'black', animation: 'fade', pdf: 'pages' }
   try { return { ...base, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'), ...sharedTurn() } } catch (_) { return base }
 }
 export function saveSettings(settings: ReaderSettings): void {

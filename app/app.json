@@ -8,11 +8,6 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#141417"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -307,7 +302,19 @@
           }
         }
       ],
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 260,
+          "resizeMode": "contain",
+          "backgroundColor": "#fafafc",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#141417"
+          }
+        }
+      ],
       "expo-status-bar",
       "expo-sharing"
     ],

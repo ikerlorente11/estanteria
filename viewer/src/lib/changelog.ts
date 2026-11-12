@@ -16,6 +16,16 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.4.1',
+      date: '2026-11-12',
+      notes: [
+        { es: 'Las marcas, notas y subrayados de tus archivos del dispositivo pasan también a tus otros dispositivos que tengan el mismo archivo.',
+          en: 'The bookmarks, notes and highlights of your files on this device also reach your other devices that have the same file.' },
+        { es: 'Si usas más de un servidor, lo que queda pendiente de enviar sin conexión ya no se mezcla entre cuentas.',
+          en: 'If you use more than one server, what is left to send while offline no longer mixes between accounts.' },
+      ],
+    },
+    {
       version: '0.4.0',
       date: '2026-11-12',
       notes: [
@@ -69,6 +79,16 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.5.1',
+      date: '2026-11-12',
+      notes: [
+        { es: 'Las marcas, notas y subrayados de tus archivos del PC pasan también a tus otros dispositivos que tengan el mismo archivo.',
+          en: 'The bookmarks, notes and highlights of your files on this PC also reach your other devices that have the same file.' },
+        { es: 'Si usas más de un servidor, lo que queda pendiente de enviar sin conexión ya no se mezcla entre cuentas.',
+          en: 'If you use more than one server, what is left to send while offline no longer mixes between accounts.' },
+      ],
+    },
     {
       version: '0.5.0',
       date: '2026-11-12',

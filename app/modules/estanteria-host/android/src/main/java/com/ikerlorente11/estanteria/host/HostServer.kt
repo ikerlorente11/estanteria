@@ -128,6 +128,9 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
         .put("lock", true)
         .put("saveAs", true)
         .put("share", true)
+        // since 0.3.0: an upload or a catalog download going on can be cut, and several copies download at once
+        .put("cancel", true)
+        .put("parallel", 3)
 
     // ---- the files and folders of this device (see Shelf) ----
     private fun shelfRoute(session: IHTTPSession, rest: String): Response {
@@ -144,6 +147,7 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
             parts.size == 2 && parts[0] == "roots" && m == Method.PATCH -> { shelf.renameRoot(parts[1].toInt(), body.getString("name")); empty() }
             parts == listOf("fetch") && m == Method.POST ->
                 json(Response.Status.OK, JSONObject().put("uri", net.download(body.optString("url"), body.optString("name"), body.optJSONObject("headers"), body.optString("folder"))))
+            parts == listOf("fetch", "cancel") && m == Method.POST -> { net.cancel(body.optString("url")); empty() }
             parts == listOf("save") && m == Method.POST ->
                 json(Response.Status.OK, JSONObject().put("uri", net.save(session.parameters["name"]?.firstOrNull(), session.parameters["folder"]?.firstOrNull(), session.inputStream,
                     session.headers["content-length"]?.toLongOrNull() ?: -1L)))
@@ -153,6 +157,7 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
             parts == listOf("cache") && m == Method.PUT -> { shelf.setCacheLimit(body.getLong("bytes")); empty() }
             parts == listOf("cache") && m == Method.DELETE -> { shelf.clearCache(); empty() }
             parts.size == 2 && parts[0] == "reveal" -> json(Response.Status.NOT_IMPLEMENTED, JSONObject().put("detail", "En Android no hay explorador que abrir."))
+            parts.size == 3 && parts[0] == "upload" && parts[2] == "cancel" && m == Method.POST -> { shelf.cancelUpload(parts[1].toLong()); empty() }
             parts.size == 2 && parts[0] == "upload" && m == Method.POST -> json(Response.Status.OK, shelf.upload(parts[1].toLong(), body.getString("dest")))
             else -> json(Response.Status.NOT_FOUND, JSONObject().put("detail", "no existe /host/shelf/$rest"))
         }

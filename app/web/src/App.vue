@@ -184,7 +184,7 @@ function makeStore(server: boolean): Store {
     downloads, canFullscreen: false, libraries: allLibraries, serverName: server ? serverName.value : undefined,
     appearance: { theme, setTheme }, version: version.value && version.value !== '?' ? version.value : undefined, catalogs, net, platform: 'android', native: native || undefined }
   if (hostInfo.offline) {
-    const keeper = offline.value || new Offline(hostBackend())
+    const keeper = offline.value || new Offline(hostBackend(hostInfo))
     keeper.attach(current)
     if (shelf) keeper.shelf = shelf
     offline.value = keeper
@@ -331,7 +331,7 @@ onMounted(async () => {
     state.error = t('No se pudo hablar con la app: {error}', { error: err?.message || String(err) })
   }
   if (hostInfo.shelf) {
-    shelf = new LocalShelf(hostShelf())
+    shelf = new LocalShelf(hostShelf(hostInfo))
     await shelf.load()
     if (appSettings.scanOnStart) shelf.scan().catch(() => {})
   }

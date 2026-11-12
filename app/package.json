@@ -10,7 +10,8 @@
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
     "web:build": "npm --prefix web run build && node scripts/zip-viewer.mjs",
-    "update": "npm run web:build && eas update --branch production",
+    "update": "npm run web:build && eas update --branch production --environment production --platform android",
+    "release": "eas build --platform android --profile production --auto-submit --non-interactive",
     "eas-build-post-install": "npm --prefix ../viewer install --no-audit --no-fund && npm --prefix web install --no-audit --no-fund && npm run web:build",
     "ios": "expo run:ios"
   },

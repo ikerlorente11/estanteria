@@ -2,7 +2,7 @@
   "expo": {
     "name": "La Estantería",
     "slug": "estanteria",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "default",
     "scheme": "estanteria",
     "userInterfaceStyle": "automatic",
@@ -13,7 +13,7 @@
     ],
     "android": {
       "package": "com.ikerlorente11.estanteria",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#261e1b"

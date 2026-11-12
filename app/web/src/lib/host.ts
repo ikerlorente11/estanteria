@@ -28,6 +28,10 @@ export interface HostInfo {
   /** the system's «save as» and share sheet for a file (/host/file) */
   saveAs?: boolean
   share?: boolean
+  /** since 0.3.0: an upload or a catalog download going on can be cut (older ones let it end) */
+  cancel?: boolean
+  /** since 0.3.0: how many copies for offline it downloads at once */
+  parallel?: number
 }
 
 export interface Connection {
@@ -85,7 +89,7 @@ export function onHostEvent(listener: Listener): () => void {
 }
 
 // ---- the files and folders of this device, listed and served by the host ----
-export function hostShelf(): ShelfBackend {
+export function hostShelf(can: Pick<HostInfo, 'cancel'> = {}): ShelfBackend {
   return {
     config: () => host<ShelfConfig>('/host/shelf'),
     scan: () => host<LocalFile[]>('/host/shelf/scan'),
@@ -110,12 +114,14 @@ export function hostShelf(): ShelfBackend {
         return await host<UploadDone>(`/host/shelf/upload/${id}`, { method: 'POST', body: JSON.stringify({ dest }) })
       } finally { stop() }
     },
+    cancelUpload: can.cancel ? async (id) => { await host<void>(`/host/shelf/upload/${id}/cancel`, { method: 'POST', body: '{}' }) } : undefined,
   }
 }
 
 // ---- the items kept for reading offline: the host downloads and stores them ----
-export function hostBackend(): OfflineBackend {
+export function hostBackend(can: Pick<HostInfo, 'parallel'> = {}): OfflineBackend {
   return {
+    parallel: can.parallel || 1,
     list: () => host<OfflineEntry[]>('/host/offline'),
     start: (job) => host<void>('/host/offline', { method: 'POST', body: JSON.stringify(job) }),
     remove: (id) => host<void>(`/host/offline/${id}`, { method: 'DELETE' }),
@@ -155,8 +161,12 @@ export function hostNet(): NetBackend {
       try { Object.defineProperty(res, 'url', { value: final }) } catch (_) {}
       return res
     },
-    download: async (url, name, headers, progress, folder) => {
+    download: async (url, name, headers, progress, folder, signal) => {
       const key = url.trim()
+      // cancelled: the host cuts it where it is and deletes what came (a host before 0.3.0 lets it end)
+      signal?.addEventListener('abort', () => {
+        host<void>('/host/shelf/fetch/cancel', { method: 'POST', body: JSON.stringify({ url: key }) }).catch(() => {})
+      }, { once: true })
       const stop = progress ? onHostEvent((e) => { if (e.type === 'fetch-progress' && e.url === key) progress(e.done, e.total) }) : null
       try {
         const done = await host<{ uri: string }>('/host/shelf/fetch', { method: 'POST', body: JSON.stringify({ url, name, headers: headers || {}, folder: folder || '' }) })

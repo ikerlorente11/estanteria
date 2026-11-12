@@ -16,6 +16,16 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.3.0',
+      date: '2026-11-12',
+      notes: [
+        { es: 'Descargas para leer sin conexión mucho más rápidas: el cómic (CBZ, CBR, CB7, CBT) o el PDF baja entero y el móvil saca las páginas; varias a la vez.',
+          en: 'Much faster downloads for reading offline: the comic (CBZ, CBR, CB7, CBT) or the PDF comes whole and the phone takes its pages out; several at once.' },
+        { es: 'Cancelar corta ya lo que va: la subida al servidor o la descarga de un catálogo en curso se paran al momento.',
+          en: 'Cancelling now cuts what is going: an upload to the server or a catalog download in progress stops at once.' },
+      ],
+    },
+    {
       version: '0.2.1',
       date: '2026-11-12',
       notes: [

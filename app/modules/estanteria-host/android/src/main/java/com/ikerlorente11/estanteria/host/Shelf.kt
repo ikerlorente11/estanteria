@@ -549,7 +549,25 @@ class Shelf(private val context: Context, private val settings: Settings, privat
     } catch (_: Exception) { null }
 
     // ---- uploading to the Archivador, a piece at a time (requests through Cloudflare carry at most 100 MB) ----
+    /** The uploads asked to stop (by the file's id), until they see it. */
+    private val stopUploads = ConcurrentHashMap.newKeySet<Long>()
+    private class UploadCancelled : RuntimeException("cancelada")
+
+    /** Stops the upload of that file going on: the piece going is cut and the service forgets what it got. */
+    fun cancelUpload(id: Long) { stopUploads.add(id) }
+
     fun upload(id: Long, dest: String): JSONObject {
+        stopUploads.remove(id)                // a stop asked of an earlier upload of it is not this one's
+        try {
+            return uploadFile(id, dest)
+        } catch (e: UploadCancelled) {
+            throw IllegalStateException("cancelada")
+        } finally {
+            stopUploads.remove(id)
+        }
+    }
+
+    private fun uploadFile(id: Long, dest: String): JSONObject {
         val k = item(id)
         val authorization = settings.authorization() ?: throw IllegalStateException("Conecta con tu Archivador primero.")
         val base = settings.url
@@ -595,9 +613,15 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         val upload = started.optString("id", "").ifEmpty { throw IllegalStateException("el servicio no empezó la subida") }
         val chunk = started.optInt("chunk", UPLOAD_CHUNK).coerceAtMost(UPLOAD_CHUNK)
         var sent = 0L
+        fun stopped() {
+            if (id !in stopUploads) return
+            try { call("DELETE", "$base/api/uploads/$upload", null, null) } catch (_: Exception) {}
+            throw UploadCancelled()
+        }
         open(k.uri).use { stream ->
             val buf = ByteArray(chunk)
             while (sent < total) {
+                stopped()
                 var filled = 0
                 while (filled < chunk) {
                     val got = stream.read(buf, filled, chunk - filled)
@@ -610,7 +634,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                     attempt++
                     try {
                         val from = sent
-                        call("PUT", "$base/api/uploads/$upload?offset=$sent", "application/octet-stream", buf.copyOf(filled)) { w -> tell(from + w) }
+                        call("PUT", "$base/api/uploads/$upload?offset=$sent", "application/octet-stream", buf.copyOf(filled)) { w -> stopped(); tell(from + w) }
                         break
                     } catch (e: IllegalStateException) {
                         if (e.cause is IllegalArgumentException && attempt > 1) break      // 409/413: the piece is there already

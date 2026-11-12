@@ -84,6 +84,12 @@ class Net(private val context: Context, private val settings: Settings, private 
         return client.newCall(builder.build()).execute()
     }
 
+    /** The downloads asked to stop (by their address), until they see it. */
+    private val cancelled = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Stops the download of that address going on: what it got is deleted. */
+    fun cancel(url: String) { cancelled.add(url.trim()) }
+
     /**
      * Downloads `url` into the catalog folder as `name` (cleaned: no folders, the extension kept, « (2)» added
      * rather than overwrite) and answers its file:// URI, which Shelf.addFile takes. The progress goes to the
@@ -101,6 +107,7 @@ class Net(private val context: Context, private val settings: Settings, private 
             val total = body.contentLength().coerceAtLeast(0)
             val file = reserve(fileName(name, response.header("Content-Disposition"), response.header("Content-Type")), folder)
             val key = url!!.trim()
+            cancelled.remove(key)
             try {
                 var done = 0L
                 var last = 0L
@@ -109,6 +116,7 @@ class Net(private val context: Context, private val settings: Settings, private 
                     FileOutputStream(file).use { output ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
+                            if (key in cancelled) throw IOException("cancelada")
                             val n = input.read(buffer)
                             if (n < 0) break
                             output.write(buffer, 0, n)
@@ -123,6 +131,8 @@ class Net(private val context: Context, private val settings: Settings, private 
             } catch (e: Exception) {
                 file.delete()
                 throw IllegalStateException("No se pudo descargar «${file.name}»: ${e.message ?: e.javaClass.simpleName}")
+            } finally {
+                cancelled.remove(key)
             }
             return Uri.fromFile(file).toString()
         }

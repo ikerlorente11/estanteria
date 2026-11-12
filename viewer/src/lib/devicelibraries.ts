@@ -97,6 +97,22 @@ export async function suwayomiSourcesOf(net: NetBackend, id: string, refresh = f
 }
 export function suwayomiSourcesNow(id: string): SuwayomiSource[] { return sources[id] || [] }
 
+// ---- the sources one does not want in Catálogos (a language of no interest, say), by library: on this device ----
+const HIDDEN_KEY = 'estanteria.suwayomi.hidden'
+const hidden = reactive<Record<string, string[]>>((() => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '{}') } catch (_) { return {} } })())
+function keepHidden() { try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden)) } catch (_) { /* this session only */ } }
+
+export function suwayomiHidden(library: string, source: string): boolean { return !!hidden[library]?.includes(source) }
+export function setSuwayomiHidden(library: string, sources: string[], hide: boolean): void {
+  const now = new Set(hidden[library] || [])
+  for (const s of sources) hide ? now.add(s) : now.delete(s)
+  hidden[library] = [...now]
+  keepHidden()
+}
+/** the sources that show in Catálogos */
+export function suwayomiVisibleSources(id: string): SuwayomiSource[] { return suwayomiSourcesNow(id).filter((s) => !suwayomiHidden(id, s.id)) }
+export function suwayomiHiddenCount(id: string): number { return suwayomiSourcesNow(id).length - suwayomiVisibleSources(id).length }
+
 /** A source of a Suwayomi as a catalog: its id is `suwayomi:<library>:<source>`. */
 export function suwayomiCatalog(library: string, source: SuwayomiSource): CatalogDef {
   const lib = state.list.find((l) => l.id === library)

@@ -89,6 +89,8 @@ export interface ShelfBackend {
   reveal(id: number): Promise<void>
   /** puts the file in the reading folder of the Archivador, at `dest` (inside it); progress in bytes */
   upload(id: number, dest: string, progress: (sent: number, total: number) => void): Promise<UploadDone>
+  /** stops the upload of that file going on (it fails with a cancelled error); a host without it lets it end */
+  cancelUpload?(id: number): Promise<void>
 }
 
 export const LOCAL_FORMATS: LocalFormat[] = ['cbz', 'cbr', 'cb7', 'cbt', 'pdf', 'djvu', 'epub', 'mobi', 'fb2', 'fbz', 'txt']
@@ -129,7 +131,9 @@ function rootOf(f: LocalFile): number {
  * #12», «The Flash vol. 2» are of «The Flash»); the title itself when it has none. */
 export function seriesOfTitle(title: string): string {
   const cut = title.replace(/\s*(?:[-–—·:,(#]|\b(?:vol(?:umen|ume)?|tomo|t|cap(?:[ií]tulo)?|ch(?:apter)?|n\.?º|no|issue|parte|part)\b\.?)?\s*\d[\s\S]*$/i, '').trim()
-  return cut || title.trim()
+  // what separated it from its number goes too («ONE PIECE - #001» is of «ONE PIECE», not «ONE PIECE -»)
+  const bare = cut.replace(/[\s\-–—·:,(#]+$/, '').trim()
+  return bare || cut || title.trim()
 }
 
 /** Where a file shows on the shelf: its folder; something downloaded from a catalog in a folder of its series
@@ -373,7 +377,22 @@ export class LocalShelf {
     const tops = [...new Set(existing.map((p) => p.split('/')[0]).filter(Boolean))]
     const top = tops.find((t) => placeOf(t) === place) || SHELF_FOLDERS[place]
     const clean = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
-    const below = meta ? (meta.series ? [clean(meta.series)] : []) : segs
+    // a library of this device whose name is not «Manga», «Cómics»… and has no such folders inside is the
+    // series itself (a folder «ONE PIECE» added as a library): its name goes up as the folder, as it shows here
+    const rootName = f.root !== LOOSE_ROOT ? this.rootName(f.root) : ''
+    const rootIsSeries = !!rootName && !placeOf(rootName) && !f.folder.split('/').some((s) => placeOf(s))
+    let below = meta ? (meta.series ? [clean(meta.series)] : []) : rootIsSeries ? [clean(rootName), ...segs] : segs
+    if (!below.length) {
+      // loose: its series is what the name says («ONE PIECE - #001…» is of «ONE PIECE»); never loose among the rest
+      const title = guess(f).title
+      const fromTitle = seriesOfTitle(title)
+      if (fromTitle && fromTitle !== title) below = [clean(fromTitle)]
+    }
+    // a series folder the server has already, spelled as it is there («One Piece» and «ONE PIECE» are one)
+    if (below.length) {
+      const there = existing.find((p) => p.toLowerCase() === `${top}/${below[0]}`.toLowerCase())
+      if (there) below = [there.split('/')[1], ...below.slice(1)]
+    }
     return [top, ...below, f.name].join('/')
   }
 

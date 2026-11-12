@@ -52,6 +52,8 @@ export interface OfflineBackend {
   onProgress(handler: (p: OfflineProgress) => void): void
   /** where the files are, to show it */
   where?(): Promise<string>
+  /** how many downloads it takes at once (1 if it does not say) */
+  parallel?: number
 }
 
 export const OFFLINE_WIDTHS = [1200, 1600, 2000, 2560]
@@ -102,7 +104,10 @@ export class Offline implements ApiOffline {
     width: Number(read(WIDTH_KEY, 1600)) || 1600,
   })
   private order: number[] = []
-  private running = false
+  /** downloads going on now (up to the backend's `parallel`) */
+  private running = 0
+  /** stopped while still asking the service about them, before the backend had them: they do not start */
+  private dropped = new Set<number>()
   private flushing = false
   private pending: Record<number, Pending> = read(PENDING_KEY, {})
   private known: Record<number, Progress> = read(KNOWN_KEY, {})
@@ -167,6 +172,7 @@ export class Offline implements ApiOffline {
     const job = this.state.jobs[id]
     this.order = this.order.filter((x) => x !== id)
     if (job && job.state !== 'running') delete this.state.jobs[id]
+    if (job?.state === 'running') this.dropped.add(id)
     await this.backend.remove(id)
     delete this.state.entries[id]
   }
@@ -176,33 +182,51 @@ export class Offline implements ApiOffline {
   }
 
   private async pump(): Promise<void> {
-    if (this.running || !this.api) return
-    const id = this.order.shift()
-    if (id === undefined) return
-    const job = this.state.jobs[id]
-    if (!job) return this.pump()
-    this.running = true
+    if (!this.api) return
+    while (this.running < Math.max(1, this.backend.parallel || 1) && this.order.length) {
+      const id = this.order.shift()!
+      const job = this.state.jobs[id]
+      if (!job) continue
+      this.running++
+      this.begin(id, job)
+    }
+  }
+
+  private async begin(id: number, job: OfflineJob): Promise<void> {
     job.state = 'running'
     try {
-      const item = await this.api.item(id)        // also makes the service open it, if it had not
+      const item = await this.api!.item(id)        // also makes the service open it, if it had not
       if (item.state !== 'ready') throw new Error(item.state === 'error' ? item.error || t('no se puede abrir') : t('aún se está abriendo; prueba en un momento'))
+      if (this.dropped.delete(id)) {             // stopped while the service was asked: it never starts
+        delete this.state.jobs[id]
+        this.ended()
+        return
+      }
       job.total = keptAsFile(item) ? 1 : item.pages
       await this.backend.start({ id, pages: keptAsFile(item) ? 0 : item.pages, file: keptAsFile(item), width: this.state.width, meta: item })
+      // stopped just as it started: now the backend has it, so it can stop it (it tells, as cancelled)
+      if (this.dropped.delete(id)) await this.backend.remove(id)
       // the backend tells when it is done (progressed)
     } catch (err: any) {
       job.state = 'error'
       job.error = err?.message || String(err)
-      this.running = false
-      this.pump()
+      this.ended()
     }
+  }
+
+  /** one download less going on: the next ones in the queue start */
+  private ended(): void {
+    this.running = Math.max(0, this.running - 1)
+    this.pump()
   }
 
   private progressed(p: OfflineProgress): void {
     const job = this.state.jobs[p.id]
+    // ended one way or another: a stop asked of it is done with (else a later download of it would not start)
+    if (p.cancelled || p.error || p.finished) this.dropped.delete(p.id)
     if (p.cancelled) {
       delete this.state.jobs[p.id]
-      this.running = false
-      this.pump()
+      this.ended()
       return
     }
     if (job) {
@@ -212,11 +236,10 @@ export class Offline implements ApiOffline {
     }
     if (p.error) {
       if (job) { job.state = 'error'; job.error = p.error }
-      this.running = false
-      this.pump()
+      this.ended()
     } else if (p.finished) {
       delete this.state.jobs[p.id]
-      this.running = false
+      this.running = Math.max(0, this.running - 1)
       this.load().then(() => this.pump())
     }
   }

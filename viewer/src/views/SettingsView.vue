@@ -72,8 +72,15 @@
     <template v-if="store.shelf || store.offline || store.downloadsFolder || store.native?.wifiOnly">
       <h2 class="es-h2">{{ t('Descargas y almacenamiento') }}</h2>
       <div v-if="store.downloadsFolder && folder" class="es-setting es-setting-block">
-        <span class="es-setting-label">{{ t('Lo que descargas de los catálogos se guarda en') }}</span>
+        <span class="es-setting-label">{{ store.setDownloadsFolder ? t('Carpeta de las descargas') : t('Lo que descargas de los catálogos se guarda en') }}</span>
         <code class="es-path">{{ folder }}</code>
+        <template v-if="store.setDownloadsFolder">
+          <p class="es-muted es-small">{{ t('Ahí va lo que descargas de los catálogos. Si eliges otra, también las copias para leer sin conexión (en su carpeta «Sin conexión»): las que ya tienes se mueven con ella.') }}</p>
+          <div class="es-cache">
+            <button class="es-btn es-small" :disabled="busy" @click="changeFolder(false)"><span v-if="busy" class="es-spin"></span> {{ t('Cambiar…') }}</button>
+            <button class="es-btn es-small" :disabled="busy" @click="changeFolder(true)">{{ t('Volver a la de siempre') }}</button>
+          </div>
+        </template>
       </div>
       <label v-if="store.native?.wifiOnly" class="es-setting es-check">
         <input v-model="app.wifiOnly" type="checkbox" />
@@ -113,6 +120,22 @@
       <span class="es-setting-label">{{ t('Versión') }}</span>
       <span class="es-muted">{{ store.version }}</span>
     </div>
+    <!-- what this version brings, and the ones before (folded) -->
+    <div v-if="releases.length" class="es-setting es-setting-block es-news">
+      <span class="es-setting-label">{{ t('Novedades de la {version}', { version: releases[0].version }) }} <small class="es-muted">· {{ dateLabel(releases[0].date) }}</small></span>
+      <ul class="es-news-list">
+        <li v-for="(n, i) in releases[0].notes" :key="i">{{ noteText(n) }}</li>
+      </ul>
+      <details v-if="releases.length > 1" class="es-news-old">
+        <summary>{{ t('Versiones anteriores') }}</summary>
+        <template v-for="r in releases.slice(1)" :key="r.version">
+          <p class="es-news-version"><strong>{{ r.version }}</strong> <small class="es-muted">· {{ dateLabel(r.date) }}</small></p>
+          <ul class="es-news-list">
+            <li v-for="(n, i) in r.notes" :key="i">{{ noteText(n) }}</li>
+          </ul>
+        </template>
+      </details>
+    </div>
     <div class="es-setting es-setting-block">
       <span class="es-setting-label">{{ t('Hecha con software libre') }}</span>
       <ul class="es-licenses">
@@ -128,7 +151,8 @@ import { clearAllDownloads, downloadsCount } from '../lib/downloads'
 import { computed, onMounted, ref } from 'vue'
 import type { Format } from '../lib/api'
 import { LICENSES, appSettings as app, makeBackup, restoreBackup } from '../lib/appsettings'
-import { LANGUAGES, plural, t } from '../lib/i18n'
+import { LANGUAGES, language, plural, t } from '../lib/i18n'
+import { releasesUpTo } from '../lib/changelog'
 import { CACHE_LIMITS, LOCAL_FORMATS } from '../lib/local'
 import { sizeLabel, useStore, type Theme } from '../lib/store'
 
@@ -145,6 +169,12 @@ function toggleFormat(f: Format, shown: boolean) {
   store.refresh()
 }
 
+// ---- «Acerca de»: what is new in this version (and before it) ----
+const releases = computed(() => (store.platform === 'android' || store.platform === 'desktop') && store.version ? releasesUpTo(store.platform, store.version) : [])
+const noteText = (n: { es: string; en: string }) => (language.value === 'en' ? n.en : n.es)
+function dateLabel(d: string): string {
+  try { return new Date(`${d}T12:00:00`).toLocaleDateString(language.value === 'en' ? 'en-GB' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) } catch (_) { return d }
+}
 const folder = ref('')
 /** the lock is offered only when the device has one set up */
 const lockAvailable = ref(false)
@@ -154,6 +184,16 @@ onMounted(async () => {
 })
 
 const busy = ref(false)
+/** another folder for the downloads (or back to the usual one); the copies kept offline move with it */
+async function changeFolder(reset: boolean) {
+  busy.value = true
+  try {
+    const now = await store.setDownloadsFolder!(reset)
+    if (now) { folder.value = now; store.notify(t('Las descargas van ahora a {folder}', { folder: now })) }
+  } catch (err: any) {
+    store.notify(err?.message || String(err), true)
+  } finally { busy.value = false }
+}
 const limits = computed(() => [...new Set([...CACHE_LIMITS, store.shelf?.state.cacheLimit || CACHE_LIMITS[1]])].sort((a, b) => a - b))
 async function work(job: () => Promise<unknown>, done?: string) {
   busy.value = true

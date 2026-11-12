@@ -51,7 +51,8 @@
       <p v-if="loading && !extensions.length" class="es-muted"><span class="es-spin"></span> {{ t('Cargando…') }}</p>
       <p v-else-if="error" class="es-banner es-banner-error">{{ error }}</p>
       <ul v-else class="es-sources es-extensions">
-        <li v-for="e in shown" :key="e.pkgName" class="es-source">
+        <template v-for="e in shown" :key="e.pkgName">
+        <li class="es-source">
           <img v-if="img(e.iconUrl)" :src="img(e.iconUrl)" class="es-ext-icon" alt="" loading="lazy" />
           <span v-else class="es-source-icon"><i class="es-i es-i-pages" aria-hidden="true"></i></span>
           <span class="es-source-text">
@@ -61,9 +62,13 @@
           <span class="es-source-actions">
             <button v-if="e.hasUpdate" class="es-btn es-small es-primary" :disabled="busy !== ''" @click="act(e, 'update')"><span v-if="busy === e.pkgName" class="es-spin"></span> {{ t('Poner al día') }}</button>
             <button v-if="!e.isInstalled" class="es-btn es-small" :disabled="busy !== ''" @click="act(e, 'install')"><span v-if="busy === e.pkgName" class="es-spin"></span><i v-else class="es-i es-i-download" aria-hidden="true"></i> {{ t('Instalar') }}</button>
-            <button v-else class="es-btn es-small" :disabled="busy !== ''" :title="t('Quitar')" @click="act(e, 'uninstall')"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
+            <!-- one with a source per language (MangaDex…): which of them show in Catálogos -->
+            <MultiPick v-if="e.isInstalled && sourcesOf(e).length > 1" end :label="t('Idiomas')" :title="t('Los idiomas de esta extensión que se ven en Catálogos')"
+                       :options="sourcesOf(e).map((x) => ({ value: x.id, label: langOf(x) }))" :model-value="visibleOf(e)" @update:model-value="(ids) => showOnly(e, ids)" />
+            <button v-if="e.isInstalled" class="es-btn es-small" :disabled="busy !== ''" :title="t('Quitar')" @click="act(e, 'uninstall')"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
           </span>
         </li>
+        </template>
         <li v-if="!shown.length" class="es-source es-muted">{{ show === 'installed' ? t('Ninguna instalada todavía: mira en «Todas».') : t('Nada con esos filtros.') }}</li>
       </ul>
     </template>
@@ -73,11 +78,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { languageName } from '../lib/catalogs'
-import { suwayomiServer, suwayomiSourcesOf } from '../lib/devicelibraries'
-import { plural, t } from '../lib/i18n'
+import { setSuwayomiHidden, suwayomiHidden, suwayomiServer, suwayomiSourcesNow, suwayomiSourcesOf } from '../lib/devicelibraries'
+import { language, plural, t } from '../lib/i18n'
 import { browserNet } from '../lib/net'
 import { netImageNow } from '../lib/netimages'
 import { useStore } from '../lib/store'
+import MultiPick from './MultiPick.vue'
+import type { SuwayomiSource } from '../lib/suwayomi'
 import { suwayomiAddStore, suwayomiExtension, suwayomiExtensions, suwayomiRemoveStore, suwayomiStores, type SuwayomiExtension, type SuwayomiStore } from '../lib/suwayomi'
 
 /** The extensions of a Suwayomi library (Mihon's): install, update or remove them, and the repositories
@@ -107,6 +114,29 @@ const shown = computed(() => {
     .sort((a, b) => Number(b.hasUpdate) - Number(a.hasUpdate) || a.name.localeCompare(b.name))
 })
 
+/** the sources an installed extension brings (one per language, for some), by language name */
+function sourcesOf(e: SuwayomiExtension): SuwayomiSource[] {
+  return suwayomiSourcesNow(props.library).filter((x) => x.pkgName === e.pkgName).sort((a, b) => langOf(a).localeCompare(langOf(b)))
+}
+const langOf = (x: SuwayomiSource) => languageName(x.lang === 'all' ? 'multi' : x.lang)
+const visibleOf = (e: SuwayomiExtension) => sourcesOf(e).filter((x) => !suwayomiHidden(props.library, x.id)).map((x) => x.id)
+function showOnly(e: SuwayomiExtension, ids: string[]) {
+  const all = sourcesOf(e).map((x) => x.id)
+  setSuwayomiHidden(props.library, all.filter((id) => !ids.includes(id)), true)
+  setSuwayomiHidden(props.library, ids, false)
+}
+/** Just installed with many languages: only the app's and English show (and the one «in many languages»);
+ * the rest can be turned on below it. */
+function keepFewLanguages(e: SuwayomiExtension): string {
+  const all = sourcesOf(e)
+  if (all.length <= 2) return ''
+  const keep = new Set(['all', 'multi', language.value, 'en'])
+  const off = all.filter((x) => !keep.has(x.lang.toLowerCase().split('-')[0]))
+  if (!off.length || off.length === all.length) return ''
+  setSuwayomiHidden(props.library, off.map((x) => x.id), true)
+  return t('Trae {n} idiomas: se ven {shown}; cambia cuáles en «Idiomas», junto a la extensión.', { n: all.length, shown: all.filter((x) => !off.includes(x)).map(langOf).join(', ') })
+}
+
 async function load(refresh = false) {
   if (!server) return
   loading.value = true
@@ -126,7 +156,8 @@ async function act(e: SuwayomiExtension, what: 'install' | 'update' | 'uninstall
     const got = await suwayomiExtension(net, server, e.pkgName, what)
     if (got) extensions.value = extensions.value.map((x) => (x.pkgName === e.pkgName ? { ...got, iconUrl: x.iconUrl } : x))
     await suwayomiSourcesOf(net, props.library, true).catch(() => [])
-    store.notify(what === 'install' ? t('«{name}» instalada: sus fuentes ya están en Catálogos.', { name: e.name.replace(/^Tachiyomi: /, '') })
+    const few = what === 'install' ? keepFewLanguages(e) : ''
+    store.notify(what === 'install' ? `${t('«{name}» instalada: sus fuentes ya están en Catálogos.', { name: e.name.replace(/^Tachiyomi: /, '') })}${few ? ` ${few}` : ''}`
       : what === 'update' ? t('«{name}» actualizada.', { name: e.name.replace(/^Tachiyomi: /, '') }) : t('«{name}» quitada.', { name: e.name.replace(/^Tachiyomi: /, '') }))
   } catch (err: any) { store.notify(err?.message || String(err), true) }
   busy.value = ''
@@ -148,5 +179,5 @@ async function removeStore(url: string) {
   try { await suwayomiRemoveStore(net, server, url); await load(true) } catch (err: any) { store.notify(err?.message || String(err), true) }
   busy.value = ''
 }
-onMounted(() => load())
+onMounted(() => { load(); suwayomiSourcesOf(net, props.library, true).catch(() => []) })
 </script>

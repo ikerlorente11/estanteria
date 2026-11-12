@@ -39,7 +39,7 @@ export const catalogMeta = reactive<Record<number, CatalogMeta>>(read(META_KEY))
 export const catalogJobs = reactive<Record<string, CatalogJob>>({})
 const running = new Map<string, Promise<number>>()
 /** how many go at once; the rest wait their turn */
-const AT_ONCE = 2
+const AT_ONCE = 3
 let busy = 0
 const turns: (() => void)[] = []
 async function turn(): Promise<void> {
@@ -60,22 +60,41 @@ export function jobLabel(job: CatalogJob | undefined): string {
   return job.total ? `${Math.round((job.done / job.total) * 100)} %` : job.done ? `${Math.round(job.done / 1e6)} MB` : ''
 }
 
+/** Stopping each download going or waiting, by its key. */
+const stops = new Map<string, AbortController>()
+
+/** The error a cancelled download ends with: it was asked for, so it is not shown as one. */
+export function cancelled(): Error {
+  const err: any = new Error(t('Cancelada'))
+  err.cancelled = true
+  return err
+}
+export const isCancelled = (err: unknown) => !!(err as any)?.cancelled
+
 /**
  * Downloads it once: asked again while it goes, the same download answers (no second copy). `work` does
- * it, telling how it goes, and answers the shelf's item; that is kept with what it is (`meta`).
+ * it, telling how it goes, and answers the shelf's item; that is kept with what it is (`meta`). `work` gets
+ * a signal that goes off when it is cancelled (see cancelCatalogDownloads): it stops and throws `cancelled()`.
  */
 export function runCatalogDownload(key: string, title: string, meta: CatalogMeta, unit: CatalogJob['unit'],
-                                   work: (progress: (done: number, total: number) => void) => Promise<number>): Promise<number> {
+                                   work: (progress: (done: number, total: number) => void, signal: AbortSignal) => Promise<number>): Promise<number> {
   const going = running.get(key)
   if (going) return going
+  const stop = new AbortController()
+  stops.set(key, stop)
   catalogJobs[key] = { key, title, done: 0, total: 0, unit, waiting: true }
   const p = turn().then(() => {
+    if (stop.signal.aborted) { done(); throw cancelled() }        // cancelled while it waited its turn
     const job = catalogJobs[key]
     if (job) job.waiting = false
     return work((got, total) => {
       const j = catalogJobs[key]
       if (j) { j.done = got; j.total = total }
-    }).finally(done)
+    }, stop.signal)
+      // what was cut because it was cancelled says so (not «the download broke»); one that ended just as it
+      // was cancelled is kept: it is whole
+      .catch((err) => { throw stop.signal.aborted ? cancelled() : err })
+      .finally(done)
   }).then((id) => {
     catalogGot[key] = id
     catalogMeta[id] = meta
@@ -85,9 +104,23 @@ export function runCatalogDownload(key: string, title: string, meta: CatalogMeta
   }).finally(() => {
     delete catalogJobs[key]
     running.delete(key)
+    stops.delete(key)
   })
   running.set(key, p)
   return p
+}
+
+/** Cancels these downloads (all of them, without keys): the waiting ones leave the queue at once, the one
+ * going stops where it is (what it got is deleted). */
+export function cancelCatalogDownloads(keys?: string[]): number {
+  let n = 0
+  for (const [key, stop] of stops) {
+    if (keys && !keys.includes(key)) continue
+    stop.abort()
+    delete catalogJobs[key]
+    n++
+  }
+  return n
 }
 
 /** Forgets what was downloaded (its item is gone from the shelf). */

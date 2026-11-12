@@ -15,9 +15,13 @@
       </button>
       <OfflineButton v-if="store.offline && !localSource && folderMode && crumbs.length && inFolder.length" :items="inFolder" :what="t('la carpeta')" />
       <!-- a folder of this device, whole, up to the server (each file where the rest is there) -->
-      <ConfirmButton v-if="localSource && state.server && toUpload.length && !uploads.run" :danger="false" icon="es-i-cloud"
-                     :label="t('Subir a {server}', { server: serverLabel(store) })" :title="t('Subir todo lo de esta carpeta (y sus subcarpetas)')"
-                     :question="plural(toUpload.length, '¿Subir {n} archivo?', '¿Subir {n} archivos?')" :action="uploadFolder" />
+      <ConfirmButton v-if="localSource && state.server && toSend.length && !uploads.run" :danger="false" icon="es-i-cloud"
+                     :label="t('Subir a {server}', { server: serverLabel(store) })" :title="t('Subir lo de esta carpeta (y sus subcarpetas) que aún no está allí')"
+                     :question="toSend.length < toUpload.length ? plural(toSend.length, '¿Subir el {n} archivo que falta?', '¿Subir los {n} archivos que faltan?') : plural(toSend.length, '¿Subir {n} archivo?', '¿Subir {n} archivos?')"
+                     :action="uploadFolder" />
+      <span v-else-if="localSource && state.server && toUpload.length && !uploads.run && checkedUpload" class="es-muted es-small es-uploaded">
+        <i class="es-i es-i-check" aria-hidden="true"></i> {{ t('Todo está ya en {server}', { server: serverLabel(store) }) }}
+      </span>
       <!-- a series downloaded (or a folder of loose files), deleted whole: never a folder of one's own -->
       <ConfirmButton v-if="deletable && folder && toUpload.length" icon="es-i-delete" :label="t('Borrar')" :title="t('Borrar todo lo de esta carpeta')"
                      :question="plural(toUpload.length, '¿Borrar {n} archivo?', '¿Borrar los {n} archivos?')" :action="() => removeFolder(folder, true)" />
@@ -32,6 +36,7 @@
       <span><span class="es-spin"></span> {{ t('Subiendo «{title}» a {server}: {done} de {n}', { title: uploads.run.title, server: serverLabel(store), done: Math.min(uploads.run.done + 1, uploads.run.files), n: uploads.run.files }) }}
         <small class="es-muted es-ellipsis">· {{ uploads.run.current }}</small></span>
       <span class="es-job-bar"><span :style="{ width: `${uploadPercent(uploads.run)}%` }"></span></span>
+      <span class="es-upload-actions"><button class="es-btn es-small" :disabled="uploads.run.cancelled" @click="cancelUploads"><i class="es-i es-i-close" aria-hidden="true"></i> {{ t('Cancelar la subida') }}</button></span>
     </div>
     <div class="es-filters">
       <!-- what: one of four, as a segmented control -->
@@ -150,7 +155,7 @@ import OfflineButton from './OfflineButton.vue'
 import ConfirmButton from './ConfirmButton.vue'
 import PullRefresh from './PullRefresh.vue'
 import { lookForNew } from '../lib/refresh'
-import { uploadFiles, uploadPercent, uploads } from '../lib/uploads'
+import { alreadyOnServer, cancelUploads, uploadFiles, uploadPercent, uploads } from '../lib/uploads'
 import { forgetCatalogItems } from '../lib/catalogdownloads'
 
 interface Subfolder { name: string; path: string; folders: number; coverItem: number | null; coverHas: boolean }
@@ -243,10 +248,22 @@ const folderSource = computed(() => (localSource.value ? props.source! : 'archiv
 const folder = computed(() => (folderMode.value ? props.folder || '' : ''))
 /** everything in this folder of the device and its subfolders, to upload it whole */
 const toUpload = computed(() => (localSource.value && store.shelf ? store.shelf.query({ source: props.source, folder: folder.value, limit: 100000 }) : []))
+/** what of it the server has already (by its index: uploading looks at the cloud again first) */
+const onServer = ref<Set<number>>(new Set())
+const checkedUpload = ref(false)
+const uploadKey = computed(() => (localSource.value && state.server ? toUpload.value.map((i) => i.id).join(',') : ''))
+async function checkUploaded() {
+  checkedUpload.value = false
+  if (!uploadKey.value) { onServer.value = new Set(); return }
+  try { onServer.value = await alreadyOnServer(store, toUpload.value) } catch (_) { onServer.value = new Set() }
+  checkedUpload.value = true
+}
+watch([uploadKey, () => uploads.run], ([, run]) => { if (!run) checkUploaded() }, { immediate: true })
+const toSend = computed(() => toUpload.value.filter((i) => !onServer.value.has(i.id)))
 function uploadFolder() {
   const title = folder.value ? folder.value.split('/').pop()! : rootName.value
   // it goes on in the background: the banner says how
-  void uploadFiles(store, toUpload.value, { title, source: props.source || '', folder: folder.value })
+  void uploadFiles(store, toSend.value, { title, source: props.source || '', folder: folder.value })
 }
 const crumbs = computed(() => {
   if (!folder.value) return []

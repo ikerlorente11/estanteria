@@ -50,9 +50,9 @@
         </div>
       </form>
 
-      <div v-if="languages.length > 1" class="es-chips es-langs" role="tablist" :aria-label="t('Idioma')">
-        <button class="es-chip" :class="{ on: !lang }" @click="lang = ''">{{ t('Todos') }}</button>
-        <button v-for="l in languages" :key="l" class="es-chip" :class="{ on: lang === l }" @click="lang = l">{{ languageName(l) }}</button>
+      <div v-if="langOptions.length > 1" class="es-langs">
+        <MultiPick v-model="langs" :options="langOptions" :label="t('Idiomas')" empty-means-all
+                   :title="t('Ver solo los catálogos y fuentes de estos idiomas')" />
       </div>
 
       <div v-if="shown.length" class="es-catalogs">
@@ -75,6 +75,10 @@
           <span class="es-grow"></span>
           <button class="es-btn es-small" @click="go({ v: 'extensions', library: s.id })"><i class="es-i es-i-add" aria-hidden="true"></i> {{ t('Extensiones') }}</button>
         </header>
+        <p v-if="suwayomiHiddenCount(s.id)" class="es-muted es-small">
+          {{ plural(suwayomiHiddenCount(s.id), '{n} fuente oculta (un idioma que no te interesa…).', '{n} fuentes ocultas (idiomas que no te interesan…).') }}
+          <a href="#" @click.prevent="go({ v: 'extensions', library: s.id })">{{ t('Elegir cuáles se ven') }}</a>
+        </p>
         <div v-if="sourcesShown(s.id).length" class="es-catalogs">
           <a v-for="src in sourcesShown(s.id)" :key="src.id" href="#" class="es-catalog" @click.prevent="go({ v: 'catalog', kind: `suwayomi:${s.id}:${src.id}` })">
             <img v-if="img(src.iconUrl)" :src="img(src.iconUrl)" class="es-catalog-mark es-catalog-icon" alt="" loading="lazy" />
@@ -142,7 +146,8 @@ import { CONTENT_NAMES, INCLUDED_CATALOGS, LANGUAGE_NAMES, languageName, type Ca
 import { plural, t } from '../lib/i18n'
 import { browserNet } from '../lib/net'
 import { netImageNow } from '../lib/netimages'
-import { suwayomiLibraries, suwayomiSourcesNow, suwayomiSourcesOf } from '../lib/devicelibraries'
+import MultiPick from './MultiPick.vue'
+import { suwayomiHiddenCount, suwayomiLibraries, suwayomiSourcesOf, suwayomiVisibleSources } from '../lib/devicelibraries'
 import { serverLabel, useStore } from '../lib/store'
 
 /** The catalogs: in an app, the ones it reads by itself (add, filter by language, remove; repositories);
@@ -158,17 +163,24 @@ const how = ref<'ready' | 'repo' | 'opds'>('ready')
 const chosen = ref('')
 const repoUrl = ref('')
 const opds = reactive({ url: '', name: '', language: 'es' })
-const lang = ref('')
+/** the languages to choose from (one «in many languages» shows with any), by their names */
+const langOptions = computed(() => languages.value.filter((l) => l !== 'multi').map((l) => ({ value: l, label: languageName(l) })).sort((a, b) => a.label.localeCompare(b.label)))
+/** the languages chosen to see (none: all), kept on this device */
+const LANGS_KEY = 'estanteria.catalogs.langs'
+const langs = ref<string[]>((() => { try { return JSON.parse(localStorage.getItem(LANGS_KEY) || '[]') } catch (_) { return [] } })())
+watch(langs, (v) => { try { localStorage.setItem(LANGS_KEY, JSON.stringify(v)) } catch (_) { /* this session only */ } })
+/** a catalog «in many languages» shows with any choice */
+const seen = (l: string) => !langs.value.length || l === 'all' || l === 'multi' || langs.value.includes(l)
 const allDefs = computed(() => [...INCLUDED_CATALOGS, ...(reg?.repos.flatMap((r) => r.catalogs) || [])])
 const chosenDef = computed(() => allDefs.value.find((c) => c.id === chosen.value))
-const languages = computed(() => [...new Set([...(reg?.active || []).flatMap((c) => c.languages), ...suwayomis.value.flatMap((s) => suwayomiSourcesNow(s.id).map((src) => (src.lang === 'all' ? 'multi' : src.lang)))])].sort((a, b) => (a === 'multi' ? 1 : b === 'multi' ? -1 : a.localeCompare(b))))
+const languages = computed(() => [...new Set([...(reg?.active || []).flatMap((c) => c.languages), ...suwayomis.value.flatMap((s) => suwayomiVisibleSources(s.id).map((src) => (src.lang === 'all' ? 'multi' : src.lang)))])].sort((a, b) => (a === 'multi' ? 1 : b === 'multi' ? -1 : a.localeCompare(b))))
 /** a catalog «in many languages» shows under each one */
 // ---- the Suwayomi libraries: their sources ----
 const suwayomis = computed(() => (reg ? suwayomiLibraries() : []))
 const sourceErrors = reactive<Record<string, string>>({})
 const img = (url: string) => netImageNow(store.net, url)
 function sourcesShown(id: string) {
-  return suwayomiSourcesNow(id).filter((s) => !lang.value || s.lang === lang.value || s.lang === 'all')
+  return suwayomiVisibleSources(id).filter((s) => seen(s.lang))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 async function loadSources() {
@@ -176,7 +188,7 @@ async function loadSources() {
     try { await suwayomiSourcesOf(store.net || browserNet, s.id, true); delete sourceErrors[s.id] } catch (err: any) { sourceErrors[s.id] = err?.message || String(err) }
   }
 }
-const shown = computed(() => (reg?.active || []).filter((c) => !lang.value || c.languages.includes(lang.value) || c.languages.includes('multi')))
+const shown = computed(() => (reg?.active || []).filter((c) => c.languages.some(seen)))
 
 function startAdd() {
   how.value = reg!.available().length ? 'ready' : 'repo'

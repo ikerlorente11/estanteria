@@ -1,5 +1,5 @@
 <template>
-  <div ref="root" class="es-reader es-book" :class="[`es-book-${settings.theme}`, { 'es-ui-hidden': !uiShown }]" tabindex="0" @keydown="onKey" @mousemove="showUi">
+  <div ref="root" class="es-reader es-book" :class="[`es-book-${settings.theme}`, { 'es-ui-hidden': !uiShown }]" tabindex="0" @keydown="onKey">
     <header class="es-rtop" :inert="!uiShown">
       <button class="es-rbtn" :title="t('Volver (Esc)')" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
@@ -15,7 +15,8 @@
       </div>
     </header>
 
-    <div class="es-bstage">
+    <!-- a click here never comes from the page itself (that one stays in its frame): it is the blank around it -->
+    <div class="es-bstage" @click="onStageClick">
       <div v-if="loading" class="es-reader-loading"><span class="es-spin"></span> {{ t('Abriendo el libro…') }}</div>
       <div v-if="error" class="es-reader-loading">{{ error }}</div>
       <div ref="stage" class="es-bview" :class="turnClass" :style="{ left: `${settings.margin}%`, right: `${settings.margin}%` }"></div>
@@ -296,8 +297,19 @@ function onTap(event: MouseEvent, doc: Document) {
   if (selection.value) { clearSelection(); return }
   if (panel.value) { panel.value = ''; return }
   const frame = (doc.defaultView?.frameElement as HTMLElement | null)?.getBoundingClientRect()
+  tapAt((frame?.left || 0) + event.clientX)
+}
+/** A click on the blank around the text (the side margins, the gap foliate-js leaves round the columns). */
+function onStageClick(event: MouseEvent) {
+  if (event.defaultPrevented || Date.now() - annotationHit < 120) return
+  if (selection.value) { clearSelection(); return }
+  if (panel.value) { panel.value = ''; return }
+  tapAt(event.clientX)
+}
+/** A tap at `clientX` across the reader: the sides turn the page, the middle shows or hides the chrome. */
+function tapAt(clientX: number) {
   const box = root.value!.getBoundingClientRect()
-  const x = ((frame?.left || 0) + event.clientX - box.left) / box.width
+  const x = (clientX - box.left) / box.width
   // after a touch foliate-js snaps to the page under the finger on the next frame: turning before that
   // makes the snap pull the page back, so the turn waits for it
   const later = (go: () => void) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(go, 30)))

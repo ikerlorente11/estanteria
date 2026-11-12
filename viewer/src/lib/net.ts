@@ -15,7 +15,7 @@ export interface NetBackend {
   /** Downloads a file into this device's shelf folder and answers what the shelf's `addFiles` takes for it
    * (a path on the desktop, a content:// or file:// URI on Android). `name` is the file name to give it;
    * `folder`, the folder (of its series) it goes in, inside that folder. */
-  download(url: string, name: string, headers?: Record<string, string>, progress?: (done: number, total: number) => void, folder?: string): Promise<string>
+  download(url: string, name: string, headers?: Record<string, string>, progress?: (done: number, total: number) => void, folder?: string, signal?: AbortSignal): Promise<string>
   /** Saves a file made here (a chapter packed as CBZ) into the same folder `download` uses (in `folder`);
    * answers what the shelf's `addFiles` takes for it. */
   save(name: string, data: Blob, folder?: string): Promise<string>

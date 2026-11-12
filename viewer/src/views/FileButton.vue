@@ -21,7 +21,11 @@
         <span class="es-fab-icon"><i class="es-i es-i-share" aria-hidden="true"></i></span>
         <span class="es-fab-text"><strong>{{ t('Compartir') }}</strong><small class="es-muted">{{ t('Enviarlo a quien quieras o a otra app') }}</small></span>
       </button>
-      <button v-if="canUpload" class="es-fab-item" role="menuitem" @click="close(); emit('upload')">
+      <div v-if="canUpload && uploaded" class="es-fab-item es-fab-item-info" role="menuitem" aria-disabled="true">
+        <span class="es-fab-icon"><i class="es-i es-i-check" aria-hidden="true"></i></span>
+        <span class="es-fab-text"><strong>{{ t('Ya está en {server}', { server: serverLabel(store) }) }}</strong><small class="es-muted">{{ t('No hace falta subirlo') }}</small></span>
+      </div>
+      <button v-else-if="canUpload" class="es-fab-item" role="menuitem" @click="close(); emit('upload')">
         <span class="es-fab-icon"><i class="es-i es-i-cloud" aria-hidden="true"></i></span>
         <span class="es-fab-text"><strong>{{ t('Subir a {server}', { server: serverLabel(store) }) }}</strong><small class="es-muted">{{ t('Para tenerlo en tu servidor') }}</small></span>
       </button>
@@ -53,7 +57,7 @@ import { serverLabel, useStore } from '../lib/store'
  * save it where one wants, share it, upload it to the server, delete it.
  * On the web (no copies kept) «Descargar» is the browser's download.
  */
-const props = defineProps<{ item: ItemDetail; local: boolean }>()
+const props = defineProps<{ item: ItemDetail; local: boolean; /** the server has it already: not offered to upload */ uploaded?: boolean }>()
 const emit = defineEmits<{ upload: []; reveal: []; removed: [] }>()
 const store = useStore()
 const open = ref(false)

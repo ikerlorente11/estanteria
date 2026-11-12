@@ -1,15 +1,21 @@
 <template>
-  <button v-if="offline" class="es-btn" :class="{ 'es-offline-on': allDone }" :disabled="!items.length" :title="hint" @click="act">
-    <span v-if="busy" class="es-spin"></span>
-    <i v-else class="es-i" :class="allDone ? 'es-i-check' : 'es-i-download'" aria-hidden="true"></i>
-    {{ label }}
-  </button>
+  <span v-if="offline" class="es-offline-btns">
+    <button class="es-btn" :class="{ 'es-offline-on': allDone }" :disabled="!items.length || busy" :title="hint" @click="act">
+      <span v-if="busy" class="es-spin"></span>
+      <i v-else class="es-i" :class="allDone ? 'es-i-check' : 'es-i-download'" aria-hidden="true"></i>
+      {{ label }}
+    </button>
+    <!-- going: stopped here (those waiting leave the queue, the one going stops and what it got is deleted) -->
+    <button v-if="busy" class="es-btn" :title="single ? t('Parar esta descarga') : t('Parar todas las descargas de aquí')" @click="cancel">
+      <i class="es-i es-i-close" aria-hidden="true"></i> {{ t('Cancelar') }}
+    </button>
+  </span>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Item } from '../lib/api'
-import { t } from '../lib/i18n'
+import { plural, t } from '../lib/i18n'
 import { sizeLabel, useStore } from '../lib/store'
 
 /** Makes one item, or a whole series or folder, available without connection (or stops / undoes it).
@@ -39,7 +45,7 @@ const percent = computed(() => {
 })
 
 const label = computed(() => {
-  if (busy.value) return single.value ? t('Descargando {percent} %', { percent: percent.value }) : t('Descargando {done} de {total}', { done: done.value, total: props.items.length })
+  if (busy.value) return single.value ? t('Descargando {percent} %', { percent: percent.value }) : t('Descargando {done} de {total} · {percent} %', { done: done.value, total: props.items.length, percent: percent.value })
   if (allDone.value) return single.value ? t('Disponible sin conexión') : props.what ? t('Todo {what} sin conexión', { what: props.what }) : t('Todo sin conexión')
   if (failed.value && single.value) return t('Reintentar la descarga')
   if (!single.value && done.value) return t('Descargar el resto ({n})', { n: props.items.length - done.value })
@@ -48,7 +54,6 @@ const label = computed(() => {
 const hint = computed(() => {
   const o = offline.value
   if (!o) return ''
-  if (busy.value) return t('Pulsa para pararla')
   if (allDone.value) {
     const bytes = props.items.reduce((sum, i) => sum + (o.state.entries[i.id]?.bytes || 0), 0)
     return t('Ocupa {size} en este equipo. Pulsa para quitar la copia.', { size: sizeLabel(bytes) })
@@ -57,13 +62,17 @@ const hint = computed(() => {
   return error ? t('No se pudo: {error}', { error }) : t('Guarda una copia en este equipo para leerla sin conexión')
 })
 
+async function cancel() {
+  const o = offline.value
+  if (!o) return
+  const going = props.items.filter((i) => o.state.jobs[i.id])
+  for (const i of going) await o.remove(i.id)
+  if (!single.value && going.length) store.notify(plural(going.length, '{n} descarga cancelada.', '{n} descargas canceladas.'))
+}
 async function act() {
   const o = offline.value
   if (!o) return
-  if (busy.value) {
-    for (const i of props.items) if (o.state.jobs[i.id]) await o.remove(i.id)
-    return
-  }
+  if (busy.value) return cancel()
   if (allDone.value) {
     await o.removeAll(props.items.map((i) => i.id))
     store.notify(single.value ? t('Copia quitada de este equipo.') : t('{n} copias quitadas de este equipo.', { n: props.items.length }))

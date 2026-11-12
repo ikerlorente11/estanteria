@@ -67,6 +67,7 @@
 </template>
 
 <script setup lang="ts">
+import { RELEASE } from './release'
 import { computed, onMounted, provide, reactive, ref, shallowReactive, shallowRef, watch } from 'vue'
 import { Api, CatalogRegistry, ExtensionsView, withDeviceLibraries, LockScreen, appSettings, useAppLock, CatalogView, CatalogsView, ChapterReader, Cover, DownloadsView, HomeView, LocalShelf, Offline, ImageCache, ItemView, LibraryView, ReaderView, SeriesView, SettingsView, SourcesView, STORE,
          createState, nameFromUrl, plural, queryFromView, t, useScrollMemory, viewFromQuery, type DownloadState, type Theme, type Item, type Library, type LibrariesBackend, type Store, type View } from 'estanteria-viewer'
@@ -254,7 +255,23 @@ const libraries: LibrariesBackend = {
   async save(input) {
     if (input.type !== 'server') throw new Error(t('Este tipo de biblioteca aún no se puede conectar desde aquí.'))
     if (!input.id && libraryList.value.length) throw new Error(t('De momento solo se puede conectar un servidor propio: cambia el que hay o quítalo antes.'))
-    Object.assign(connection, await saveConnection({ url: input.url, username: input.username.trim(), name: input.name, token: input.secret?.trim() || undefined }))
+    // a new or changed address (or credential) must answer before it is kept: else a typo in it would be taken
+    // for being offline and the app would wait for a server that does not exist
+    const url = input.url.trim().replace(/\/+$/, '')
+    const username = input.username.trim()
+    const secret = input.secret?.trim() || ''
+    if (!input.id || url !== connection.url || username !== connection.username || secret) {
+      let answer: Response
+      try {
+        answer = await net.fetch(`${url}/api/cloud`, { headers: secret ? { Authorization: Api.basic(username, secret) } : {} })
+      } catch (_) {
+        throw new Error(t('No se pudo conectar: {error}', { error: t('Sin conexión con el servidor') }))
+      }
+      // with a password, a 401 is a wrong one; without one (the one kept is used), a 401 only says it is there
+      if (secret && answer.status === 401) throw new Error(t('No reconoce ese usuario o esa contraseña de aplicación.'))
+      if (answer.status >= 500 || answer.status === 404) throw new Error(t('No se pudo conectar: {error}', { error: `HTTP ${answer.status}` }))
+    }
+    Object.assign(connection, await saveConnection({ url, username, name: input.name, token: secret || undefined }))
     if (!connection.hasToken) throw new Error(t('Hace falta la contraseña de aplicación.'))
     if (!(await connect())) throw new Error(serverError.value || t('No se pudo conectar.'))
     return libraryList.value[0]
@@ -307,7 +324,8 @@ onMounted(async () => {
     native = hostNative(hostInfo)
     native.wifiOnly?.(appSettings.wifiOnly)
     await lock.lockIfAsked()
-    version.value = hostInfo.version
+    // the release this page is (an update over the air moves it on; the native version stays)
+    version.value = RELEASE
   } catch (err: any) {
     version.value = '?'
     state.error = t('No se pudo hablar con la app: {error}', { error: err?.message || String(err) })

@@ -15,7 +15,7 @@ import { t } from '../lib/i18n'
 /**
  * «Pull to refresh», for the page it is at the top of: a pull down while the page is at its top shows the
  * mark, and letting go past it runs `action` (the mark spins until it is done). It listens on the page's
- * scrolling element (the shell's main), so nothing else has to know.
+ * scrolling element (the shell's main), so nothing else has to know. F5 or Ctrl+R runs it too.
  */
 const props = defineProps<{ action: () => Promise<unknown> }>()
 const MARK = 64
@@ -42,8 +42,19 @@ async function onEnd() {
   const go = pull.value >= MARK
   pull.value = 0
   if (!go) return
+  await run()
+}
+async function run() {
+  if (busy.value) return
   busy.value = true
   try { await props.action() } finally { busy.value = false }
+}
+/** with a keyboard (the desktop) F5 or Ctrl+R does the same, instead of reloading the whole app */
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'r')) {
+    e.preventDefault()
+    run()
+  }
 }
 
 onMounted(() => {
@@ -52,11 +63,13 @@ onMounted(() => {
   scroller?.addEventListener('touchmove', onMove, { passive: true })
   scroller?.addEventListener('touchend', onEnd)
   scroller?.addEventListener('touchcancel', onEnd)
+  window.addEventListener('keydown', onKey)
 })
 onBeforeUnmount(() => {
   scroller?.removeEventListener('touchstart', onStart)
   scroller?.removeEventListener('touchmove', onMove)
   scroller?.removeEventListener('touchend', onEnd)
   scroller?.removeEventListener('touchcancel', onEnd)
+  window.removeEventListener('keydown', onKey)
 })
 </script>

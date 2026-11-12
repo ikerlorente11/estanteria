@@ -35,7 +35,11 @@
       </p>
 
       <section v-if="jobs.length || catalogRunning.length" class="es-section">
-        <h2 class="es-h2">{{ t('En curso') }}</h2>
+        <header class="es-page-head es-subhead">
+          <h2 class="es-h2">{{ t('En curso') }}</h2>
+          <span class="es-grow"></span>
+          <ConfirmButton :label="t('Parar todo')" icon="es-i-close" :question="t('¿Parar las {n} descargas (las que esperan y las que van)?', { n: jobs.length + catalogRunning.length })" :action="stopAll" />
+        </header>
         <ul class="es-jobs">
           <!-- what comes from the catalogs (chapters, books) -->
           <li v-for="j in catalogRunning" :key="j.key" class="es-job">
@@ -44,6 +48,7 @@
               <small class="es-muted">{{ jobLabel(j) || t('Empezando…') }}</small>
               <span class="es-job-bar"><span :style="{ width: `${j.total ? Math.round((j.done / j.total) * 100) : 0}%` }"></span></span>
             </span>
+            <button class="es-mini" :title="j.waiting ? t('Quitar de la cola') : t('Parar')" @click="cancelCatalogDownloads([j.key])"><i class="es-i es-i-close" aria-hidden="true"></i></button>
           </li>
           <li v-for="j in jobs" :key="j.id" class="es-job" :class="{ 'es-job-bad': j.state === 'error' }">
             <span class="es-job-text">
@@ -86,7 +91,7 @@
 
 <script setup lang="ts">
 import ConfirmButton from './ConfirmButton.vue'
-import { catalogItemIds, catalogJobs, jobLabel } from '../lib/catalogdownloads'
+import { cancelCatalogDownloads, catalogItemIds, catalogJobs, jobLabel } from '../lib/catalogdownloads'
 import { clearAllDownloads, downloadsCount } from '../lib/downloads'
 import { computed, onMounted, ref } from 'vue'
 import { plural, t } from '../lib/i18n'
@@ -127,6 +132,12 @@ const fromCatalogs = computed(() => {
     .sort((a, b) => (a.series || a.title).localeCompare(b.series || b.title, 'es') || (a.number ?? 0) - (b.number ?? 0))
 })
 const total = computed(() => downloadsCount(store))
+/** every download going or waiting, stopped (copies kept offline and what comes from the catalogs) */
+async function stopAll() {
+  const n = jobs.value.length + cancelCatalogDownloads()
+  for (const j of [...jobs.value]) await offline.value?.remove(j.id)
+  store.notify(plural(n, '{n} descarga parada.', '{n} descargas paradas.'))
+}
 async function removeAll() {
   const n = await clearAllDownloads(store)
   store.notify(plural(n, '{n} descarga borrada.', '{n} descargas borradas.'))

@@ -35,7 +35,7 @@
               <span v-if="converting" class="es-spin"></span><i v-else class="es-i es-i-book" aria-hidden="true"></i>
               {{ converting ? t('Convirtiendo…') : t('Convertir a {format}', { format: convertTo }) }}
             </button>
-            <FileButton :item="item" :local="local" @upload="local ? startUpload() : toCloud()" @reveal="reveal" @removed="backToList" />
+            <FileButton :item="item" :local="local" :uploaded="uploadedAlready" @upload="local ? startUpload() : toCloud()" @reveal="reveal" @removed="backToList" />
             <button v-if="fromCatalog" class="es-btn" :title="t('Quitar de tu estantería (sigue en el catálogo)')" @click="remove">
               <i class="es-i es-i-delete" aria-hidden="true"></i> {{ t('Quitar') }}
             </button>
@@ -46,7 +46,8 @@
             </label>
             <div class="es-form-actions">
               <button class="es-btn es-primary" type="submit" :disabled="uploading > 0"><span v-if="uploading > 0" class="es-spin"></span> {{ uploading > 0 ? t('Subiendo… {percent} %', { percent: Math.round(uploading * 100) }) : t('Subir') }}</button>
-              <button class="es-btn" type="button" :disabled="uploading > 0" @click="uploading = null">{{ t('Cancelar') }}</button>
+              <button v-if="uploading > 0 && store.shelf?.backend.cancelUpload" class="es-btn" type="button" @click="cancelUpload">{{ t('Cancelar la subida') }}</button>
+              <button v-else-if="!(uploading > 0)" class="es-btn" type="button" @click="uploading = null">{{ t('Cancelar') }}</button>
             </div>
             <span v-if="uploading > 0" class="es-job-bar"><span :style="{ width: `${Math.round(uploading * 100)}%` }"></span></span>
           </form>
@@ -91,6 +92,7 @@ import { isLocal } from '../lib/local'
 import { kindLabel, loadSettings, serverLabel, sizeLabel, sourceName, useStore } from '../lib/store'
 import Cover from './Cover.vue'
 import FileButton from './FileButton.vue'
+import { alreadyOnServer } from '../lib/uploads'
 
 const props = defineProps<{ id: number }>()
 const store = useStore()
@@ -106,8 +108,18 @@ const pdfAs = loadSettings().pdf
 /** null: not asked; 0: asking where; 0–1: how much went */
 const uploading = ref<number | null>(null)
 const uploadPath = ref('')
-function startUpload() {
+/** a file of this PC the server has already (where it would go): it is not offered to upload */
+const uploadedAlready = ref(false)
+async function checkUploaded(fresh = false): Promise<boolean> {
+  if (!item.value || !local.value || !state.server) return (uploadedAlready.value = false)
+  try { uploadedAlready.value = (await alreadyOnServer(store, [item.value], fresh)).has(item.value.id) } catch (_) { uploadedAlready.value = false }
+  return uploadedAlready.value
+}
+watch(() => [item.value?.id, state.server], () => { checkUploaded() }, { immediate: true })
+async function startUpload() {
   if (!item.value || !store.shelf) return
+  // looked at again in the cloud first: if it is there, it is said, not offered
+  if (await checkUploaded(true)) { store.notify(t('Ya está en {server}.', { server: serverLabel(store) })); return }
   uploadPath.value = store.shelf.uploadPath(item.value.id, state.status?.folders || [])
   uploading.value = 0
 }
@@ -119,11 +131,20 @@ async function upload() {
     const done = await store.shelf.backend.upload(item.value.id, dest, (sent, total) => { uploading.value = Math.max(0.001, sent / Math.max(1, total)) })
     store.notify(t('Subido a {path}.', { path: done.path }))
     uploading.value = null
+    uploadedAlready.value = true
     store.refresh()
   } catch (err: any) {
-    store.notify(t('No se pudo subir: {error}', { error: err?.message || err }), true)
-    uploading.value = 0
+    if (cancelling) store.notify(t('Subida cancelada.'))
+    else store.notify(t('No se pudo subir: {error}', { error: err?.message || err }), true)
+    uploading.value = cancelling ? null : 0
   }
+  cancelling = false
+}
+let cancelling = false
+function cancelUpload() {
+  if (!item.value || !store.shelf?.backend.cancelUpload) return
+  cancelling = true
+  store.shelf.backend.cancelUpload(item.value.id).catch(() => {})
 }
 /** gone from the shelf: back to where it was listed (the folder, «Archivos sueltos»), not to the top */
 function backToList() {

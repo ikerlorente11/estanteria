@@ -36,6 +36,9 @@
           {{ missing ? t('Descargar todos ({n})', { n: missing }) + (next ? '+' : '') : t('Todos descargados') }}
         </button>
         <small v-if="queued" class="es-muted">{{ t('{n} en cola', { n: queued }) }}</small>
+        <button v-if="queued" class="es-btn es-small" :title="t('Parar las descargas de esta serie (las que esperan y la que va)')" @click="cancelSeries">
+          <i class="es-i es-i-close" aria-hidden="true"></i> {{ t('Cancelar descargas') }}
+        </button>
       </div>
       <div v-if="entries.length && entries[0].chapter" class="es-chapters">
         <div v-for="e in entries" :key="e.id" class="es-chapter" :class="{ 'es-chapter-seen': seen[e.chapter!] }">
@@ -47,8 +50,11 @@
             <button v-if="catalogGot[keyOf(e)] && hasItem(e)" class="es-btn es-small" :title="t('Abrir lo descargado (para leerlo sin conexión o subirlo a tu servidor)')" @click="openDownloaded(e)">
               <i class="es-i es-i-check" aria-hidden="true"></i>
             </button>
-            <button v-else class="es-btn es-small" :disabled="!!jobOf(e) || !canSave" :title="canSave ? t('Descargar el capítulo (CBZ) para leerlo sin conexión') : t('Esta versión no puede guardar archivos')" @click="downloadChapter(e)">
-              <span v-if="jobOf(e)" class="es-spin"></span><i v-else class="es-i es-i-download" aria-hidden="true"></i>
+            <button v-else-if="jobOf(e)" class="es-btn es-small" :title="t('Cancelar esta descarga')" @click="cancelCatalogDownloads([keyOf(e)])">
+              <span class="es-spin"></span><i class="es-i es-i-close" aria-hidden="true"></i>
+            </button>
+            <button v-else class="es-btn es-small" :disabled="!canSave" :title="canSave ? t('Descargar el capítulo (CBZ) para leerlo sin conexión') : t('Esta versión no puede guardar archivos')" @click="downloadChapter(e)">
+              <i class="es-i es-i-download" aria-hidden="true"></i>
             </button>
           </span>
         </div>
@@ -100,14 +106,14 @@
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import type { Item } from '../lib/api'
 import { bestFormat, fileName, languageName, type CatalogDef } from '../lib/catalogs'
-import { t } from '../lib/i18n'
+import { plural, t } from '../lib/i18n'
 import { MANGADEX_LANGUAGES, mangadexFeed } from '../lib/mangadex'
 import { browserNet } from '../lib/net'
 import { authOf, netImageNow } from '../lib/netimages'
 import { readFeed, searchUrl, type Feed, type FeedEntry } from '../lib/opds'
 import { seriesOfTitle } from '../lib/local'
 import { cachedFeed, prefetchFeed } from '../lib/feedcache'
-import { catalogGot, catalogJobs, jobLabel, runCatalogDownload, type CatalogKind } from '../lib/catalogdownloads'
+import { cancelCatalogDownloads, cancelled, catalogGot, catalogJobs, isCancelled, jobLabel, runCatalogDownload, type CatalogKind } from '../lib/catalogdownloads'
 import { serverLabel, useStore } from '../lib/store'
 import { storeZip } from '../lib/zipstore'
 import { chapterPages } from '../lib/chapters'
@@ -267,15 +273,15 @@ async function fetchToShelf(e: FeedEntry): Promise<Item | null> {
   try {
     // in the folder of its series; one on its own, in that of its title («The Flash 012» → The Flash)
     const series = (e as any).series || seriesOfTitle(e.title)
-    const id = await runCatalogDownload(keyOf(e), e.title, { series, kind: kindOf(e, offer.format!), title: e.title }, 'bytes', async (progress) => {
-      const uri = await saver.download(offer.href, fileName(e.title, offer.format!), undefined, progress, series)
+    const id = await runCatalogDownload(keyOf(e), e.title, { series, kind: kindOf(e, offer.format!), title: e.title }, 'bytes', async (progress, signal) => {
+      const uri = await saver.download(offer.href, fileName(e.title, offer.format!), undefined, progress, series, signal)
       const [item] = await shelf.addFiles([uri])
       return item.id
     })
     await store.refresh()
     return shelf.item(id) as Item
   } catch (err: any) {
-    store.notify(t('No se pudo descargar «{title}»: {error}', { title: e.title, error: err?.message || String(err) }), true)
+    if (!isCancelled(err)) store.notify(t('No se pudo descargar «{title}»: {error}', { title: e.title, error: err?.message || String(err) }), true)
     return null
   }
 }
@@ -302,9 +308,19 @@ async function downloadAll() {
   if (!todo.length) return
   store.notify(t('{n} capítulos en la cola de descargas.', { n: todo.length }))
   let ok = 0
+  seriesCancelled = false
   await Promise.all(todo.map((e) => downloadChapter(e, true).then((got) => { if (got) ok++ })))
   await store.refresh()
-  store.notify(t('{series}: {n} capítulos descargados.', { series: feed.value?.title || props.def.name, n: ok }))
+  store.notify(seriesCancelled
+    ? t('{series}: descargas canceladas; llegaron {n} capítulos.', { series: feed.value?.title || props.def.name, n: ok })
+    : t('{series}: {n} capítulos descargados.', { series: feed.value?.title || props.def.name, n: ok }))
+}
+let seriesCancelled = false
+/** stops every chapter of this series waiting or going */
+function cancelSeries() {
+  seriesCancelled = true
+  const n = cancelCatalogDownloads(entries.value.filter((e) => e.chapter && jobOf(e)).map(keyOf))
+  if (n) store.notify(plural(n, '{n} descarga cancelada.', '{n} descargas canceladas.'))
 }
 
 async function downloadChapter(e: FeedEntry, quiet = false): Promise<boolean> {
@@ -313,11 +329,12 @@ async function downloadChapter(e: FeedEntry, quiet = false): Promise<boolean> {
   const saver = store.net
   const series = feed.value?.title || props.def.name
   try {
-    await runCatalogDownload(keyOf(e), `${series} · ${e.title}`, { series, kind: 'manga', title: e.title }, 'pages', async (progress) => {
+    await runCatalogDownload(keyOf(e), `${series} · ${e.title}`, { series, kind: 'manga', title: e.title }, 'pages', async (progress, signal) => {
       const urls = await chapterPages(net, props.def, e.chapter!)
       const files: { name: string; data: Uint8Array }[] = []
       progress(0, urls.length)
       for (const [i, url] of urls.entries()) {
+        if (signal.aborted) throw cancelled()
         const res = await net.fetch(url, { headers: { Accept: 'image/*', ...authOf(url) } })
         if (!res.ok) throw new Error(t('la página {n} respondió {status}', { n: i + 1, status: res.status }))
         const ext = (url.match(/\.(jpe?g|png|webp|gif|avif)(?:$|\?)/i)?.[1] || 'jpg').toLowerCase()
@@ -328,6 +345,7 @@ async function downloadChapter(e: FeedEntry, quiet = false): Promise<boolean> {
       const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       const info = `<?xml version="1.0" encoding="utf-8"?>\n<ComicInfo><Series>${esc(series)}</Series>${number ? `<Number>${number}</Number>` : ''}<Title>${esc(e.title)}</Title>`
         + `<LanguageISO>${esc(e.language || lang.value)}</LanguageISO><Manga>YesAndRightToLeft</Manga><Web>${esc(props.def.site || props.def.url)}</Web></ComicInfo>`
+      if (signal.aborted) throw cancelled()
       files.unshift({ name: 'ComicInfo.xml', data: new TextEncoder().encode(info) })
       const zip = storeZip(files)
       const uri = await saver.save(`${series} - ${e.title}`.replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 140) + '.cbz', new Blob([zip.buffer as ArrayBuffer], { type: 'application/vnd.comicbook+zip' }), series)
@@ -338,7 +356,7 @@ async function downloadChapter(e: FeedEntry, quiet = false): Promise<boolean> {
     if (!quiet) store.notify(t('«{title}» descargado: se lee sin conexión.', { title: e.title }))
     return true
   } catch (err: any) {
-    store.notify(t('No se pudo descargar «{title}»: {error}', { title: e.title, error: err?.message || String(err) }), true)
+    if (!isCancelled(err)) store.notify(t('No se pudo descargar «{title}»: {error}', { title: e.title, error: err?.message || String(err) }), true)
     return false
   }
 }

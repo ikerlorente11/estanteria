@@ -20,6 +20,8 @@ export interface SuwayomiSource {
   iconUrl: string
   isNsfw: boolean
   supportsLatest: boolean
+  /** the extension it comes from (one, MangaDex say, brings a source per language) */
+  pkgName?: string
 }
 
 export interface SuwayomiExtension {
@@ -58,8 +60,9 @@ export async function suwayomiCheck(net: NetBackend, server: SuwayomiServer): Pr
 
 /** The sources of the installed extensions (the «Local source» left out). */
 export async function suwayomiSources(net: NetBackend, server: SuwayomiServer): Promise<SuwayomiSource[]> {
-  const data = await gql<any>(net, server, 'query { sources { nodes { id name displayName lang iconUrl isNsfw supportsLatest } } }')
-  return (data.sources?.nodes || []).filter((s: SuwayomiSource) => s.id !== '0').map((s: SuwayomiSource) => ({ ...s, id: String(s.id), iconUrl: absolute(server, s.iconUrl) }))
+  const data = await gql<any>(net, server, 'query { sources { nodes { id name displayName lang iconUrl isNsfw supportsLatest extension { pkgName } } } }')
+  return (data.sources?.nodes || []).filter((s: any) => s.id !== '0')
+    .map(({ extension, ...s }: any) => ({ ...s, id: String(s.id), iconUrl: absolute(server, s.iconUrl), pkgName: extension?.pkgName || undefined }))
 }
 
 const EXTENSION_FIELDS = 'pkgName name lang versionName iconUrl isNsfw isInstalled hasUpdate isObsolete'

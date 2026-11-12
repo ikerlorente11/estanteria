@@ -1,6 +1,6 @@
 <template>
   <div ref="root" class="es-reader" :class="[`es-bg-${settings.background}`, { 'es-ui-hidden': !uiShown, 'es-strip-mode': settings.mode === 'strip' }]"
-       tabindex="0" @keydown="onKey" @mousemove="onMouseMove" @touchstart.passive="touchStart" @touchend.passive="touchEnd">
+       tabindex="0" @keydown="onKey" @touchstart.passive="touchStart" @touchend.passive="touchEnd">
     <header class="es-rtop" :inert="!uiShown">
       <button class="es-rbtn" :title="t('Volver (Esc)')" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
@@ -307,15 +307,9 @@ let touch: { x: number; y: number; t: number } | null = null
 function touchStart(event: TouchEvent) {
   const t = event.touches[0]
   touch = { x: t.clientX, y: t.clientY, t: Date.now() }
-  lastTouchAt = Date.now()
 }
-/** A finger on the screen also fires a mouse move: the chrome then only answers to taps (the middle of
- * the page shows or hides it, and it stays), as a real pointer's moves would show it for a moment. */
-let lastTouchAt = 0
-function onMouseMove() {
-  if (Date.now() - lastTouchAt < 1500 || matchMedia('(hover: none)').matches) return
-  showUi()
-}
+// the chrome only answers to a click or tap in the middle of the page (it shows or hides, and it stays): moving
+// the mouse does not bring it back, so turning pages with clicks on the sides leaves the page clear
 function touchEnd(event: TouchEvent) {
   if (!touch || settings.mode === 'strip' || zoom.value !== 1) return
   const t = event.changedTouches[0]

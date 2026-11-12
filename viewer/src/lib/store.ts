@@ -53,6 +53,8 @@ export interface Store {
   platform?: 'android' | 'desktop' | 'web'
   /** where the app keeps what it downloads, to show it */
   downloadsFolder?: () => Promise<string>
+  /** lets the person choose that folder (`reset`: back to the usual one); the folder now, or null if they gave up */
+  setDownloadsFolder?: (reset: boolean) => Promise<string | null>
   /** what only the app's native side can do (volume keys, Wi-Fi only, the device's lock) */
   native?: NativeFeatures
   /** The network as the app sees it (no CORS) and the catalogs it reads by itself: the desktop and Android. */

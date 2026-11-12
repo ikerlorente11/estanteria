@@ -244,4 +244,6 @@ function remove(c: CatalogDef) {
 }
 
 onMounted(loadSources)
+// the libraries may come later (the web: from the server): their sources asked when they do
+watch(() => suwayomis.value.map((s) => s.id).join(','), (now, before) => { if (now && now !== before) loadSources() })
 </script>

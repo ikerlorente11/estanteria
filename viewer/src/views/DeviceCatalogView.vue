@@ -9,9 +9,7 @@
         <h1 class="es-h1">{{ q ? `«${q}»` : feed?.title || def.name }}</h1>
       </div>
       <span class="es-grow"></span>
-      <select v-if="def.protocol === 'mangadex'" class="es-select" :value="lang" :aria-label="t('Idioma')" @change="setLang(($event.target as HTMLSelectElement).value)">
-        <option v-for="l in MANGADEX_LANGUAGES" :key="l" :value="l">{{ languageName(l) }}</option>
-      </select>
+      <Pick v-if="def.protocol === 'mangadex'" :model-value="lang" :aria-label="t('Idioma')" :options="MANGADEX_LANGUAGES.map((l) => ({ value: l, label: languageName(l) }))" @change="setLang" />
       <input v-if="canSearch" :value="q" class="es-search" type="search" :placeholder="t('Buscar en {name}', { name: def.name })" :aria-label="t('Buscar')"
              @keydown.enter="search(($event.target as HTMLInputElement).value)" />
     </header>
@@ -20,7 +18,7 @@
     <p v-else-if="refreshing" class="es-muted es-small es-refreshing"><span class="es-spin"></span> {{ t('Actualizando…') }}</p>
     <p v-else-if="error" class="es-banner es-banner-error">{{ error }} <button class="es-btn es-small" @click="load()">{{ t('Reintentar') }}</button></p>
     <template v-else-if="feed">
-      <div v-if="feed.subtitle || (feed as any).cover || (isChapters && path)" class="es-hero es-hero-slim">
+      <div v-if="feed.subtitle || (feed as any).cover || (isChapters && path) || opdsSeries" class="es-hero es-hero-slim">
         <img v-if="(feed as any).cover" :src="img((feed as any).cover)" class="es-hero-pic es-hero-pic-small" alt="" />
         <div class="es-hero-text">
           <p v-if="feed.subtitle" class="es-summary">{{ feed.subtitle }}</p>
@@ -28,6 +26,10 @@
           <div v-if="isChapters && path" class="es-hero-actions">
             <FavoriteButton :fav="catalogFavorite(def.id, path, feed.title || def.name, (feed as any).cover)" />
             <FollowButton :def="def" :address="path" :title="feed.title || def.name" :cover="(feed as any).cover" :missing="missing" :lang="lang" />
+          </div>
+          <!-- a list of books or comics of an OPDS catalog (a series of a Komga, say): the server can keep it up to date -->
+          <div v-else-if="opdsSeries" class="es-hero-actions">
+            <FollowButton :def="def" :address="path!" :title="feed.title || def.name" :missing="missingFiles" :lang="lang" :kind="filesKind" />
           </div>
         </div>
       </div>
@@ -78,7 +80,7 @@
           </a>
           <div class="es-card-text">
             <a href="#" class="es-card-title es-ellipsis" :title="e.title" @click.prevent="act(e)">{{ e.title }}</a>
-            <span class="es-muted es-small es-ellipsis">{{ [e.author, offerOf(e)?.format?.toUpperCase()].filter(Boolean).join(' · ') }}</span>
+            <span class="es-muted es-small es-ellipsis">{{ [e.author, e.detail || offerOf(e)?.format?.toUpperCase()].filter(Boolean).join(' · ') }}</span>
           </div>
           <div v-if="!e.href" class="es-entry-actions">
             <button class="es-btn es-small" :disabled="!!jobOf(e) || !offerOf(e)" :title="offerOf(e) ? '' : t('No ofrece un formato que se lea aquí')" @click="act(e)">
@@ -110,6 +112,7 @@
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import { computed, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import type { Item } from '../lib/api'
 import { bestFormat, fileName, languageName, type CatalogDef } from '../lib/catalogs'
@@ -129,6 +132,8 @@ import FavoriteButton from './FavoriteButton.vue'
 import FollowButton from './FollowButton.vue'
 import { suwayomiServer } from '../lib/devicelibraries'
 import { randomTag, suwayomiFeed } from '../lib/suwayomi'
+import { webdavFeed } from '../lib/webdav'
+import { archiveFeed } from '../lib/archive'
 
 /** A catalog the app reads by itself: its sections, what it offers and its search. A book or a comic is
  * downloaded to this device's shelf to be read (and stays there); a chapter is read page by page. */
@@ -176,7 +181,7 @@ const gotOf = (e: FeedEntry) => keeper.value?.gotOf(keyOf(e))
 const hasItem = (e: FeedEntry) => gotOf(e) !== undefined
 /** the downloaded file's page: read it offline, upload it to a server of one's own */
 function openDownloaded(e: FeedEntry) { const id = gotOf(e); if (id !== undefined) go({ v: 'item', id }) }
-const canSearch = computed(() => props.def.protocol !== 'opds' || !!(feed.value?.search || rootSearch))
+const canSearch = computed(() => props.def.protocol === 'webdav' ? false : props.def.protocol !== 'opds' || !!(feed.value?.search || rootSearch))
 
 /** what a page is kept as (the language of a catalog in many is part of it) */
 const keyOf$ = (address: string | undefined) => `${props.def.id}|${props.def.protocol === 'mangadex' ? lang.value : ''}|${address || ''}`
@@ -199,6 +204,8 @@ async function fetchFeed(address: string | undefined): Promise<Feed> {
     if (!server) throw new Error(t('Ese servidor Suwayomi ya no está entre tus bibliotecas.'))
     return suwayomiFeed(net, server, props.def.source!, address || 'suwayomi:home', props.def.supportsLatest !== false)
   }
+  if (props.def.protocol === 'archive') return archiveFeed(net, address || 'archive:home')
+  if (props.def.protocol === 'webdav') return webdavFeed(net, address || props.def.url, props.def.url)
   return readFeed(net, address || props.def.url)
 }
 
@@ -210,6 +217,7 @@ async function load() {
     if (props.q) {
       if (props.def.protocol === 'mangadex') address = `mangadex:search?q=${encodeURIComponent(props.q)}`
       else if (props.def.protocol === 'suwayomi') address = `suwayomi:search?q=${encodeURIComponent(props.q)}`
+      else if (props.def.protocol === 'archive') address = `archive:search?q=${encodeURIComponent(props.q)}`
       else {
         if (!rootSearch) rootSearch = (await fetchFeed(undefined)).search
         if (!rootSearch) throw new Error(t('Este catálogo no permite buscar.'))
@@ -302,6 +310,15 @@ async function fetchToShelf(e: FeedEntry): Promise<Item | null> {
 const gathering = ref(false)
 /** the chapters shown that are not downloaded (nor going) */
 const missing = computed(() => entries.value.filter((e) => e.chapter && !hasItem(e) && !jobOf(e)).length)
+/** an OPDS page of files (not the catalog's start, not a search): a series that can be followed */
+const opdsSeries = computed(() => props.def.protocol === 'opds' && !!props.path && !props.q && /^https?:/.test(props.path) && entries.value.some((e) => !e.href && offerOf(e)))
+const missingFiles = computed(() => entries.value.filter((e) => !e.href && offerOf(e) && !hasItem(e) && !jobOf(e)).length)
+/** what most of its files are: comics, or books */
+const filesKind = computed<'comic' | 'book'>(() => {
+  const formats = entries.value.map((e) => offerOf(e)?.format).filter(Boolean) as string[]
+  const comics = formats.filter((f) => ['cbz', 'cbr', 'cb7', 'cbt'].includes(f)).length
+  return comics * 2 >= formats.length && comics ? 'comic' : 'book'
+})
 /** how many of this series are waiting or going */
 const queued = computed(() => entries.value.filter((e) => e.chapter && jobOf(e)).length)
 async function downloadAll() {

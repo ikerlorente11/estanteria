@@ -12,20 +12,12 @@
 
       <form v-if="adding" class="es-form es-addcatalog" @submit.prevent="addChosen">
         <label>{{ t('Cómo') }}
-          <select v-model="how">
-            <option value="ready">{{ t('Uno de los preparados') }}</option>
-            <option value="repo">{{ t('Un repositorio de catálogos (su URL)') }}</option>
-            <option value="opds">{{ t('Un catálogo OPDS (su URL)') }}</option>
-          </select>
+          <Pick v-model="how" field :options="[{ value: 'ready', label: t('Uno de los preparados') }, { value: 'repo', label: t('Un repositorio de catálogos (su URL)') }, { value: 'opds', label: t('Un catálogo OPDS (su URL)') }]" />
         </label>
         <template v-if="how === 'ready'">
           <label>{{ t('Catálogo') }}
-            <select v-model="chosen" required>
-              <option value="" disabled>{{ t('Elige uno…') }}</option>
-              <optgroup v-for="g in reg.available()" :key="g.from" :label="g.from">
-                <option v-for="c in g.catalogs" :key="c.id" :value="c.id">{{ c.name }} · {{ c.languages.map(languageName).join(', ') }}</option>
-              </optgroup>
-            </select>
+            <Pick v-model="chosen" field :placeholder="t('Elige uno…')"
+                  :options="reg.available().flatMap((g) => g.catalogs.map((c) => ({ value: c.id, label: `${c.name} · ${c.languages.map(languageName).join(', ')}`, group: g.from })))" />
           </label>
           <p v-if="chosenDef?.description" class="es-muted es-small">{{ t(chosenDef.description) }}</p>
           <p v-if="!reg.available().length" class="es-muted es-small">{{ t('Ya tienes todos los preparados. Añade un repositorio para tener más.') }}</p>
@@ -39,9 +31,7 @@
           <label>{{ t('Dirección') }} <input v-model="opds.url" type="url" required :placeholder="t('https://ejemplo.com/opds')" /></label>
           <label>{{ t('Nombre') }} <input v-model="opds.name" type="text" maxlength="80" :placeholder="t('Cómo quieres llamarlo')" /></label>
           <label>{{ t('Idioma') }}
-            <select v-model="opds.language">
-              <option v-for="(name, code) in LANGUAGE_NAMES" :key="code" :value="code">{{ languageName(String(code)) }}</option>
-            </select>
+            <Pick v-model="opds.language" field :options="Object.keys(LANGUAGE_NAMES).map((code) => ({ value: code, label: languageName(code) }))" />
           </label>
         </template>
         <div class="es-form-actions">
@@ -68,6 +58,30 @@
           <button class="es-btn es-small es-catalog-remove" :title="t('Quitar {name}', { name: c.name })" @click="remove(c)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
         </div>
       </div>
+      <!-- the libraries connected in «Bibliotecas» that are read as catalogs: a Komga, a Kavita, an OPDS, a WebDAV folder -->
+      <template v-if="libs.length">
+        <header class="es-page-head es-subhead">
+          <button class="es-collapse" :aria-expanded="!isCollapsed('libraries')" @click="toggleCollapsed('libraries')">
+            <i class="es-i es-i-chevron" :class="{ 'es-collapse-closed': isCollapsed('libraries') }" aria-hidden="true"></i>
+            <h2 class="es-h2">{{ t('Tus bibliotecas') }}</h2>
+            <span class="es-chip-count">{{ libs.length }}</span>
+          </button>
+          <span class="es-grow"></span>
+          <button class="es-btn es-small" @click="go({ v: 'sources' })"><i class="es-i es-i-settings" aria-hidden="true"></i> {{ t('Bibliotecas') }}</button>
+        </header>
+        <div v-if="!isCollapsed('libraries')" class="es-catalogs">
+          <a v-for="l in libs" :key="l.id" href="#" class="es-catalog" @click.prevent="go({ v: 'catalog', kind: `lib:${l.id}` })">
+            <span class="es-catalog-mark" aria-hidden="true"><i class="es-i es-i-server"></i></span>
+            <span class="es-catalog-text">
+              <strong>{{ l.name }}</strong>
+              <span class="es-muted es-small es-ellipsis">{{ l.url }}</span>
+              <span class="es-origin">{{ t(LIBRARY_TYPES[l.type].label) }}</span>
+            </span>
+            <i class="es-i es-i-next es-catalog-go" aria-hidden="true"></i>
+          </a>
+        </div>
+      </template>
+
       <!-- the sources of each Suwayomi library: its installed extensions, every one a catalog -->
       <template v-for="s in suwayomis" :key="s.id">
         <header class="es-page-head es-subhead">
@@ -100,7 +114,7 @@
         </template>
       </template>
 
-      <div v-if="!reg.active.length && !suwayomis.length && !adding" class="es-empty es-home-empty">
+      <div v-if="!reg.active.length && !suwayomis.length && !libs.length && !adding" class="es-empty es-home-empty">
         <span class="es-empty-icon"><i class="es-i es-i-cloud" aria-hidden="true"></i></span>
         <p><strong>{{ t('Aún no tienes catálogos.') }}</strong></p>
         <p class="es-muted">{{ t('Añade alguno de los preparados (Project Gutenberg, textos.info, MangaDex…), un repositorio o un catálogo OPDS.') }}</p>
@@ -128,29 +142,13 @@
       <FollowsList />
     </template>
 
-    <!-- the web of a server: the server's catalogs -->
-    <template v-else>
-      <p class="es-muted es-intro">{{ t('Bibliotecas públicas a las que ya estás conectado. Entra, busca y guarda en tu estantería lo que te interese: se lee aquí mismo y, si quieres, se copia a {server}.', { server: serverLabel(store) }) }}</p>
-      <p v-if="loading" class="es-muted"><span class="es-spin"></span> {{ t('Cargando…') }}</p>
-      <div v-else class="es-catalogs">
-        <a v-for="c in catalogs" :key="c.kind" href="#" class="es-catalog" @click.prevent="go({ v: 'catalog', kind: c.kind })">
-          <span class="es-catalog-mark" :class="`es-catalog-${c.kind}`" aria-hidden="true">{{ c.label.slice(0, 1) }}</span>
-          <span class="es-catalog-text">
-            <strong>{{ c.label }}</strong>
-            <span class="es-muted es-small">{{ c.description }}</span>
-            <span v-if="c.items" class="es-origin"><i class="es-i es-i-bookmark-fill" aria-hidden="true"></i> {{ plural(c.items, '{n} guardado', '{n} guardados') }}</span>
-          </span>
-          <i class="es-i es-i-next es-catalog-go" aria-hidden="true"></i>
-        </a>
-      </div>
-    </template>
   </section>
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import { useSync } from '../lib/favorites'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import type { Catalog } from '../lib/api'
 import { CONTENT_NAMES, INCLUDED_CATALOGS, LANGUAGE_NAMES, languageName, type CatalogDef } from '../lib/catalogs'
 import { plural, t } from '../lib/i18n'
 import { browserNet } from '../lib/net'
@@ -159,11 +157,12 @@ import { netImageNow } from '../lib/netimages'
 import MultiPick from './MultiPick.vue'
 import FollowsList from './FollowsList.vue'
 import { isCollapsed, toggleCollapsed } from '../lib/collapse'
-import { suwayomiHiddenCount, suwayomiLibraries, suwayomiSourcesOf, suwayomiVisibleSources } from '../lib/devicelibraries'
+import { LIBRARY_TYPES } from '../lib/libraries'
+import { catalogLibraries, suwayomiHiddenCount, suwayomiLibraries, suwayomiSourcesOf, suwayomiVisibleSources } from '../lib/devicelibraries'
 import { serverLabel, useStore } from '../lib/store'
 
 /** The catalogs: in an app, the ones it reads by itself (add, filter by language, remove; repositories);
- * on the web of a server, that server's catalogs. */
+ * the same on the web of a server, through its network. */
 const store = useStore()
 // what is shared with the other devices, kept in step from the first page (see sync.ts)
 useSync(store)
@@ -191,6 +190,7 @@ const languages = computed(() => [...new Set([...(reg?.active || []).flatMap((c)
 /** a catalog «in many languages» shows under each one */
 // ---- the Suwayomi libraries: their sources ----
 const suwayomis = computed(() => (reg ? suwayomiLibraries() : []))
+const libs = computed(() => (reg ? catalogLibraries() : []))
 const sourceErrors = reactive<Record<string, string>>({})
 const img = (url: string) => netImageNow(store.net, url)
 function sourcesShown(id: string) {
@@ -243,14 +243,5 @@ function remove(c: CatalogDef) {
   reg!.remove(c.id)
 }
 
-// ---- the web of a server ----
-const catalogs = ref<Catalog[]>([])
-const loading = ref(true)
-async function load() {
-  if (reg || !state.connected || !state.server) return
-  try { catalogs.value = await store.api.catalogs() } catch (err: any) { store.notify(err?.message || String(err), true) }
-  loading.value = false
-}
-onMounted(() => { load(); loadSources() })
-watch(() => state.connected, load)
+onMounted(loadSources)
 </script>

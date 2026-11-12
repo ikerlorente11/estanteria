@@ -11,9 +11,7 @@
     <!-- an app: a library it connects by itself -->
     <form v-if="adding && store.libraries" class="es-form" @submit.prevent="saveLibrary">
       <label>{{ t('Tipo') }}
-        <select v-model="lib.type" :disabled="!!lib.id">
-          <option v-for="ty in store.libraries.types" :key="ty" :value="ty">{{ t(LIBRARY_TYPES[ty].label) }}</option>
-        </select>
+        <Pick v-model="lib.type" field :disabled="!!lib.id" :options="store.libraries.types.map((ty) => ({ value: ty, label: t(LIBRARY_TYPES[ty].label) }))" />
       </label>
       <p class="es-muted es-small">{{ t(libInfo.hint) }}</p>
       <label>{{ t('Nombre') }} <input v-model="lib.name" type="text" maxlength="120" :placeholder="lib.url ? nameFromUrl(lib.url) : t('Cómo quieres llamarla')" /></label>
@@ -29,9 +27,7 @@
     <!-- the web of a server: a library the server connects -->
     <form v-if="adding && !store.libraries && state.server" class="es-form" @submit.prevent="save">
       <label>{{ t('Tipo') }}
-        <select v-model="form.kind">
-          <option v-for="k in kinds" :key="k.kind" :value="k.kind">{{ k.label }}</option>
-        </select>
+        <Pick v-model="form.kind" field :options="kinds.map((k) => ({ value: k.kind, label: k.label }))" />
       </label>
       <p v-if="hint" class="es-muted es-small">{{ hint }}</p>
       <label>{{ t('Nombre') }} <input v-model="form.name" type="text" required maxlength="120" :placeholder="t('Komga de Ana')" /></label>
@@ -56,6 +52,7 @@
         </span>
         <span class="es-source-actions">
           <a v-if="l.type === 'server' && state.server" href="#" class="es-btn es-small" @click.prevent="go({ v: 'library', source: 'archivador' })">{{ t('Ver') }}</a>
+          <a v-if="CATALOG_LIBRARY_TYPES.includes(l.type)" href="#" class="es-btn es-small" @click.prevent="go({ v: 'catalog', kind: `lib:${l.id}` })">{{ t('Ver') }}</a>
           <a v-if="l.type === 'suwayomi'" href="#" class="es-btn es-small" @click.prevent="go({ v: 'extensions', library: l.id })">{{ t('Extensiones') }}</a>
           <template v-if="!l.fixed">
             <button class="es-btn es-small" :title="t('Cambiar')" @click="startEditLibrary(l)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
@@ -108,12 +105,14 @@
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import { useSync } from '../lib/favorites'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { Source, SourceKind, SourceKindInfo } from '../lib/api'
 import { plural, t } from '../lib/i18n'
 import { LIBRARY_TYPES, nameFromUrl, type Library, type LibraryType } from '../lib/libraries'
 import { serverLabel, useStore } from '../lib/store'
+import { CATALOG_LIBRARY_TYPES } from '../lib/devicelibraries'
 
 /** The libraries: in an app, the servers it connects by itself (a server of its own, Komga, Kavita…); on
  * the web of a server, the outside libraries that server connects (add one, see how each is doing, scan,
@@ -165,7 +164,7 @@ async function saveLibrary() {
   saving.value = true
   try {
     const name = lib.name.trim() || nameFromUrl(lib.url.trim())
-    const saved = await store.libraries!.save({ id: lib.id || undefined, type: lib.type, name, url: lib.url.trim().replace(/\/+$/, ''), username: lib.username.trim(), secret: lib.secret || undefined })
+    const saved = await store.libraries!.save({ id: lib.id || undefined, type: lib.type, name, url: ['opds', 'webdav'].includes(lib.type) ? lib.url.trim() : lib.url.trim().replace(/\/+$/, ''), username: lib.username.trim(), secret: lib.secret || undefined })
     store.notify(lib.id ? t('«{name}» guardada.', { name: saved.name }) : t('«{name}» conectada.', { name: saved.name }))
     adding.value = false
     lib.secret = ''

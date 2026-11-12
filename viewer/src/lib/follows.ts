@@ -58,10 +58,26 @@ export async function unfollow(api: Api, f: Follow) {
   followState.list = followState.list.filter((x) => x.id !== f.id)
 }
 
-/** The id of a series from its address in a catalog (`mangadex:manga/<id>`, `suwayomi:manga/<id>`), or null. */
+/** The id of a series from its address in a catalog (`mangadex:manga/<id>`, `suwayomi:manga/<id>`, an OPDS feed's
+ * address: a short hash of it, without its page), or null. */
 export function seriesIdOf(address: string | undefined): string | null {
   const m = (address || '').match(/^(?:mangadex|suwayomi):manga\/([\w-]+)/)
-  return m ? m[1] : null
+  if (m) return m[1]
+  if (/^https?:\/\//.test(address || '')) {
+    let h = 0x811c9dc5
+    for (const ch of feedAddress(address!)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0 }
+    return `opds-${h.toString(16).padStart(8, '0')}`
+  }
+  return null
+}
+
+/** An OPDS feed's address without the page it was on (the server goes through every page from the first). */
+export function feedAddress(address: string): string {
+  try {
+    const u = new URL(address)
+    for (const k of ['page', 'p', 'offset', 'start', 'startIndex', 'pageNumber']) u.searchParams.delete(k)
+    return u.toString()
+  } catch (_) { return address }
 }
 
 /** «hace 3 h» */

@@ -4,14 +4,18 @@ import { reactive } from 'vue'
 import type { NetBackend } from './net.ts'
 
 const MAX = 300
-/** the Authorization each server's images need (by origin): a Suwayomi asks for its basic auth */
-const auth = new Map<string, string>()
-export function setImageAuth(url: string, header: string): void {
-  try { if (header) auth.set(new URL(url).origin, header); else auth.delete(new URL(url).origin) } catch (_) { /* not a URL */ }
+/** the headers each server's requests need (by origin): a Suwayomi or a Komga asks for its basic auth, a Komga
+ * with an API key for its X-API-Key */
+const auth = new Map<string, Record<string, string>>()
+export function setOriginHeaders(url: string, headers: Record<string, string>): void {
+  try { if (Object.keys(headers).length) auth.set(new URL(url).origin, headers); else auth.delete(new URL(url).origin) } catch (_) { /* not a URL */ }
 }
-/** the headers an image of `url` needs (its server's credential, if it asks for one) */
+export function setImageAuth(url: string, header: string): void {
+  setOriginHeaders(url, header ? { Authorization: header } : {})
+}
+/** the headers a request to `url` needs (its server's credential, if it asks for one) */
 export function authOf(url: string): Record<string, string> {
-  try { const h = auth.get(new URL(url).origin); return h ? { Authorization: h } : {} } catch (_) { return {} }
+  try { return { ...(auth.get(new URL(url).origin) || {}) } } catch (_) { return {} }
 }
 const ready = reactive(new Map<string, string>())
 const loading = new Map<string, Promise<string>>()

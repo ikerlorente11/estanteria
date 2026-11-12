@@ -5,6 +5,7 @@ import type { Format } from './api.ts'
 import { formatOfMime } from './catalogs.ts'
 import { t } from './i18n.ts'
 import type { NetBackend } from './net.ts'
+import { authOf } from './netimages.ts'
 
 export interface Offer {
   href: string
@@ -61,7 +62,7 @@ function absolute(href: string | null | undefined, base: string): string | null 
 
 /** The feed at `url` (OPDS 1.2 or 2.0, whichever it answers). */
 export async function readFeed(net: NetBackend, url: string): Promise<Feed> {
-  const res = await net.fetch(url, { headers: { Accept: 'application/opds+json, application/atom+xml, application/xml;q=0.9, */*;q=0.5' } })
+  const res = await net.fetch(url, { headers: { Accept: 'application/opds+json, application/atom+xml, application/xml;q=0.9, */*;q=0.5', ...authOf(url) } })
   if (!res.ok) throw new Error(t('{host} respondió {status}', { host: new URL(url).host, status: res.status }))
   const where = res.headers.get('X-Fetch-Url') || res.url || url
   const type = res.headers.get('Content-Type') || ''
@@ -127,7 +128,7 @@ export function parseOpds1(xml: string, base: string): Feed {
 }
 
 async function openSearchTemplate(net: NetBackend, url: string, base: string): Promise<string | null> {
-  const res = await net.fetch(url)
+  const res = await net.fetch(url, { headers: authOf(url) })
   if (!res.ok) return null
   const doc = new DOMParser().parseFromString(await res.text(), 'application/xml')
   const urls = Array.from(doc.getElementsByTagName('Url'))

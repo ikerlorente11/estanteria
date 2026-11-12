@@ -10,7 +10,7 @@ import { getJson, type NetBackend } from './net.ts'
 import { onPrefsReplaced, prefs } from './prefs.ts'
 
 /** How the app talks to a catalog: OPDS (1.2 or 2.0, told apart by what it answers) or an API it knows. */
-export type CatalogProtocol = 'opds' | 'mangadex' | 'suwayomi'
+export type CatalogProtocol = 'opds' | 'mangadex' | 'archive' | 'suwayomi' | 'webdav'
 export type CatalogContent = 'books' | 'comics' | 'manga'
 
 export interface CatalogDef {
@@ -28,7 +28,7 @@ export interface CatalogDef {
   nsfw?: boolean
   /** a site to visit (credits, terms) */
   site?: string
-  /** a source of a Suwayomi library: the library's id, the source's id, whether it has a «latest» list, its icon */
+  /** a library's catalog (Komga, Kavita, OPDS, WebDAV) or a source of a Suwayomi library: the library's id, the source's id, whether it has a «latest» list, its icon */
   library?: string
   source?: string
   supportsLatest?: boolean
@@ -68,6 +68,10 @@ export const INCLUDED_CATALOGS: CatalogDef[] = [
   {
     id: 'unglue-it', name: 'unglue.it', protocol: 'opds', url: 'https://unglue.it/api/opds/',
     description: 'Libros gratuitos con licencias libres (Creative Commons y dominio público).', languages: ['en'], content: ['books'], site: 'https://unglue.it',
+  },
+  {
+    id: 'archive', name: 'Internet Archive', protocol: 'archive', url: 'https://archive.org',
+    description: 'Libros digitalizados por bibliotecas de todo el mundo y cómics clásicos de dominio público.', languages: ['multi'], content: ['books', 'comics'], site: 'https://archive.org',
   },
   {
     id: 'mangadex', name: 'MangaDex', protocol: 'mangadex', url: 'https://api.mangadex.org',
@@ -203,5 +207,5 @@ function mihonRepo(): Error {
 
 function validDef(c: any): c is CatalogDef {
   return c && typeof c.id === 'string' && typeof c.name === 'string' && typeof c.url === 'string' && /^https?:\/\//.test(c.url)
-    && ['opds', 'mangadex'].includes(c.protocol) && Array.isArray(c.languages) && Array.isArray(c.content)
+    && ['opds', 'mangadex', 'archive'].includes(c.protocol) && Array.isArray(c.languages) && Array.isArray(c.content)
 }

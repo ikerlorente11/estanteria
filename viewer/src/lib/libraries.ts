@@ -30,22 +30,22 @@ export const LIBRARY_TYPES: Record<LibraryType, LibraryTypeInfo> = {
   },
   opds: {
     label: 'Catálogo OPDS',
-    hint: 'Cualquier catálogo OPDS 1.2 o 2.0 (Calibre-Web, COPS, el servidor de Calibre, Kavita, Komga…): la dirección del catálogo y, si lo pide, usuario y contraseña. El progreso se guarda en este dispositivo.',
+    hint: 'Cualquier catálogo OPDS 1.2 o 2.0 (Calibre-Web, COPS, el servidor de Calibre, Kavita, Komga…): la dirección del catálogo y, si lo pide, usuario y contraseña. Se navega en Catálogos; el progreso se guarda en este dispositivo.',
     example: 'https://libros.ejemplo.com/opds', username: true, secretLabel: 'Contraseña',
   },
   komga: {
     label: 'Komga',
-    hint: 'Un servidor Komga: tu usuario y contraseña (o el usuario vacío y una clave de API). El progreso se guarda en Komga.',
+    hint: 'Un servidor Komga: tu usuario y contraseña (o el usuario vacío y una clave de API). Se navega en Catálogos (por su OPDS) y lo que abras se descarga a este dispositivo; el progreso se guarda aquí.',
     example: 'https://komga.ejemplo.com', username: true, secretLabel: 'Contraseña o clave de API',
   },
   kavita: {
     label: 'Kavita',
-    hint: 'Un servidor Kavita: tu clave de API (en Kavita: tu usuario › Ajustes › API). El progreso se guarda en Kavita.',
+    hint: 'Un servidor Kavita: tu clave de API (en Kavita: tu usuario › Ajustes › API). Se navega en Catálogos (por su OPDS) y lo que abras se descarga a este dispositivo; el progreso se guarda aquí.',
     example: 'https://kavita.ejemplo.com', username: false, secretLabel: 'Clave de API',
   },
   webdav: {
     label: 'Carpeta WebDAV',
-    hint: 'Una carpeta compartida por WebDAV (Nextcloud, OpenCloud, un NAS…): sus cómics y libros, con sus subcarpetas. El progreso se guarda en este dispositivo.',
+    hint: 'Una carpeta compartida por WebDAV (Nextcloud, OpenCloud, un NAS…): sus cómics y libros, con sus subcarpetas, se navegan en Catálogos. El progreso se guarda en este dispositivo.',
     example: 'https://nube.ejemplo.com/remote.php/dav/files/usuario/Lectura', username: true, secretLabel: 'Contraseña',
   },
 }

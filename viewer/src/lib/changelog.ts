@@ -16,6 +16,20 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.4.2',
+      date: '2026-11-12',
+      notes: [
+        { es: 'Komga, Kavita, catálogos OPDS y carpetas WebDAV se vuelven a conectar en Bibliotecas, ahora sin servidor: se navegan en Catálogos («Tus bibliotecas») y lo que abres se descarga para leerlo.',
+          en: 'Komga, Kavita, OPDS catalogs and WebDAV folders can be connected again in Libraries, now without a server: browse them in Catalogs («Your libraries») and what you open is downloaded to read.' },
+        { es: 'Internet Archive vuelve como catálogo preparado: cómics clásicos y libros digitalizados de dominio público.',
+          en: 'The Internet Archive is back as a ready-made catalog: classic comics and scanned public-domain books.' },
+        { es: '«Mantenerme al día» también en una serie de un catálogo OPDS (un Komga, un Kavita…): tu servidor descarga cada libro nuevo.',
+          en: '«Keep me up to date» also on a series of an OPDS catalog (a Komga, a Kavita…): your server downloads each new book.' },
+        { es: 'Los desplegables (tipo de biblioteca, orden, idioma, letra…) se abren junto a su campo; en la tableta salían arriba de la pantalla, de lado a lado.',
+          en: 'Drop-downs (library type, order, language, font…) open next to their field; on the tablet they came out at the top of the screen, edge to edge.' },
+      ],
+    },
+    {
       version: '0.4.1',
       date: '2026-11-12',
       notes: [
@@ -79,6 +93,20 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.5.2',
+      date: '2026-11-12',
+      notes: [
+        { es: 'Komga, Kavita, catálogos OPDS y carpetas WebDAV se vuelven a conectar en Bibliotecas, ahora sin servidor: se navegan en Catálogos («Tus bibliotecas») y lo que abres se descarga para leerlo.',
+          en: 'Komga, Kavita, OPDS catalogs and WebDAV folders can be connected again in Libraries, now without a server: browse them in Catalogs («Your libraries») and what you open is downloaded to read.' },
+        { es: 'Internet Archive vuelve como catálogo preparado: cómics clásicos y libros digitalizados de dominio público.',
+          en: 'The Internet Archive is back as a ready-made catalog: classic comics and scanned public-domain books.' },
+        { es: '«Mantenerme al día» también en una serie de un catálogo OPDS (un Komga, un Kavita…): tu servidor descarga cada libro nuevo.',
+          en: '«Keep me up to date» also on a series of an OPDS catalog (a Komga, a Kavita…): your server downloads each new book.' },
+        { es: 'Los desplegables (tipo de biblioteca, orden, idioma, letra…) se abren junto a su campo; en la tableta salían arriba de la pantalla, de lado a lado.',
+          en: 'Drop-downs (library type, order, language, font…) open next to their field; on the tablet they came out at the top of the screen, edge to edge.' },
+      ],
+    },
     {
       version: '0.5.1',
       date: '2026-11-12',

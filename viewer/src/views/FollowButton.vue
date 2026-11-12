@@ -24,18 +24,21 @@
 import { computed, watch } from 'vue'
 import type { CatalogDef } from '../lib/catalogs'
 import { suwayomiCredentials } from '../lib/devicelibraries'
-import { checkFollowNow, followOf, followSeries, followState, followStatus, loadFollows, seriesIdOf, setFollowEnabled, unfollow } from '../lib/follows'
+import { checkFollowNow, feedAddress, followOf, followSeries, followState, followStatus, loadFollows, seriesIdOf, setFollowEnabled, unfollow } from '../lib/follows'
+import { authOf } from '../lib/netimages'
 import { t } from '../lib/i18n'
 import { catalogFolder } from '../lib/local'
 import { serverLabel, useStore } from '../lib/store'
 import ConfirmButton from './ConfirmButton.vue'
 
 /** «Mantenerme al día» of a series of a catalog: the server fetches every chapter that is missing and, from then
- * on, each new one as it comes out (see follows.ts). Only with a server of one's own. */
-const props = defineProps<{ def: CatalogDef; address: string; title: string; cover?: string | null; missing: number; lang: string }>()
+ * on, each new one as it comes out (see follows.ts); of an OPDS series, each book. Only with a server of one's own. */
+const props = defineProps<{ def: CatalogDef; address: string; title: string; cover?: string | null; missing: number; lang: string
+  /** what it holds (an OPDS series: comics or books), for the folder its files go to */
+  kind?: 'manga' | 'comic' | 'book' }>()
 const store = useStore()
 const seriesId = computed(() => seriesIdOf(props.address))
-const canFollow = computed(() => !!store.state.server && !store.api.standalone && !!seriesId.value && ['mangadex', 'suwayomi'].includes(props.def.protocol))
+const canFollow = computed(() => !!store.state.server && !store.api.standalone && !!seriesId.value && ['mangadex', 'suwayomi', 'opds'].includes(props.def.protocol))
 const loaded = computed(() => followState.loaded)
 const follow = computed(() => (seriesId.value ? followOf(props.def.id, seriesId.value) : undefined))
 
@@ -47,9 +50,12 @@ async function start() {
     const creds = props.def.protocol === 'suwayomi' && props.def.library ? suwayomiCredentials(props.def.library) : null
     if (props.def.protocol === 'suwayomi' && !creds) throw new Error(t('Ese servidor Suwayomi ya no está entre tus bibliotecas.'))
     const language = props.def.protocol === 'mangadex' ? props.lang : props.def.languages.find((l) => l !== 'multi') || ''
+    const opds = props.def.protocol === 'opds'
+    const address = opds ? feedAddress(props.address) : props.address.replace(/\?.*$/, '')
     await followSeries(store.api, {
-      catalog: props.def.id, protocol: props.def.protocol as 'mangadex' | 'suwayomi', series_id: seriesId.value!, address: props.address.replace(/\?.*$/, ''),
-      title: props.title, folder: catalogFolder({ series: props.title, kind: 'manga', title: props.title }, store.state.status?.folders || []),
+      catalog: props.def.id, protocol: props.def.protocol as 'mangadex' | 'suwayomi' | 'opds', series_id: seriesId.value!, address,
+      title: props.title, folder: catalogFolder({ series: props.title, kind: props.kind || 'manga', title: props.title }, store.state.status?.folders || []),
+      ...(opds ? { headers: authOf(address) } : {}),
       language, web: props.def.site || props.def.url, cover: props.cover || null,
       ...(creds ? { suwayomi_url: creds.url, suwayomi_username: creds.username, suwayomi_secret: creds.secret } : {}),
     })

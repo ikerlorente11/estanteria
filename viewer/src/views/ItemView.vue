@@ -40,9 +40,6 @@
             </button>
             <FavoriteButton :fav="itemFavorite(item)" />
             <FileButton :item="item" :local="local" :uploaded="uploadedAlready" @upload="local ? startUpload() : toCloud()" @reveal="reveal" @removed="backToList" />
-            <button v-if="fromCatalog" class="es-btn" :title="t('Quitar de tu estantería (sigue en el catálogo)')" @click="remove">
-              <i class="es-i es-i-delete" aria-hidden="true"></i> {{ t('Quitar') }}
-            </button>
           </div>
           <form v-if="uploading !== null" class="es-upload" @submit.prevent="upload">
             <label>{{ t('En {server}, dentro de «{folder}»', { server: serverLabel(store), folder: store.readingRoot }) }}
@@ -163,7 +160,6 @@ async function reveal() {
   if (!item.value || !store.shelf) return
   try { await store.shelf.backend.reveal(item.value.id) } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
-const fromCatalog = computed(() => !!item.value?.source_id && !!state.status?.sources.find((s) => s.id === item.value!.source_id)?.catalog)
 
 async function toCloud() {
   if (!item.value) return
@@ -192,15 +188,6 @@ async function convert() {
     if (r.item) go({ v: 'item', id: r.item.id })
   } catch (err: any) { store.notify(err?.message || String(err), true) }
   converting.value = false
-}
-async function remove() {
-  if (!item.value) return
-  try {
-    await store.api.removeItem(item.value.id)
-    store.notify(t('Quitado de tu estantería.'))
-    store.refresh()
-    go({ v: 'library' }, true)
-  } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
 
 async function load() {

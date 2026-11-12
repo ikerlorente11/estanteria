@@ -84,7 +84,7 @@ function deviceKeeper(store: Store): Keeper {
       Object.assign(serverGot, got)
     },
     async file(_key, url, name, meta, progress, signal) {
-      const uri = await net.download(url, name, undefined, progress, seriesFolder(meta), signal)
+      const uri = await net.download(url, name, authOf(url), progress, seriesFolder(meta), signal)
       const [item] = await shelf.addFiles([uri])
       toServer(item, meta)
       return item.id

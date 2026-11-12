@@ -40,10 +40,7 @@
           <button class="es-seg-btn" :class="{ on: show === 'installed' }" @click="show = 'installed'">{{ t('Instaladas') }} ({{ installedCount }})</button>
           <button class="es-seg-btn" :class="{ on: show === 'all' }" @click="show = 'all'">{{ t('Todas') }}</button>
         </div>
-        <select class="es-select" :value="lang" :aria-label="t('Idioma')" @change="lang = ($event.target as HTMLSelectElement).value">
-          <option value="">{{ t('Todos los idiomas') }}</option>
-          <option v-for="l in languages" :key="l" :value="l">{{ languageName(l) }}</option>
-        </select>
+        <Pick v-model="lang" :aria-label="t('Idioma')" :options="[{ value: '', label: t('Todos los idiomas') }, ...languages.map((l) => ({ value: l, label: languageName(l) }))]" />
         <span class="es-grow"></span>
         <input v-model="q" class="es-search" type="search" :placeholder="t('Buscar extensión')" :aria-label="t('Buscar')" />
       </div>
@@ -76,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import { computed, onMounted, ref } from 'vue'
 import { languageName } from '../lib/catalogs'
 import { setSuwayomiHidden, suwayomiHidden, suwayomiServer, suwayomiSourcesNow, suwayomiSourcesOf } from '../lib/devicelibraries'

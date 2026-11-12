@@ -71,13 +71,7 @@
       <NumberField :model-value="settings.margin" :label="t('Márgenes')" :unit="t('% a cada lado')" :min="0" :max="25" :step="1" :presets="[0, 4, 8, 12]" @update:model-value="set('margin', $event)" />
       <div class="es-rfield">
         <span>{{ t('Letra') }}</span>
-        <select class="es-rselect" :value="settings.font" @change="set('font', ($event.target as HTMLSelectElement).value)">
-          <option value="publisher">{{ t('La del libro') }}</option>
-          <optgroup v-for="group in FONT_GROUPS" :key="group.kind" :label="t(group.label)">
-            <option v-for="f in group.fonts" :key="f.id" :value="f.id">{{ t(f.label) }}</option>
-          </optgroup>
-          <option value="custom">{{ t('Otra (escríbela)…') }}</option>
-        </select>
+        <Pick button-class="es-rselect" :model-value="settings.font" :aria-label="t('Letra')" :options="fontOptions" @change="set('font', $event)" />
         <input v-if="settings.font === 'custom'" class="es-rtext" :value="settings.customFont" :placeholder="t('Nombre de la fuente instalada, p. ej. Bookerly')"
                @change="set('customFont', ($event.target as HTMLInputElement).value)" />
         <small class="es-muted es-tiny">{{ t('Se usan las fuentes que tenga este dispositivo; si falta una, se toma la más parecida.') }}</small>
@@ -108,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { TURN_EVENT } from '../lib/native'
 import type { Bookmark, ItemDetail } from '../lib/api'
@@ -142,6 +137,11 @@ function handoffGo(p: Progress) {
 
 const THEMES = [{ id: 'light', label: 'Claro' }, { id: 'sepia', label: 'Sepia' }, { id: 'dark', label: 'Oscuro' }] as const
 const ANIMATIONS = [{ id: 'none', label: 'De golpe' }, { id: 'fade', label: 'Fundido' }, { id: 'slide', label: 'Deslizar' }] as const
+const fontOptions = computed(() => [
+  { value: 'publisher', label: t('La del libro') },
+  ...FONT_GROUPS.flatMap((g) => g.fonts.map((f) => ({ value: f.id, label: t(f.label), group: t(g.label) }))),
+  { value: 'custom', label: t('Otra (escríbela)…') },
+])
 const FONT_GROUPS = [
   { kind: 'serif', label: 'Con remates (serif)', fonts: FONTS.filter((f) => f.kind === 'serif') },
   { kind: 'sans', label: 'Sin remates (sans)', fonts: FONTS.filter((f) => f.kind === 'sans') },

@@ -97,9 +97,7 @@
         <p class="es-muted es-small">{{ t('Lo abierto de cbr, cb7 y PDF de este dispositivo se guarda descomprimido para pasar de página al instante. Ocupa {size}; lo más antiguo se borra solo al pasar del máximo.', { size: sizeLabel(store.shelf.state.cacheBytes) }) }}</p>
         <div class="es-cache">
           <span>{{ t('Máximo') }}</span>
-          <select class="es-select" :value="store.shelf.state.cacheLimit" @change="setLimit(Number(($event.target as HTMLSelectElement).value))">
-            <option v-for="b in limits" :key="b" :value="b">{{ Math.round(b / 2 ** 30) }} GB</option>
-          </select>
+          <Pick :model-value="store.shelf.state.cacheLimit" :options="limits.map((b) => ({ value: b, label: `${Math.round(b / 2 ** 30)} GB` }))" @change="setLimit" />
           <button class="es-btn es-small" :disabled="busy" @click="clearCache">{{ t('Vaciar') }}</button>
         </div>
       </div>
@@ -146,6 +144,7 @@
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import ConfirmButton from './ConfirmButton.vue'
 import { clearAllDownloads, downloadsCount } from '../lib/downloads'
 import { computed, onMounted, ref } from 'vue'

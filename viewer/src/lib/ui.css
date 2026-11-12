@@ -130,7 +130,7 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-topbtn:hover { background: var(--es-surface-3); }
 .es-topbtn.on { background: var(--es-accent); color: var(--es-on-accent); }
 .es-topbar + .es-page, .es-topbar ~ * .es-page:first-child { padding-top: 6px; }
-.es-summary { margin: 4px 0 0; max-width: 720px; line-height: 1.55; }
+.es-summary { margin: 4px 0 0; max-width: 720px; line-height: 1.55; overflow-wrap: anywhere; }
 .es-path { word-break: break-all; margin: 0; }
 
 .es-btn { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--es-line); background: transparent; color: inherit; cursor: pointer;
@@ -596,3 +596,22 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-news-old { margin-top: 10px; }
 .es-news-old summary { cursor: pointer; color: var(--es-muted, inherit); font-size: 14px; }
 .es-news-version { margin: 10px 0 0; }
+
+/* a drop-down to choose one (Pick): drawn by the page, not the system's <select> */
+.es-pick { position: relative; display: inline-flex; min-width: 0; }
+.es-pick-field { display: flex; }
+.es-pick-btn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; text-align: left; }
+.es-pick-btn .es-ellipsis { flex: 1; min-width: 0; }
+.es-pick-btn .es-i-chevron { flex: none; opacity: .7; }
+.es-pick-btn:disabled { opacity: .6; cursor: default; }
+.es-pick-btn-field { width: 100%; padding: 8px 11px; border-radius: 9px; border: 1px solid var(--es-line); background: var(--es-surface); color: inherit; font: inherit; font-size: 14px; font-weight: 400; cursor: pointer; }
+.es-pick-btn-field:focus-visible { outline: 2px solid var(--es-accent); outline-offset: 1px; }
+.es-rselect.es-pick-btn { width: 100%; cursor: pointer; }
+.es-pick-menu { position: fixed; z-index: 60; min-width: 0; overflow-y: auto; align-content: start; color: var(--oc-role-on-surface, #1b1b1f); }
+.es-rpanel .es-pick-menu { background: rgba(28,28,32,1); border-color: rgba(255,255,255,.2); color: #eee; }
+.es-pick-group { padding: 8px 10px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--es-muted); }
+.es-pick-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 0; border-radius: 9px; background: transparent; color: inherit; font: inherit; font-size: 14px; font-weight: 400; text-align: left; cursor: pointer; }
+.es-pick-item:hover, .es-pick-item.active { background: var(--es-surface-2); }
+.es-rpanel .es-pick-item:hover, .es-rpanel .es-pick-item.active { background: rgba(255,255,255,.08); }
+.es-pick-item.on { font-weight: 600; color: var(--es-accent); }
+.es-pick-item:disabled { opacity: .5; cursor: default; }

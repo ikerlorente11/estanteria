@@ -45,12 +45,7 @@
       </div>
       <span class="es-grow"></span>
       <label class="es-muted es-small">{{ t('Orden') }}
-        <select class="es-select" :value="sort || 'series'" @change="setSort(($event.target as HTMLSelectElement).value)">
-          <option value="series">{{ t('Serie y número') }}</option>
-          <option value="title">{{ t('Título') }}</option>
-          <option value="added">{{ t('Más recientes') }}</option>
-          <option value="modified">{{ t('Última modificación') }}</option>
-        </select>
+        <Pick :model-value="sort || 'series'" :options="[{ value: 'series', label: t('Serie y número') }, { value: 'title', label: t('Título') }, { value: 'added', label: t('Más recientes') }, { value: 'modified', label: t('Última modificación') }]" @change="setSort" />
       </label>
     </div>
     <!-- where from: the libraries, apart -->
@@ -142,6 +137,7 @@
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import type { Item, Kind } from '../lib/api'
 import { plural, t } from '../lib/i18n'

@@ -4,9 +4,7 @@
       <h1 class="es-h1">{{ t('Descargas') }}</h1>
       <span class="es-grow"></span>
       <label v-if="offline" class="es-muted es-small" :title="t('Ancho al que se guardan las páginas: más, más nitidez en pantallas grandes y más espacio')">{{ t('Calidad') }}
-        <select class="es-select" :value="offline.state.width" @change="offline.setWidth(Number(($event.target as HTMLSelectElement).value))">
-          <option v-for="w in OFFLINE_WIDTHS" :key="w" :value="w">{{ w === 1600 ? t('{w} px (recomendada)', { w }) : `${w} px` }}</option>
-        </select>
+        <Pick :model-value="offline.state.width" :options="OFFLINE_WIDTHS.map((w) => ({ value: w, label: w === 1600 ? t('{w} px (recomendada)', { w }) : `${w} px` }))" @change="offline.setWidth" />
       </label>
     </header>
 
@@ -90,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import Pick from './Pick.vue'
 import ConfirmButton from './ConfirmButton.vue'
 import { cancelCatalogDownloads, catalogItemIds, catalogJobs, jobLabel } from '../lib/catalogdownloads'
 import { clearAllDownloads, downloadsCount } from '../lib/downloads'

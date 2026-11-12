@@ -87,8 +87,8 @@ export type SourceKind = 'komga' | 'kavita' | 'opds' | 'opds2' | 'audiobookshelf
 export interface Source {
   id: number
   kind: SourceKind | CatalogKind
-  /** true: what the user kept from a public catalogue (not a server of their own) */
-  catalog: boolean
+  /** true: what the user kept from a public catalogue (servers before 2026-11; none now) */
+  catalog?: boolean
   label: string
   name: string
   url: string
@@ -112,59 +112,8 @@ export interface SourceKindInfo {
   supports_progress: boolean
 }
 
-/** A public catalogue (Project Gutenberg, the Internet Archive, MangaDex): browsed, never indexed. */
+/** What a server used to keep from a public catalogue (now read by the apps themselves, see catalogs.ts). */
 export type CatalogKind = 'gutenberg' | 'archive' | 'mangadex'
-
-export interface Catalog {
-  kind: CatalogKind
-  label: string
-  description: string
-  home: string
-  /** the source that holds what the user kept from it (null until they keep something) */
-  source_id: number | null
-  items: number
-}
-
-/** Somewhere to go inside a catalogue: a shelf, a search, a series (then it has a cover). */
-export interface CatalogSection {
-  title: string
-  path: string
-  subtitle: string | null
-  /** a cover id for `catalogCoverPath`, or null */
-  cover: string | null
-  summary: string | null
-}
-
-/** Something to keep or read from a catalogue. */
-export interface CatalogEntry {
-  id: string
-  title: string
-  series: string | null
-  number: number | null
-  author: string | null
-  year: number | null
-  summary: string | null
-  format: Format
-  kind: Kind
-  pages: number
-  size: number
-  cover: boolean
-  language: string | null
-  /** the item it already is on the user's shelf, or null */
-  item: number | null
-}
-
-export interface CatalogListing {
-  path: string
-  title: string
-  subtitle: string | null
-  summary: string | null
-  cover: string | null
-  /** the path of the following page, when there is one */
-  next: string | null
-  sections: CatalogSection[]
-  entries: CatalogEntry[]
-}
 
 export interface LibraryStatus {
   connected: boolean
@@ -236,7 +185,7 @@ function emptyAnswer(path: string): unknown {
   if (base === '/api/library') {
     return { connected: false, username: '', scanned: null, scan_error: null, total: 0, pending: 0, errors: 0, folders: [], archivador: { total: 0, pending: 0, errors: 0 }, sources: [] }
   }
-  if (['/api/series', '/api/continue', '/api/recent', '/api/items', '/api/sources', '/api/sources/kinds', '/api/catalogs'].includes(base)) return []
+  if (['/api/series', '/api/continue', '/api/recent', '/api/items', '/api/sources', '/api/sources/kinds'].includes(base)) return []
   return undefined
 }
 
@@ -276,7 +225,7 @@ export interface KeepJob {
 export interface Follow {
   id: number
   catalog: string
-  protocol: 'mangadex' | 'suwayomi'
+  protocol: 'mangadex' | 'suwayomi' | 'opds'
   series_id: string
   address: string
   title: string
@@ -297,7 +246,7 @@ export interface Follow {
 }
 export interface FollowRequest {
   catalog: string
-  protocol: 'mangadex' | 'suwayomi'
+  protocol: 'mangadex' | 'suwayomi' | 'opds'
   series_id: string
   address: string
   title: string
@@ -308,6 +257,8 @@ export interface FollowRequest {
   suwayomi_url?: string
   suwayomi_username?: string
   suwayomi_secret?: string
+  /** an OPDS feed's: the headers its library asks for (its credential) */
+  headers?: Record<string, string>
 }
 
 export class Api {
@@ -536,21 +487,6 @@ export class Api {
   /** the item of each entry kept, by its key in the catalog */
   keptFromCatalogs() { return this.call<Record<string, number>>('/api/keep/got') }
 
-  // ---- public catalogues ----
-  catalogs() { return this.call<Catalog[]>('/api/catalogs') }
-  browseCatalog(kind: string, path = '') { return this.call<CatalogListing>(`/api/catalogs/${kind}?path=${encodeURIComponent(path)}`) }
-  searchCatalog(kind: string, q: string, path = '') {
-    return this.call<CatalogListing>(`/api/catalogs/${kind}/search?q=${encodeURIComponent(q)}&path=${encodeURIComponent(path)}`)
-  }
-  catalogCoverPath(kind: string, coverId: string) { return `/api/catalogs/${kind}/cover/${encodeURIComponent(coverId)}` }
-  /** Keeps an entry on the shelf (it becomes an item) and, with 'archivador', copies its file to the cloud too. */
-  keepEntry(kind: string, id: string, to: 'library' | 'archivador' = 'library') {
-    return this.call<Item & { saved_to?: string }>(`/api/catalogs/${kind}/entries/${encodeURIComponent(id)}/save`, { method: 'POST', body: JSON.stringify({ to }) })
-  }
-  /** Keeps every entry of a listing (a series, a shelf, a search), page after page. */
-  keepListing(kind: string, path: string, q = '') {
-    return this.call<{ saved: number; source_id: number; complete: boolean }>(`/api/catalogs/${kind}/save-all`, { method: 'POST', body: JSON.stringify({ path, q }) })
-  }
   /** Copies an item of an outside library or a catalogue into the reading folder of the cloud. */
   saveItem(id: number) { return this.call<{ path: string }>(`/api/items/${id}/save`, { method: 'POST' }) }
   /** Rebuilds a PDF with text as an EPUB, or lays a book out as a PDF, next to it (the new item comes back already listed). */
@@ -559,5 +495,4 @@ export class Api {
       `/api/items/${id}/convert`, { method: 'POST' })
   }
   /** Takes an entry kept from a catalogue off the shelf. */
-  removeItem(id: number) { return this.call<{ ok: boolean }>(`/api/items/${id}`, { method: 'DELETE' }) }
 }

@@ -1,18 +1,22 @@
-/** The libraries the page itself keeps (a Suwayomi server, and the next kinds that come), next to the ones
+/** The libraries the page itself keeps (a Suwayomi, Komga, Kavita, an OPDS catalog, a WebDAV folder), next to the ones
  * the app keeps (a server of one's own): several at once, each with its address, name and credential. They
  * are kept in this device; their passwords apart, under keys the backup leaves out. */
 import { computed, reactive, type Ref } from 'vue'
 import { Api } from './api.ts'
 import { t } from './i18n.ts'
-import { nameFromUrl, type LibrariesBackend, type Library, type LibraryInput, type LibraryType } from './libraries.ts'
+import { LIBRARY_TYPES, nameFromUrl, type LibrariesBackend, type Library, type LibraryInput, type LibraryType } from './libraries.ts'
 import type { NetBackend } from './net.ts'
-import { setImageAuth } from './netimages.ts'
+import { setImageAuth, setOriginHeaders } from './netimages.ts'
+import { readFeed } from './opds.ts'
+import { davList } from './webdav.ts'
 import { suwayomiCheck, suwayomiSources, type SuwayomiServer, type SuwayomiSource } from './suwayomi.ts'
 import { registerCatalogResolver, type CatalogDef } from './catalogs.ts'
 import { onPrefsReplaced, prefs, SECRET_PREFIX } from './prefs.ts'
 
 /** the kinds the page connects by itself */
-export const DEVICE_LIBRARY_TYPES: LibraryType[] = ['suwayomi']
+export const DEVICE_LIBRARY_TYPES: LibraryType[] = ['suwayomi', 'komga', 'kavita', 'opds', 'webdav']
+/** the kinds read as a catalog (browsed, downloaded and read on this device) */
+export const CATALOG_LIBRARY_TYPES: LibraryType[] = ['komga', 'kavita', 'opds', 'webdav']
 
 /** kept with the person's settings (prefs.ts: this device, or the server for its web); each password apart,
  * under `SECRET_PREFIX` + its id, which a backup leaves out (see appsettings.ts) */
@@ -63,15 +67,33 @@ export function withDeviceLibraries(app: LibrariesBackend | undefined, net: NetB
       }
       const id = input.id || `${input.type}-${Date.now().toString(36)}`
       const secret = input.secret ?? secretOf(id)
-      const url = input.url.replace(/\/+$/, '')
-      const server = { url, auth: input.username || secret ? Api.basic(input.username, secret) : '' }
-      await suwayomiCheck(net, server)            // it answers and lets us in, or the reason why not
-      if (input.secret) prefs.set(SECRET_PREFIX + id, input.secret)
+      // an OPDS or WebDAV address is kept as given (some answer only with their final slash)
+      const url = ['opds', 'webdav'].includes(input.type) ? input.url.trim() : input.url.replace(/\/+$/, '')
       const saved: Saved = { id, type: input.type, name: input.name || nameFromUrl(url), url, username: input.username }
+      if (input.type === 'suwayomi') {
+        const server = { url, auth: input.username || secret ? Api.basic(input.username, secret) : '' }
+        await suwayomiCheck(net, server)            // it answers and lets us in, or the reason why not
+        setImageAuth(url, server.auth)
+      } else {
+        if (input.type === 'kavita' && !secret) throw new Error(t('Kavita necesita tu clave de API.'))
+        const root = rootOf(saved, secret)
+        setOriginHeaders(root, headersOf(saved, secret))
+        try {
+          if (input.type === 'webdav') await davList(net, root)
+          else {
+            const feed = await readFeed(net, root)
+            if (!feed.navigation.length && !feed.entries.length && !feed.search) throw new Error(t('No parece un catálogo OPDS.'))
+          }
+        } catch (err: any) {
+          const known = state.list.find((l) => l.id === id)
+          setOriginHeaders(root, known ? headersOf(known, secretOf(id)) : {})
+          throw new Error(t('No se pudo conectar con {name}: {error}', { name: saved.name, error: err?.message || String(err) }))
+        }
+      }
+      if (input.secret) prefs.set(SECRET_PREFIX + id, input.secret)
       state.list = [...state.list.filter((l) => l.id !== id), saved]
       delete state.errors[id]
       keep()
-      setImageAuth(url, server.auth)
       return { ...saved, hasSecret: !!secret }
     },
     async remove(id: string) {
@@ -82,6 +104,39 @@ export function withDeviceLibraries(app: LibrariesBackend | undefined, net: NetB
     },
   }
 }
+
+// ---- Komga, Kavita, OPDS and WebDAV libraries: each one a catalog of its own ----
+/** where its catalog starts: Komga's OPDS, Kavita's (with the API key in the address), the address as given */
+function rootOf(lib: Saved, secret: string): string {
+  const url = lib.url.replace(/\/+$/, '')
+  if (lib.type === 'komga') return /\/opds\//.test(url) ? url : `${url}/opds/v1.2/catalog`
+  if (lib.type === 'kavita') return /\/api\/opds\//.test(url) ? url : `${url}/api/opds/${encodeURIComponent(secret)}`
+  return lib.url
+}
+/** what its requests carry: basic auth, or Komga's API key (no user), or nothing (Kavita: the key is in the address) */
+function headersOf(lib: Saved, secret: string): Record<string, string> {
+  if (lib.type === 'kavita' || (!lib.username && !secret)) return {}
+  if (lib.type === 'komga' && !lib.username) return { 'X-API-Key': secret }
+  return { Authorization: Api.basic(lib.username, secret) }
+}
+/** The Komga, Kavita, OPDS and WebDAV libraries connected (what «Catálogos» shows as «Tus bibliotecas»). */
+export function catalogLibraries(): Saved[] {
+  return state.list.filter((l) => CATALOG_LIBRARY_TYPES.includes(l.type))
+}
+/** A library as a catalog: its id is `lib:<library>`. Its requests get its credential from here on. */
+export function libraryCatalog(id: string): CatalogDef | undefined {
+  const lib = state.list.find((l) => l.id === id && CATALOG_LIBRARY_TYPES.includes(l.type))
+  if (!lib) return undefined
+  const secret = secretOf(id)
+  const url = rootOf(lib, secret)
+  setOriginHeaders(url, headersOf(lib, secret))
+  return { id: `lib:${id}`, name: lib.name, protocol: lib.type === 'webdav' ? 'webdav' : 'opds', url, library: id,
+           languages: ['multi'], content: lib.type === 'webdav' || lib.type === 'opds' ? ['books', 'comics'] : ['comics', 'manga'],
+           description: t(LIBRARY_TYPES[lib.type].label) }
+}
+registerCatalogResolver((id) => (id.startsWith('lib:') ? libraryCatalog(id.slice(4)) : undefined))
+// their credentials, ready for covers and downloads as soon as the app starts
+for (const l of state.list) if (CATALOG_LIBRARY_TYPES.includes(l.type)) libraryCatalog(l.id)
 
 // ---- the sources of each Suwayomi, as catalogs (kept, so a catalog opens at once and offline lists show) ----
 const SOURCES_KEY = 'estanteria.suwayomi.sources'
@@ -115,6 +170,7 @@ function keepHidden() { prefs.set(HIDDEN_KEY, JSON.stringify(hidden)) }
 onPrefsReplaced(() => {
   state.list = loadList()
   state.errors = {}
+  for (const l of state.list) if (CATALOG_LIBRARY_TYPES.includes(l.type)) libraryCatalog(l.id)
   for (const k of Object.keys(hidden)) delete hidden[k]
   Object.assign(hidden, loadHidden())
 })

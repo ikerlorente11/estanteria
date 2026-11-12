@@ -61,6 +61,8 @@ export interface Bookmark {
   note: string
   created: number
   updated: number | null
+  /** a bookmark of a file of a device (not the server's): the same one on every device (see offline.ts) */
+  uid?: string
 }
 
 export interface ItemDetail extends Item {

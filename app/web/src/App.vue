@@ -173,6 +173,13 @@ let shelf: LocalShelf | null = null
 const catalogs = new CatalogRegistry()
 const net = hostNet()
 
+/** Whose what is kept is: `user@host` of the server connected. */
+function accountOf(): string {
+  let host = connection.url
+  try { host = new URL(connection.url).host } catch (_) { /* as it is */ }
+  return `${connection.username}@${host}`.replace(/[^A-Za-z0-9-]/g, '_')
+}
+
 /** The store with a server (through the host, which adds the credential) or without (this device's shelf answers). */
 function makeStore(server: boolean): Store {
   current = server ? new Api(HOST_BASE, () => `Host ${TOKEN}`) : Api.onDevice()
@@ -187,7 +194,8 @@ function makeStore(server: boolean): Store {
     appearance: { theme, setTheme }, version: version.value && version.value !== '?' ? version.value : undefined, catalogs, net, platform: 'android', native: native || undefined }
   if (hostInfo.offline) {
     const keeper = offline.value || new Offline(hostBackend(hostInfo))
-    keeper.attach(current)
+    // what waits to be sent is this account's (`local` without a server): never sent to another one
+    keeper.attach(current, server ? accountOf() : 'local')
     if (shelf) keeper.shelf = shelf
     offline.value = keeper
     s.offline = keeper

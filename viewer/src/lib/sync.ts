@@ -11,7 +11,7 @@
 import { reactive } from 'vue'
 import type { Api } from './api.ts'
 
-export type SyncKind = 'favorite' | 'progress'
+export type SyncKind = 'favorite' | 'progress' | 'mark'
 
 export interface SyncRecord<T = any> {
   kind: SyncKind
@@ -62,6 +62,16 @@ export function syncRecords<T = any>(kind: SyncKind): SyncRecord<T>[] {
   }
   return [...out.values()].filter((r) => !r.deleted)
 }
+/** Every record of a kind whose key starts so, deleted ones too (to know what was removed elsewhere). */
+export function syncRecordsLike<T = any>(kind: SyncKind, prefix: string): SyncRecord<T>[] {
+  const out = new Map<string, SyncRecord<T>>()
+  for (const book of [state.device, state.account]) {
+    if (!book) continue
+    for (const r of Object.values(book.records)) if (r.kind === kind && r.key.startsWith(prefix)) out.set(r.key, r as SyncRecord<T>)
+  }
+  return [...out.values()]
+}
+
 export function syncGet<T = any>(kind: SyncKind, key: string): T | null {
   const r = state.account?.records[id(kind, key)] || state.device.records[id(kind, key)]
   return r && !r.deleted ? (r.value as T) : null
@@ -145,8 +155,22 @@ async function round(server: Api) {
     if (book.pending.length) {
       const sending = book.pending.slice(0, 2000)
       const sent = new Map(sending.map((k) => [k, book.records[k]?.updated]))
-      await server.syncPush(sending.map((k) => book.records[k]).filter(Boolean))
-      book.pending = book.pending.filter((k) => !sent.has(k) || book.records[k]?.updated !== sent.get(k))
+      const refused = new Set<string>()
+      try {
+        await server.syncPush(sending.map((k) => book.records[k]).filter(Boolean))
+      } catch (err: any) {
+        // the server refuses something (a kind it does not know yet, an older server): one by one, so what it takes
+        // goes, and what it refuses waits for it (the rest is not held back)
+        if (!(err?.status >= 400 && err.status < 500) || err.status === 401) throw err
+        for (const k of sending) {
+          if (!book.records[k]) continue
+          try { await server.syncPush([book.records[k]]) } catch (e: any) {
+            if (e?.status >= 400 && e.status < 500 && e.status !== 401) refused.add(k)
+            else throw e
+          }
+        }
+      }
+      book.pending = book.pending.filter((k) => refused.has(k) || !sent.has(k) || book.records[k]?.updated !== sent.get(k))
     }
     for (let more = true; more;) {
       const got = await server.sync(book.seq)

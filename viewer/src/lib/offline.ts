@@ -10,6 +10,8 @@ import { reactive } from 'vue'
 import type { Api, ApiOffline, Bookmark, Item, ItemDetail, LibraryStatus, Progress, Series } from './api.ts'
 import { isLocal, isLocalSource, type LocalShelf } from './local.ts'
 import { t } from './i18n.ts'
+import { progressKey } from './handoff.ts'
+import { syncPut, syncRecordsLike } from './sync.ts'
 
 export interface OfflineEntry {
   item: ItemDetail
@@ -58,10 +60,37 @@ export interface OfflineBackend {
 
 export const OFFLINE_WIDTHS = [1200, 1600, 2000, 2560]
 const WIDTH_KEY = 'estanteria.offline.width'
-const PENDING_KEY = 'estanteria.offline.pending'
-const KNOWN_KEY = 'estanteria.offline.progress'
-const MARKS_KEY = 'estanteria.offline.marks'
-const KNOWN_MARKS_KEY = 'estanteria.offline.bookmarks'
+// What is kept is of an account (what waits to be sent to its server, what its server last said of the items kept)
+// or of this device (the progress and bookmarks of its own files, whatever the account). Before accounts, all of it
+// was in the LEGACY keys: the first account used takes it.
+const LEGACY = { pending: 'estanteria.offline.pending', known: 'estanteria.offline.progress', marks: 'estanteria.offline.marks',
+                 knownMarks: 'estanteria.offline.bookmarks' }
+const DEVICE_KNOWN_KEY = 'estanteria.offline.device.progress'
+const DEVICE_MARKS_KEY = 'estanteria.offline.device.bookmarks'
+/** the temporary ids of bookmarks go down on this device whatever the account: never two alike */
+const NEXT_KEY = 'estanteria.offline.device.next'
+const accountKey = (account: string, what: string) => `estanteria.offline.account.${account}.${what}`
+
+/** Only the entries of this device's own files (`here`), or only the others. */
+function partOf<T>(map: Record<number, T>, here: boolean): Record<number, T> {
+  return Object.fromEntries(Object.entries(map).filter(([id]) => isLocal(Number(id)) === here)) as Record<number, T>
+}
+
+/** What was kept before accounts, once: this device's part goes to its keys, the rest is answered (and forgotten there). */
+function takeLegacy(): { pending: Record<number, any>; known: Record<number, Progress>; marks: Partial<Marks>; knownMarks: Record<number, Bookmark[]> } | null {
+  const got = { pending: read<any>(LEGACY.pending, null), known: read<any>(LEGACY.known, null), marks: read<any>(LEGACY.marks, null),
+                knownMarks: read<any>(LEGACY.knownMarks, null) }
+  if (!got.pending && !got.known && !got.marks && !got.knownMarks) return null
+  write(DEVICE_KNOWN_KEY, { ...read(DEVICE_KNOWN_KEY, {}), ...partOf(got.known || {}, true) })
+  write(DEVICE_MARKS_KEY, { ...read(DEVICE_MARKS_KEY, {}), ...partOf(got.knownMarks || {}, true) })
+  try { for (const k of Object.values(LEGACY)) localStorage.removeItem(k) } catch (_) { /* nothing kept */ }
+  return { pending: got.pending || {}, known: partOf(got.known || {}, false), marks: got.marks || {}, knownMarks: partOf(got.knownMarks || {}, false) }
+}
+
+/** An id for a bookmark of a file of this device, the same on every device it goes to. */
+function newUid(): string {
+  try { return crypto.randomUUID() } catch (_) { return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` }
+}
 
 function read<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback } catch (_) { return fallback }
@@ -109,10 +138,13 @@ export class Offline implements ApiOffline {
   /** stopped while still asking the service about them, before the backend had them: they do not start */
   private dropped = new Set<number>()
   private flushing = false
-  private pending: Record<number, Pending> = read(PENDING_KEY, {})
-  private known: Record<number, Progress> = read(KNOWN_KEY, {})
-  private marks: Marks = { next: -1, creates: {}, changes: {}, resolved: {}, ...read<Partial<Marks>>(MARKS_KEY, {}) }
-  private knownMarks: Record<number, Bookmark[]> = read(KNOWN_MARKS_KEY, {})
+  // of the account in use (see useAccount) plus this device's own files
+  private pending: Record<number, Pending> = {}
+  private known: Record<number, Progress> = read(DEVICE_KNOWN_KEY, {})
+  private marks: Marks = { next: Math.min(-1, Number(read(NEXT_KEY, -1)) || -1), creates: {}, changes: {}, resolved: {} }
+  private knownMarks: Record<number, Bookmark[]> = read(DEVICE_MARKS_KEY, {})
+  /** whose server it works for: `user@host`, or `local` without one */
+  private account: string | null = null
   private api: Api | null = null
   /** the files of this device (the desktop), shown with the library */
   shelf: LocalShelf | null = null
@@ -124,10 +156,40 @@ export class Offline implements ApiOffline {
     backend.onProgress((p) => this.progressed(p))
   }
 
-  /** The API it works for (to fetch what to download and to send progress made offline). */
-  attach(api: Api): void {
+  /** The API it works for (to fetch what to download and to send progress made offline), and whose it is
+   * (`user@host`; `local` without a server): what waits to be sent is that account's, never another's. */
+  attach(api: Api, account = 'default'): void {
     this.api = api
     api.offline = this
+    if (account !== this.account) this.useAccount(account)
+    else {
+      // this device's own files, as kept now (another keeper of this device, of another account, may have changed them)
+      this.known = { ...partOf(this.known, false), ...read<Record<number, Progress>>(DEVICE_KNOWN_KEY, {}) }
+      this.knownMarks = { ...partOf(this.knownMarks, false), ...read<Record<number, Bookmark[]>>(DEVICE_MARKS_KEY, {}) }
+    }
+  }
+
+  /** What is kept of this account (and this device's own files, always). */
+  private useAccount(account: string): void {
+    const k = (what: string) => accountKey(account, what)
+    let pending = read<Record<number, Pending> | null>(k('pending'), null)
+    let known = read<Record<number, Progress> | null>(k('progress'), null)
+    let marks = read<Partial<Marks> | null>(k('marks'), null)
+    let knownMarks = read<Record<number, Bookmark[]> | null>(k('bookmarks'), null)
+    const legacy = takeLegacy()
+    if (legacy) {
+      pending ??= legacy.pending
+      known ??= legacy.known
+      marks ??= legacy.marks
+      knownMarks ??= legacy.knownMarks
+    }
+    this.account = account
+    this.pending = pending || {}
+    this.known = { ...(known || {}), ...read<Record<number, Progress>>(DEVICE_KNOWN_KEY, {}) }
+    this.knownMarks = { ...(knownMarks || {}), ...read<Record<number, Bookmark[]>>(DEVICE_MARKS_KEY, {}) }
+    const next = Math.min(this.marks.next, marks?.next ?? -1, Number(read(NEXT_KEY, -1)) || -1)
+    this.marks = { creates: {}, changes: {}, resolved: {}, ...(marks || {}), next }
+    if (legacy) { this.save(); this.saveKnownMarks(); this.saveMarks() }
   }
 
   async load(): Promise<void> {
@@ -377,7 +439,7 @@ export class Offline implements ApiOffline {
       const id = Number(m[1])
       const rest = m[2] || ''
       if (!this.shelf?.has(id)) throw Object.assign(refused(t('Ese archivo ya no está en este dispositivo (¿se movió o se borró?).')), { status: 404 })
-      if (!rest && method === 'GET') return this.shelf.detail(id).then((d) => ({ ...this.withProgress(d), bookmarks: this.marksOf(id) }))
+      if (!rest && method === 'GET') return this.shelf.detail(id).then((d) => { this.mergeMarks(id); return { ...this.withProgress(d), bookmarks: this.marksOf(id) } })
       if (rest === '/progress' && method === 'DELETE') {
         delete this.known[id]
         this.save()
@@ -392,20 +454,22 @@ export class Offline implements ApiOffline {
       }
       if (rest === '/bookmarks' && method === 'POST') {
         const made: Bookmark = { id: this.marks.next, kind: b.kind || 'bookmark', page: b.page ?? null, location: b.location ?? null,
-                                 excerpt: b.excerpt || '', note: b.note || '', created: now, updated: null }
+                                 excerpt: b.excerpt || '', note: b.note || '', created: now, updated: null, uid: newUid() }
         this.marks.next -= 1
         this.knownMarks[id] = [...this.marksBase(id), made]
         this.saveMarks()
-        write(KNOWN_MARKS_KEY, this.knownMarks)
+        this.saveKnownMarks()
+        this.publishMark(id, made)
         return made
       }
       const one = rest.match(/^\/bookmarks\/(-?\d+)$/)
       if (one && method === 'PUT') {
         const was = this.marksBase(id).find((x) => x.id === Number(one[1]))
         if (!was) throw refused(t('Esa nota ya no está.'))
-        const changed = { ...was, ...b, updated: now }
+        const changed = { ...was, ...b, updated: now, uid: was.uid || newUid() }
         this.knownMarks[id] = this.marksBase(id).map((x) => (x.id === was.id ? changed : x))
-        write(KNOWN_MARKS_KEY, this.knownMarks)
+        this.saveKnownMarks()
+        this.publishMark(id, changed)
         return changed
       }
       throw refused(t('Esto solo se puede con lo que está en el servidor; este es un archivo de este dispositivo.'))
@@ -415,8 +479,10 @@ export class Offline implements ApiOffline {
       const bid = Number(gone[1])
       const owner = Object.keys(this.knownMarks).map(Number).find((i) => isLocal(i) && this.knownMarks[i].some((x) => x.id === bid))
       if (owner === undefined) return undefined
+      const mark = this.knownMarks[owner].find((x) => x.id === bid)
       this.knownMarks[owner] = this.knownMarks[owner].filter((x) => x.id !== bid)
-      write(KNOWN_MARKS_KEY, this.knownMarks)
+      this.saveKnownMarks()
+      if (mark) this.publishMark(owner, { ...mark, updated: Date.now() / 1000 }, true)
       return { ok: true }
     }
     return undefined
@@ -548,14 +614,14 @@ export class Offline implements ApiOffline {
       const item = data as ItemDetail
       if (item && this.state.entries[item.id] && Array.isArray(item.bookmarks) && !this.hasMarks(item.id)) {
         this.knownMarks[item.id] = item.bookmarks
-        write(KNOWN_MARKS_KEY, this.knownMarks)
+        this.saveKnownMarks()
       }
     } else if (/^\/api\/(items\/\d+\/)?bookmarks(\/\d+)?$/.test(base)) this.seenMark(method, base, data as Bookmark)
     else if (method === 'PUT' && /^\/api\/items\/\d+\/progress$/.test(base)) {
       const id = Number(base.split('/')[3])
       if (this.state.entries[id]) { this.known[id] = data as Progress; changed = true }
     }
-    if (changed) write(KNOWN_KEY, this.known)
+    if (changed) this.saveKnown()
   }
 
   private seenMark(method: string, base: string, data: Bookmark): void {
@@ -575,7 +641,7 @@ export class Offline implements ApiOffline {
         if (list.some((b) => b.id === gone)) { this.knownMarks[key] = list.filter((b) => b.id !== gone); changed = true }
       }
     }
-    if (changed) write(KNOWN_MARKS_KEY, this.knownMarks)
+    if (changed) this.saveKnownMarks()
   }
 
   /** The service answers (`true`) or not; when it comes back, what was read offline is sent. */
@@ -642,12 +708,71 @@ export class Offline implements ApiOffline {
     // temporary ids are only needed while a view may still hold them: keep the newest (the lowest)
     const resolved = Object.entries(this.marks.resolved)
     if (resolved.length > 200) this.marks.resolved = Object.fromEntries(resolved.sort((a, b) => Number(a[0]) - Number(b[0])).slice(0, 200))
-    write(MARKS_KEY, this.marks)
+    if (this.account) write(accountKey(this.account, 'marks'), this.marks)
+    write(NEXT_KEY, this.marks.next)
   }
 
   private save(): void {
-    write(PENDING_KEY, this.pending)
-    write(KNOWN_KEY, this.known)
+    if (this.account) write(accountKey(this.account, 'pending'), this.pending)
+    this.saveKnown()
+  }
+
+  /** this device's own files apart, the account's items apart */
+  private saveKnown(): void {
+    if (this.account) write(accountKey(this.account, 'progress'), partOf(this.known, false))
+    write(DEVICE_KNOWN_KEY, partOf(this.known, true))
+  }
+
+  private saveKnownMarks(): void {
+    if (this.account) write(accountKey(this.account, 'bookmarks'), partOf(this.knownMarks, false))
+    write(DEVICE_MARKS_KEY, partOf(this.knownMarks, true))
+  }
+
+  // ---- the bookmarks of this device's own files, on every device that has the same file (see sync.ts) ----
+  /** what the file is known by on every device (its name and size) */
+  private fileKey(id: number): string | null {
+    const it = this.shelf?.item(id)
+    return it ? progressKey(it) : null
+  }
+
+  /** Tells the other devices of a bookmark of a file of this device (or that it is gone). */
+  private publishMark(id: number, mark: Bookmark, gone = false): void {
+    const key = this.fileKey(id)
+    if (!key || !mark.uid) return
+    syncPut('mark', `${key}|${mark.uid}`, gone ? null : { kind: mark.kind, page: mark.page, location: mark.location, excerpt: mark.excerpt,
+                                                          note: mark.note, created: mark.created, updated: mark.updated })
+  }
+
+  /** The bookmarks of a file of this device joined with what the other devices did with the same file: new ones
+   * come, changed ones change, deleted ones go (the newest change of each wins); ours they have not had yet go out. */
+  private mergeMarks(id: number): void {
+    const key = this.fileKey(id)
+    if (!key) return
+    const prefix = `${key}|`
+    let changed = false
+    const list = this.marksBase(id).map((b) => (b.uid ? b : ((changed = true), { ...b, uid: newUid() })))
+    const records = syncRecordsLike('mark', prefix)
+    for (const r of records) {
+      const uid = r.key.slice(prefix.length)
+      const i = list.findIndex((b) => b.uid === uid)
+      const mine = i >= 0 ? list[i].updated || list[i].created : 0
+      if (r.deleted) {
+        if (i >= 0 && r.updated >= mine) { list.splice(i, 1); changed = true }
+      } else if (i < 0) {
+        list.push({ ...(r.value as Bookmark), id: this.marks.next, uid })
+        this.marks.next -= 1
+        changed = true
+      } else if (r.updated > mine) {
+        list[i] = { ...list[i], ...(r.value as Bookmark), id: list[i].id, uid }
+        changed = true
+      }
+    }
+    if (changed) {
+      this.knownMarks[id] = list
+      this.saveKnownMarks()
+      this.saveMarks()
+    }
+    for (const b of list) if (!records.some((r) => r.key === prefix + b.uid)) this.publishMark(id, b)
   }
 }
 

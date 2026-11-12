@@ -60,6 +60,8 @@ export interface Library {
   hasSecret: boolean
   /** why it does not work now, if it does not */
   error?: string
+  /** it comes with the app and stays (the web of a server: the server itself): it cannot be changed or removed here */
+  fixed?: boolean
 }
 
 export interface LibraryInput {

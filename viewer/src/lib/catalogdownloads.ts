@@ -27,7 +27,10 @@ export interface CatalogJob {
 function read<T>(key: string): T {
   try { return JSON.parse(localStorage.getItem(key) || '{}') } catch (_) { return {} as T }
 }
+/** false on the web of a server: what was kept is the server's (see catalogGotFrom), nothing of it is written here */
+let persist = true
 function write(key: string, value: unknown) {
+  if (!persist) return
   try { localStorage.setItem(key, JSON.stringify(value)) } catch (_) { /* storage off: this session only */ }
 }
 
@@ -121,6 +124,14 @@ export function cancelCatalogDownloads(keys?: string[]): number {
     n++
   }
   return n
+}
+
+/** The web of a server: what was kept is what the server says (its items, by the entries' keys), not this browser. */
+export function catalogGotFrom(server: Record<string, number>): void {
+  persist = false
+  for (const k of Object.keys(catalogGot)) delete catalogGot[k]
+  for (const k of Object.keys(catalogMeta)) delete catalogMeta[Number(k)]
+  Object.assign(catalogGot, server)
 }
 
 /** Forgets what was downloaded (its item is gone from the shelf). */

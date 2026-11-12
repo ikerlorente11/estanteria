@@ -1,5 +1,6 @@
 <template>
   <div ref="root" class="es-reader es-book" :class="[`es-book-${settings.theme}`, { 'es-ui-hidden': !uiShown }]" tabindex="0" @keydown="onKey">
+    <HandoffBanner :offer="handoffOffer" @go="handoffGo" @dismiss="handoff.dismiss()" />
     <header class="es-rtop" :inert="!uiShown">
       <button class="es-rbtn" :title="t('Volver (Esc)')" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
@@ -112,7 +113,10 @@ import { TURN_EVENT } from '../lib/native'
 import type { Bookmark, ItemDetail } from '../lib/api'
 import { openBook } from '../lib/books'
 import { t } from '../lib/i18n'
-import { FONTS, fontStack, loadBookSettings, saveBookSettings, useStore, type BookSettings } from '../lib/store'
+import { deviceName, FONTS, fontStack, loadBookSettings, saveBookSettings, useStore, type BookSettings } from '../lib/store'
+import { recordProgress, useHandoff } from '../lib/handoff'
+import HandoffBanner from './HandoffBanner.vue'
+import type { Progress } from '../lib/api'
 import NotesPanel from './NotesPanel.vue'
 import NumberField from './NumberField.vue'
 
@@ -127,6 +131,14 @@ const props = defineProps<{ item: ItemDetail }>()
 const emit = defineEmits<{ changed: [] }>()
 const store = useStore()
 const { item } = props
+// read on since on another device: offered to go there (see handoff.ts)
+const handoff = useHandoff(store, item.id)
+const handoffOffer = handoff.offer
+function handoffGo(p: Progress) {
+  if (p.location) view.value?.goTo(p.location)
+  else goPercent(p.percent || 0)
+  handoff.saved()
+}
 
 const THEMES = [{ id: 'light', label: 'Claro' }, { id: 'sepia', label: 'Sepia' }, { id: 'dark', label: 'Oscuro' }] as const
 const ANIMATIONS = [{ id: 'none', label: 'De golpe' }, { id: 'fade', label: 'Fundido' }, { id: 'slide', label: 'Deslizar' }] as const
@@ -365,7 +377,10 @@ function save(finished = false) {
   clearTimeout(saveTimer)
   if (!cfi || !ready.value) return
   const done = finished || atEnd || percent.value >= 0.995
-  store.api.setProgress(item.id, { location: cfi, percent: done ? 1 : percent.value, finished: done, device: 'web' }).then(() => emit('changed')).catch(() => {})
+  const update = { location: cfi, percent: done ? 1 : percent.value, finished: done, device: deviceName(store), updated: Date.now() / 1000 }
+  store.api.setProgress(item.id, update).then(() => emit('changed')).catch(() => {})
+  recordProgress(item, update)
+  handoff.saved()
 }
 
 // ---- bookmarks, highlights and notes ----

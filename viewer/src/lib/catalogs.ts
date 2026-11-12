@@ -2,11 +2,12 @@
  * (public domain libraries, open catalogs…). Like Mihon's sources: some come with the app, more come from
  * a repository (an index.json somewhere, with the catalogs it offers: data only, no code), and any OPDS
  * catalog can be added by hand. Several are used at once, and each can be removed at any time. They are
- * kept in this device. */
+ * kept with the person's settings (prefs.ts: this device, or the server for its web). */
 import { reactive } from 'vue'
 import type { Format } from './api.ts'
 import { t } from './i18n.ts'
 import { getJson, type NetBackend } from './net.ts'
+import { onPrefsReplaced, prefs } from './prefs.ts'
 
 /** How the app talks to a catalog: OPDS (1.2 or 2.0, told apart by what it answers) or an API it knows. */
 export type CatalogProtocol = 'opds' | 'mangadex' | 'suwayomi'
@@ -122,7 +123,7 @@ interface Saved { active: CatalogDef[]; repos: CatalogRepo[] }
 
 function load(): Saved {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || 'null')
+    const saved = JSON.parse(prefs.get(KEY) || 'null')
     if (saved && Array.isArray(saved.active)) return { active: saved.active, repos: saved.repos || [] }
   } catch (_) { /* nothing kept */ }
   return { active: [], repos: [] }
@@ -131,8 +132,12 @@ function load(): Saved {
 export class CatalogRegistry {
   readonly state = reactive<Saved>(load())
 
+  constructor() {
+    onPrefsReplaced(() => Object.assign(this.state, load()))
+  }
+
   private save(): void {
-    try { localStorage.setItem(KEY, JSON.stringify({ active: this.state.active, repos: this.state.repos })) } catch (_) { /* private mode */ }
+    prefs.set(KEY, JSON.stringify({ active: this.state.active, repos: this.state.repos }))
   }
 
   get active(): CatalogDef[] { return this.state.active }

@@ -13,6 +13,7 @@
           <button v-if="next" class="es-btn es-primary" @click="store.read(next)">
             <i class="es-i es-i-book-open" aria-hidden="true"></i> {{ next.progress && next.progress.page ? t('Seguir por el nº {number}', { number: next.number ?? '' }) : finished ? t('Leer el nº {number}', { number: next.number ?? '' }) : t('Empezar a leer') }}
           </button>
+          <FavoriteButton :fav="seriesFavorite(name)" />
           <OfflineButton v-if="store.offline && items.length" :items="items" :what="t('la serie')" />
         </div>
       </div>
@@ -32,6 +33,8 @@ import { useStore } from '../lib/store'
 import Cover from './Cover.vue'
 import ItemCard from './ItemCard.vue'
 import OfflineButton from './OfflineButton.vue'
+import FavoriteButton from './FavoriteButton.vue'
+import { seriesFavorite } from '../lib/favorites'
 
 const props = defineProps<{ name: string }>()
 const store = useStore()

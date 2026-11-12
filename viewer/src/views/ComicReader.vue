@@ -1,6 +1,7 @@
 <template>
   <div ref="root" class="es-reader" :class="[`es-bg-${settings.background}`, { 'es-ui-hidden': !uiShown, 'es-strip-mode': settings.mode === 'strip' }]"
        tabindex="0" @keydown="onKey" @touchstart.passive="touchStart" @touchend.passive="touchEnd">
+    <HandoffBanner :offer="handoffOffer" @go="handoffGo" @dismiss="handoff.dismiss()" />
     <header class="es-rtop" :inert="!uiShown">
       <button class="es-rbtn" :title="t('Volver (Esc)')" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
@@ -109,7 +110,10 @@ import type { Bookmark, ItemDetail } from '../lib/api'
 import { plural, t } from '../lib/i18n'
 import { widthFor } from '../lib/images'
 import { spreadOf, spreads, toPrefetch, type Mode } from '../lib/layout'
-import { loadSettings, saveSettings, shortTitle, useStore, type ReaderSettings } from '../lib/store'
+import { deviceName, loadSettings, saveSettings, shortTitle, useStore, type ReaderSettings } from '../lib/store'
+import { recordProgress, useHandoff } from '../lib/handoff'
+import HandoffBanner from './HandoffBanner.vue'
+import type { Progress } from '../lib/api'
 import NotesPanel from './NotesPanel.vue'
 
 /**
@@ -122,6 +126,10 @@ const props = defineProps<{ item: ItemDetail; startPage?: number; source?: (page
 const emit = defineEmits<{ changed: [] }>()
 const store = useStore()
 const { item } = props
+// read on since on another device: offered to go there (see handoff.ts)
+const handoff = useHandoff(store, item.id)
+const handoffOffer = handoff.offer
+function handoffGo(p: Progress) { goPage(p.page ?? 0); handoff.saved() }
 
 const FITS = [{ id: 'best', label: 'Página entera' }, { id: 'width', label: 'Ancho' }, { id: 'height', label: 'Alto' }, { id: 'original', label: 'Tamaño real' }] as const
 const BACKGROUNDS = [{ id: 'black', label: 'Negro' }, { id: 'dark', label: 'Gris' }, { id: 'white', label: 'Blanco' }] as const
@@ -388,7 +396,10 @@ function save(finished = false) {
   if (done) finishedSaved = true
   if (last === lastSaved && !done) return
   lastSaved = last
-  store.api.setProgress(item.id, { page: last, percent: (last + 1) / item.pages, finished: done, device: 'web' }).then(() => emit('changed')).catch(() => {})
+  const update = { page: last, percent: (last + 1) / item.pages, finished: done, device: deviceName(store), updated: Date.now() / 1000 }
+  store.api.setProgress(item.id, update).then(() => emit('changed')).catch(() => {})
+  recordProgress(item, update)
+  handoff.saved()
 }
 watch(page, () => {
   clearTimeout(saveTimer)

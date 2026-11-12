@@ -4,6 +4,7 @@ import type { Api, Item, LibraryStatus, Series, Source } from './api.ts'
 import { t } from './i18n.ts'
 import type { ImageCache } from './images.ts'
 import type { CatalogRegistry } from './catalogs.ts'
+import type { Keeper } from './keeper.ts'
 import type { LibrariesBackend } from './libraries.ts'
 import type { NativeFeatures } from './native.ts'
 import type { NetBackend } from './net.ts'
@@ -60,6 +61,14 @@ export interface Store {
   /** The network as the app sees it (no CORS) and the catalogs it reads by itself: the desktop and Android. */
   net?: NetBackend
   catalogs?: CatalogRegistry
+  /** Where what comes from catalogs is kept, when it is not this device's shelf (the web: the server's reading
+   * folder); an app with a shelf and a network has its own (see keeperOf). */
+  keeper?: Keeper
+}
+
+/** How this device signs what is read on it («móvil», «escritorio», «web»), so another one can say where. */
+export function deviceName(store: { platform?: Store['platform'] }): string {
+  return store.platform === 'android' ? 'móvil' : store.platform === 'desktop' ? 'escritorio' : 'web'
 }
 
 /** The app's light or dark look: the system's, or one chosen. */

@@ -5,8 +5,8 @@
       <p>{{ error }}</p>
       <button class="es-btn" @click="store.back()">{{ t('Volver') }}</button>
     </div>
-    <PdfReader v-else-if="item && item.kind === 'pdf' && asDoc" :item="item" :start-page="startPage" @changed="changed" />
-    <ComicReader v-else-if="item && item.kind !== 'book'" :item="item" :start-page="startPage" :source="djvu ? (p, w) => djvu!.image(p, w) : undefined" @changed="changed" />
+    <PdfReader v-else-if="item && item.kind === 'pdf' && asDoc" :item="item" :start-page="sharedStart ?? startPage" @changed="changed" />
+    <ComicReader v-else-if="item && item.kind !== 'book'" :item="item" :start-page="sharedStart ?? startPage" :source="djvu ? (p, w) => djvu!.image(p, w) : undefined" @changed="changed" />
     <BookReader v-else-if="item && BOOK_FORMATS.includes(item.format)" :item="item" @changed="changed" />
     <div v-else-if="item" class="es-reader-loading">
       <p><strong>{{ item.title }}</strong></p>
@@ -23,6 +23,8 @@ import { BOOK_FORMATS } from '../lib/books'
 import type { DjvuBook } from '../lib/djvu'
 import { t } from '../lib/i18n'
 import { loadSettings, useStore } from '../lib/store'
+import { newestProgress, sharedProgress } from '../lib/handoff'
+import { useSync } from '../lib/favorites'
 import ComicReader from './ComicReader.vue'
 import BookReader from './BookReader.vue'
 
@@ -33,6 +35,7 @@ const PdfReader = defineAsyncComponent(() => import('./PdfReader.vue'))
 const props = defineProps<{ id: number; startPage?: number; as?: 'doc' | 'pages' }>()
 /** a PDF: as a document (pdf.js), or its pages as images in the comic reader; the reader's setting unless asked */
 const store = useStore()
+useSync(store)
 const item = ref<ItemDetail | null>(null)
 // never for a PDF without text (a comic, a scan): the service says
 // a DjVu is always pages: pdf.js cannot read it
@@ -40,6 +43,8 @@ const asDoc = computed(() => item.value?.format === 'pdf' && item.value?.meta?.t
 const loading = ref(true)
 const djvu = shallowRef<DjvuBook | null>(null)
 const error = ref('')
+/** where another device read up to, when it read later than the server says */
+const sharedStart = ref<number | undefined>(undefined)
 
 async function load() {
   try {
@@ -53,6 +58,14 @@ async function load() {
       item.value = { ...got, pages: djvu.value.pages, page_sizes: djvu.value.sizes }
     }
     else item.value = got
+    // read later somewhere else (a copy of this file on another device): from there
+    if (item.value) {
+      const shared = sharedProgress(item.value)
+      if (shared && newestProgress(item.value.progress, shared) === shared && !shared.finished) {
+        item.value = { ...item.value, progress: { ...shared } }
+        if (item.value.kind !== 'book' && shared.page !== null) sharedStart.value = shared.page
+      }
+    }
   } catch (err: any) { error.value = err?.message || String(err) }
   loading.value = false
 }

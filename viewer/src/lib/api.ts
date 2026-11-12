@@ -198,7 +198,10 @@ export interface ProgressUpdate {
   location?: string | null
   percent?: number
   finished?: boolean
+  /** this device's name («móvil», «escritorio», «web»): where it was read */
   device?: string
+  /** when it was read, on this device's clock (seconds since 1970): what was read later wins, on any device */
+  updated?: number
 }
 
 /** What an app that keeps items for reading offline plugs into the API (see offline.ts). */
@@ -250,6 +253,59 @@ function unreachable(cause?: unknown): Error {
   err.status = 0
   err.cause = cause
   return err
+}
+
+/** Something the service is fetching into the reading folder for the web (see keeper.ts). */
+export interface KeepJob {
+  id: string
+  key: string
+  title: string
+  unit: 'bytes' | 'pages'
+  done: number
+  total: number
+  state: 'waiting' | 'running' | 'done' | 'error' | 'cancelled'
+  error: string
+  /** the item it became, once done */
+  item: number | null
+  path: string | null
+}
+
+/** A series of a catalog followed: the server fetches its new chapters by itself (see follows.ts). */
+export interface Follow {
+  id: number
+  catalog: string
+  protocol: 'mangadex' | 'suwayomi'
+  series_id: string
+  address: string
+  title: string
+  folder: string
+  language: string
+  cover: string | null
+  enabled: boolean
+  created: number
+  checked: number | null
+  check_error: string | null
+  next_check: number
+  /** in the catalog (one per number), of them in the reading folder, and fetched since last looked */
+  chapters: number
+  kept: number
+  new: number
+  /** fetching now: how far */
+  going: { done: number; total: number; percent: number } | null
+}
+export interface FollowRequest {
+  catalog: string
+  protocol: 'mangadex' | 'suwayomi'
+  series_id: string
+  address: string
+  title: string
+  folder: string
+  language?: string
+  web?: string
+  cover?: string | null
+  suwayomi_url?: string
+  suwayomi_username?: string
+  suwayomi_secret?: string
 }
 
 export class Api {
@@ -433,6 +489,50 @@ export class Api {
   }
   deleteSource(id: number) { return this.call<{ ok: boolean }>(`/api/sources/${id}`, { method: 'DELETE' }) }
   scanSource(id: number) { return this.call<{ files: number; new: number; changed: number; removed: number }>(`/api/sources/${id}/scan`, { method: 'POST' }) }
+
+  // ---- the person's settings kept in the server (the web: its libraries and catalogs, see prefs.ts) ----
+  prefs() { return this.call<Record<string, string>>('/api/prefs') }
+  savePrefs(change: { set: Record<string, string>; remove: string[] }) {
+    return this.call<{ ok: boolean }>('/api/prefs', { method: 'PUT', body: JSON.stringify(change) })
+  }
+  /** A request to another server made by the service for the page (the web has no network of its own without
+   * CORS): the answer as the service tells it (`X-Net-Status`, `X-Net-Url`), see `serverNet`. */
+  netFetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }, signal?: AbortSignal): Promise<Response> {
+    return fetch(`${this.baseUrl}/api/net`, {
+      method: 'POST', signal,
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ url, method: init?.method || 'GET', headers: init?.headers || {}, body: init?.body ?? null }),
+    })
+  }
+
+  // ---- series followed: their new chapters come by themselves ----
+  follows() { return this.call<Follow[]>('/api/follows') }
+  follow(req: FollowRequest) { return this.call<Follow>('/api/follows', { method: 'POST', body: JSON.stringify(req) }) }
+  changeFollow(id: number, change: { enabled?: boolean; seen?: boolean }) {
+    return this.call<Follow>(`/api/follows/${id}`, { method: 'PATCH', body: JSON.stringify(change) })
+  }
+  checkFollow(id: number) { return this.call<Follow>(`/api/follows/${id}/check`, { method: 'POST' }) }
+  unfollow(id: number) { return this.call<{ ok: boolean }>(`/api/follows/${id}`, { method: 'DELETE' }) }
+
+  // ---- what every device of the person shares (see sync.ts) ----
+  sync(since: number) {
+    return this.call<{ user: string; seq: number; more: boolean; changes: (import('./sync.ts').SyncRecord & { seq: number })[] }>(`/api/sync?since=${since}`)
+  }
+  syncPush(changes: import('./sync.ts').SyncRecord[]) {
+    return this.call<{ kept: number; seq: number }>('/api/sync', { method: 'POST', body: JSON.stringify({ changes }) })
+  }
+
+  // ---- what the web keeps from the catalogs it reads by itself: fetched by the service into the reading folder ----
+  keepFile(req: { key: string; url: string; headers?: Record<string, string>; folder: string; name: string; title?: string }) {
+    return this.call<KeepJob>('/api/keep/file', { method: 'POST', body: JSON.stringify(req) })
+  }
+  keepChapter(req: { key: string; pages: { url: string; headers?: Record<string, string> }[]; comic_info: string; folder: string; name: string; title?: string }) {
+    return this.call<KeepJob>('/api/keep/chapter', { method: 'POST', body: JSON.stringify(req) })
+  }
+  keepJob(id: string) { return this.call<KeepJob>(`/api/keep/jobs/${encodeURIComponent(id)}`) }
+  cancelKeepJob(id: string) { return this.call<{ ok: boolean }>(`/api/keep/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
+  /** the item of each entry kept, by its key in the catalog */
+  keptFromCatalogs() { return this.call<Record<string, number>>('/api/keep/got') }
 
   // ---- public catalogues ----
   catalogs() { return this.call<Catalog[]>('/api/catalogs') }

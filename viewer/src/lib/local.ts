@@ -7,7 +7,7 @@
  * Their items' ids start at LOCAL_BASE (the service's count from 1); each folder is a library
  * whose source id is below 0 (−its id), so the library's filters and folder browsing work as for
  * the Archivador. Files added on their own make the library «Archivos sueltos» (root 1). */
-import { catalogMeta } from './catalogdownloads.ts'
+import { catalogMeta, type CatalogMeta } from './catalogdownloads.ts'
 import { reactive } from 'vue'
 import type { Item, ItemDetail, ItemQuery, Series, Source } from './api.ts'
 import { appSettings } from './appsettings.ts'
@@ -120,6 +120,20 @@ export function guess(file: Pick<LocalFile, 'folder' | 'name'>): { title: string
   // a chapter's number before any other («Vol. 15 · Cap. 114» is 114), then the first number
   const m = rest.match(/\b(?:cap(?:[ií]tulo)?|ch(?:apter)?)\.?\s*(\d+(?:[.,]\d+)?)/i) || rest.match(/(?<![\d.])(\d+(?:[.,]\d+)?)/)
   return { title, series, number: m ? Number(m[1].replace(',', '.')) : null }
+}
+
+/** Where in the server's reading folder something of a catalog goes, like the rest there: `Manga`, `Comics` or
+ * `Libros` (spelled as the server has it, when it has one), then its series (its title without the number, if
+ * it has none), the series spelled as the server already has it too. `existing`: the server's folders. */
+export function catalogFolder(meta: CatalogMeta, existing: string[] = []): string {
+  const place: Place = meta.kind === 'manga' ? 'manga' : meta.kind === 'book' ? 'book' : 'comic'
+  const tops = [...new Set(existing.map((p) => p.split('/')[0]).filter(Boolean))]
+  const top = tops.find((t) => placeOf(t) === place) || SHELF_FOLDERS[place]
+  const clean = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const series = clean(meta.series || seriesOfTitle(meta.title))
+  if (!series) return top
+  const there = existing.find((p) => p.toLowerCase() === `${top}/${series}`.toLowerCase())
+  return there ? `${top}/${there.split('/')[1]}` : `${top}/${series}`
 }
 
 /** The root a file shows under: its own; one downloaded from a catalog, «Descargas». */

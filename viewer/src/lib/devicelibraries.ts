@@ -9,22 +9,24 @@ import type { NetBackend } from './net.ts'
 import { setImageAuth } from './netimages.ts'
 import { suwayomiCheck, suwayomiSources, type SuwayomiServer, type SuwayomiSource } from './suwayomi.ts'
 import { registerCatalogResolver, type CatalogDef } from './catalogs.ts'
+import { onPrefsReplaced, prefs, SECRET_PREFIX } from './prefs.ts'
 
 /** the kinds the page connects by itself */
 export const DEVICE_LIBRARY_TYPES: LibraryType[] = ['suwayomi']
 
+/** kept with the person's settings (prefs.ts: this device, or the server for its web); each password apart,
+ * under `SECRET_PREFIX` + its id, which a backup leaves out (see appsettings.ts) */
 const KEY = 'estanteria.libraries'
-/** where a library's password is kept: never in a backup (see appsettings.ts) */
-export const SECRET_PREFIX = 'estanteria.secret.'
 
 interface Saved { id: string; type: LibraryType; name: string; url: string; username: string }
 
 const state = reactive<{ list: Saved[]; errors: Record<string, string> }>({
-  list: (() => { try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch (_) { return [] } })(),
+  list: loadList(),
   errors: {},
 })
-function keep() { try { localStorage.setItem(KEY, JSON.stringify(state.list)) } catch (_) { /* private mode */ } }
-function secretOf(id: string): string { try { return localStorage.getItem(SECRET_PREFIX + id) || '' } catch (_) { return '' } }
+function loadList(): Saved[] { try { return JSON.parse(prefs.get(KEY) || '[]') } catch (_) { return [] } }
+function keep() { prefs.set(KEY, JSON.stringify(state.list)) }
+function secretOf(id: string): string { return prefs.get(SECRET_PREFIX + id) || '' }
 
 /** A Suwayomi library as the API calls want it (its address and credential); its images get the credential too. */
 export function suwayomiServer(id: string): SuwayomiServer | null {
@@ -34,6 +36,12 @@ export function suwayomiServer(id: string): SuwayomiServer | null {
   const auth = lib.username || secret ? Api.basic(lib.username, secret) : ''
   setImageAuth(lib.url, auth)
   return { url: lib.url, auth }
+}
+
+/** A Suwayomi library's address and credential as they are (to hand them to the server, which follows a series of it). */
+export function suwayomiCredentials(id: string): { url: string; username: string; secret: string } | null {
+  const lib = state.list.find((l) => l.id === id && l.type === 'suwayomi')
+  return lib ? { url: lib.url, username: lib.username, secret: secretOf(id) } : null
 }
 
 /** The Suwayomi libraries connected (what «Catálogos» shows the sources of). */
@@ -58,7 +66,7 @@ export function withDeviceLibraries(app: LibrariesBackend | undefined, net: NetB
       const url = input.url.replace(/\/+$/, '')
       const server = { url, auth: input.username || secret ? Api.basic(input.username, secret) : '' }
       await suwayomiCheck(net, server)            // it answers and lets us in, or the reason why not
-      try { if (input.secret) localStorage.setItem(SECRET_PREFIX + id, input.secret) } catch (_) { /* private mode */ }
+      if (input.secret) prefs.set(SECRET_PREFIX + id, input.secret)
       const saved: Saved = { id, type: input.type, name: input.name || nameFromUrl(url), url, username: input.username }
       state.list = [...state.list.filter((l) => l.id !== id), saved]
       delete state.errors[id]
@@ -69,7 +77,7 @@ export function withDeviceLibraries(app: LibrariesBackend | undefined, net: NetB
     async remove(id: string) {
       if (!state.list.some((l) => l.id === id)) return app?.remove(id)
       state.list = state.list.filter((l) => l.id !== id)
-      try { localStorage.removeItem(SECRET_PREFIX + id) } catch (_) { /* nothing kept */ }
+      prefs.remove(SECRET_PREFIX + id)
       keep()
     },
   }
@@ -99,8 +107,17 @@ export function suwayomiSourcesNow(id: string): SuwayomiSource[] { return source
 
 // ---- the sources one does not want in Catálogos (a language of no interest, say), by library: on this device ----
 const HIDDEN_KEY = 'estanteria.suwayomi.hidden'
-const hidden = reactive<Record<string, string[]>>((() => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '{}') } catch (_) { return {} } })())
-function keepHidden() { try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden)) } catch (_) { /* this session only */ } }
+function loadHidden(): Record<string, string[]> { try { return JSON.parse(prefs.get(HIDDEN_KEY) || '{}') } catch (_) { return {} } }
+const hidden = reactive<Record<string, string[]>>(loadHidden())
+function keepHidden() { prefs.set(HIDDEN_KEY, JSON.stringify(hidden)) }
+
+// the settings moved (the web of a server: they come from it): what was read from them, read again
+onPrefsReplaced(() => {
+  state.list = loadList()
+  state.errors = {}
+  for (const k of Object.keys(hidden)) delete hidden[k]
+  Object.assign(hidden, loadHidden())
+})
 
 export function suwayomiHidden(library: string, source: string): boolean { return !!hidden[library]?.includes(source) }
 export function setSuwayomiHidden(library: string, sources: string[], hide: boolean): void {

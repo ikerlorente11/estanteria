@@ -14,6 +14,9 @@
             <template v-if="item.author">{{ item.author }} · </template>{{ kindLabel(item) }}<template v-if="item.year"> · {{ item.year }}</template>
             <template v-if="item.pages && item.kind !== 'book'"> · {{ plural(item.pages, '{n} página', '{n} páginas') }}</template> · {{ sizeLabel(item.size) }}
           </p>
+          <p v-if="item.progress?.device && item.progress.updated && item.progress.percent > 0" class="es-muted es-small">
+            {{ t('Leído por última vez {where}, {ago}', { where: deviceWhere(item.progress.device), ago: timeAgo(item.progress.updated) }) }}
+          </p>
           <p v-if="item.summary" class="es-summary">{{ item.summary }}</p>
           <p v-if="item.state === 'error'" class="es-banner es-banner-error">{{ t('No se pudo abrir: {error}', { error: item.error ?? '' }) }}</p>
           <div class="es-hero-actions">
@@ -35,6 +38,7 @@
               <span v-if="converting" class="es-spin"></span><i v-else class="es-i es-i-book" aria-hidden="true"></i>
               {{ converting ? t('Convirtiendo…') : t('Convertir a {format}', { format: convertTo }) }}
             </button>
+            <FavoriteButton :fav="itemFavorite(item)" />
             <FileButton :item="item" :local="local" :uploaded="uploadedAlready" @upload="local ? startUpload() : toCloud()" @reveal="reveal" @removed="backToList" />
             <button v-if="fromCatalog" class="es-btn" :title="t('Quitar de tu estantería (sigue en el catálogo)')" @click="remove">
               <i class="es-i es-i-delete" aria-hidden="true"></i> {{ t('Quitar') }}
@@ -89,9 +93,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { ItemDetail } from '../lib/api'
 import { plural, t } from '../lib/i18n'
 import { isLocal } from '../lib/local'
-import { kindLabel, loadSettings, serverLabel, sizeLabel, sourceName, useStore } from '../lib/store'
+import { deviceName, kindLabel, loadSettings, serverLabel, sizeLabel, sourceName, useStore } from '../lib/store'
 import Cover from './Cover.vue'
 import FileButton from './FileButton.vue'
+import FavoriteButton from './FavoriteButton.vue'
+import { deviceWhere } from '../lib/handoff'
+import { timeAgo } from '../lib/follows'
+import { itemFavorite } from '../lib/favorites'
 import { alreadyOnServer } from '../lib/uploads'
 
 const props = defineProps<{ id: number }>()
@@ -203,7 +211,8 @@ async function load() {
 async function mark(finished: boolean) {
   if (!item.value) return
   try {
-    if (finished) await store.api.setProgress(item.value.id, { page: item.value.kind === 'book' ? null : Math.max(0, item.value.pages - 1), percent: 1, finished: true })
+    if (finished) await store.api.setProgress(item.value.id, { page: item.value.kind === 'book' ? null : Math.max(0, item.value.pages - 1), percent: 1, finished: true,
+                                                               device: deviceName(store), updated: Date.now() / 1000 })
     else await store.api.clearProgress(item.value.id)
     await load()
     store.refresh()

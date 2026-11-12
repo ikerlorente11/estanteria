@@ -5,6 +5,10 @@
       <span v-if="busy" class="es-spin"></span><i v-else class="es-i es-i-download" aria-hidden="true"></i>
       {{ label }}
     </button>
+    <!-- the web (no copies on a device): something of an outside library or a catalog, copied to the server -->
+    <button v-if="!have && !offline && canUpload && !uploaded" class="es-btn" :title="t('Para tenerlo en tu servidor')" @click="emit('upload')">
+      <i class="es-i es-i-cloud" aria-hidden="true"></i> {{ t('Subir a {server}', { server: serverLabel(store) }) }}
+    </button>
     <!-- on this device: what to do with it -->
     <button v-else class="es-btn es-btn-done" aria-haspopup="menu" :aria-expanded="open" :disabled="!!working" @click="toggle">
       <span v-if="working" class="es-spin"></span><i v-else class="es-i" :class="local ? 'es-i-page' : 'es-i-check'" aria-hidden="true"></i>

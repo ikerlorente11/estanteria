@@ -57,8 +57,10 @@
         <span class="es-source-actions">
           <a v-if="l.type === 'server' && state.server" href="#" class="es-btn es-small" @click.prevent="go({ v: 'library', source: 'archivador' })">{{ t('Ver') }}</a>
           <a v-if="l.type === 'suwayomi'" href="#" class="es-btn es-small" @click.prevent="go({ v: 'extensions', library: l.id })">{{ t('Extensiones') }}</a>
-          <button class="es-btn es-small" :title="t('Cambiar')" @click="startEditLibrary(l)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
-          <button class="es-btn es-small" :title="t('Quitar')" :disabled="saving" @click="removeLibrary(l)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
+          <template v-if="!l.fixed">
+            <button class="es-btn es-small" :title="t('Cambiar')" @click="startEditLibrary(l)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
+            <button class="es-btn es-small" :title="t('Quitar')" :disabled="saving" @click="removeLibrary(l)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
+          </template>
         </span>
       </li>
       <li v-if="!store.libraries.list.value.length" class="es-source es-muted">{{ t('Ninguna todavía: añade una con «Añadir biblioteca».') }}</li>
@@ -106,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { useSync } from '../lib/favorites'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { Source, SourceKind, SourceKindInfo } from '../lib/api'
 import { plural, t } from '../lib/i18n'
@@ -118,6 +121,8 @@ import { serverLabel, useStore } from '../lib/store'
 /** `add`: open with the form to add a library (the «+» menu) */
 const props = defineProps<{ add?: boolean }>()
 const store = useStore()
+// what is shared with the other devices, kept in step from the first page (see sync.ts)
+useSync(store)
 const { state, go } = store
 const kinds = ref<SourceKindInfo[]>([])
 const sources = ref<Source[]>([])

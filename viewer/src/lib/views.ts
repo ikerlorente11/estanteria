@@ -9,6 +9,8 @@ export type View =
   | { v: 'sources'; add?: boolean }
   | { v: 'catalogs' }
   | { v: 'downloads' }
+  /** what was marked with the star */
+  | { v: 'favorites' }
   | { v: 'catalog'; kind: string; path?: string; q?: string }
   /** a chapter of a catalog read page by page, without downloading it */
   | { v: 'chapter'; catalog: string; chapter: string; title?: string }
@@ -19,7 +21,7 @@ export type View =
 export function viewFromQuery(query: Record<string, unknown>): View {
   const v = String(query.v || 'home')
   const id = Number(query.id)
-  if (v === 'catalogs' || v === 'downloads') return { v }
+  if (v === 'catalogs' || v === 'downloads' || v === 'favorites') return { v }
   if (v === 'catalog' && query.kind) {
     const view: View = { v, kind: String(query.kind) }
     if (query.path) view.path = String(query.path)

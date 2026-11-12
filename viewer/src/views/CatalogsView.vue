@@ -71,10 +71,15 @@
       <!-- the sources of each Suwayomi library: its installed extensions, every one a catalog -->
       <template v-for="s in suwayomis" :key="s.id">
         <header class="es-page-head es-subhead">
-          <h2 class="es-h2">{{ t('Fuentes de {name}', { name: s.name }) }}</h2>
+          <button class="es-collapse" :aria-expanded="!isCollapsed(`suwayomi:${s.id}`)" @click="toggleCollapsed(`suwayomi:${s.id}`)">
+            <i class="es-i es-i-chevron" :class="{ 'es-collapse-closed': isCollapsed(`suwayomi:${s.id}`) }" aria-hidden="true"></i>
+            <h2 class="es-h2">{{ t('Fuentes de {name}', { name: s.name }) }}</h2>
+            <span class="es-chip-count">{{ sourcesShown(s.id).length }}</span>
+          </button>
           <span class="es-grow"></span>
           <button class="es-btn es-small" @click="go({ v: 'extensions', library: s.id })"><i class="es-i es-i-add" aria-hidden="true"></i> {{ t('Extensiones') }}</button>
         </header>
+        <template v-if="!isCollapsed(`suwayomi:${s.id}`)">
         <p v-if="suwayomiHiddenCount(s.id)" class="es-muted es-small">
           {{ plural(suwayomiHiddenCount(s.id), '{n} fuente oculta (un idioma que no te interesa…).', '{n} fuentes ocultas (idiomas que no te interesan…).') }}
           <a href="#" @click.prevent="go({ v: 'extensions', library: s.id })">{{ t('Elegir cuáles se ven') }}</a>
@@ -92,6 +97,7 @@
         </div>
         <p v-else-if="sourceErrors[s.id]" class="es-banner es-banner-error">{{ sourceErrors[s.id] }}</p>
         <p v-else class="es-muted">{{ t('Ninguna fuente todavía: instala extensiones.') }}</p>
+        </template>
       </template>
 
       <div v-if="!reg.active.length && !suwayomis.length && !adding" class="es-empty es-home-empty">
@@ -118,6 +124,8 @@
           </li>
         </ul>
       </template>
+      <!-- the series followed: their new chapters come by themselves (with a server of one's own) -->
+      <FollowsList />
     </template>
 
     <!-- the web of a server: the server's catalogs -->
@@ -140,19 +148,25 @@
 </template>
 
 <script setup lang="ts">
+import { useSync } from '../lib/favorites'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { Catalog } from '../lib/api'
 import { CONTENT_NAMES, INCLUDED_CATALOGS, LANGUAGE_NAMES, languageName, type CatalogDef } from '../lib/catalogs'
 import { plural, t } from '../lib/i18n'
 import { browserNet } from '../lib/net'
+import { prefs } from '../lib/prefs'
 import { netImageNow } from '../lib/netimages'
 import MultiPick from './MultiPick.vue'
+import FollowsList from './FollowsList.vue'
+import { isCollapsed, toggleCollapsed } from '../lib/collapse'
 import { suwayomiHiddenCount, suwayomiLibraries, suwayomiSourcesOf, suwayomiVisibleSources } from '../lib/devicelibraries'
 import { serverLabel, useStore } from '../lib/store'
 
 /** The catalogs: in an app, the ones it reads by itself (add, filter by language, remove; repositories);
  * on the web of a server, that server's catalogs. */
 const store = useStore()
+// what is shared with the other devices, kept in step from the first page (see sync.ts)
+useSync(store)
 const { state, go } = store
 const reg = store.catalogs || null
 
@@ -165,10 +179,10 @@ const repoUrl = ref('')
 const opds = reactive({ url: '', name: '', language: 'es' })
 /** the languages to choose from (one «in many languages» shows with any), by their names */
 const langOptions = computed(() => languages.value.filter((l) => l !== 'multi').map((l) => ({ value: l, label: languageName(l) })).sort((a, b) => a.label.localeCompare(b.label)))
-/** the languages chosen to see (none: all), kept on this device */
+/** the languages chosen to see (none: all), kept with the person's settings */
 const LANGS_KEY = 'estanteria.catalogs.langs'
-const langs = ref<string[]>((() => { try { return JSON.parse(localStorage.getItem(LANGS_KEY) || '[]') } catch (_) { return [] } })())
-watch(langs, (v) => { try { localStorage.setItem(LANGS_KEY, JSON.stringify(v)) } catch (_) { /* this session only */ } })
+const langs = ref<string[]>((() => { try { return JSON.parse(prefs.get(LANGS_KEY) || '[]') } catch (_) { return [] } })())
+watch(langs, (v) => prefs.set(LANGS_KEY, JSON.stringify(v)))
 /** a catalog «in many languages» shows with any choice */
 const seen = (l: string) => !langs.value.length || l === 'all' || l === 'multi' || langs.value.includes(l)
 const allDefs = computed(() => [...INCLUDED_CATALOGS, ...(reg?.repos.flatMap((r) => r.catalogs) || [])])

@@ -5,7 +5,7 @@
       <p>{{ error }}</p>
       <button class="es-btn" @click="store.back()">{{ t('Volver') }}</button>
     </div>
-    <ComicReader v-else-if="item" :item="item" :source="source" @changed="() => {}" />
+    <ComicReader v-else-if="item" :item="item" :start-page="item.progress?.finished ? 0 : item.progress?.page ?? 0" :source="source" @changed="() => {}" />
   </div>
 </template>
 
@@ -18,11 +18,14 @@ import { browserNet } from '../lib/net'
 import { netImage } from '../lib/netimages'
 import { useStore } from '../lib/store'
 import ComicReader from './ComicReader.vue'
+import { sharedProgress } from '../lib/handoff'
+import { useSync } from '../lib/favorites'
 
 /** A chapter of a catalog read online, page by page, in the comic reader (nothing is downloaded): its
  * pages come from the catalog's servers through the app's network. */
 const props = defineProps<{ catalog: string; chapter: string; title?: string }>()
 const store = useStore()
+useSync(store)
 const net = store.net || browserNet
 const item = shallowRef<ItemDetail | null>(null)
 const loading = ref(true)
@@ -48,9 +51,11 @@ onMounted(async () => {
     urls = await chapterPages(net, def, props.chapter)
     const now = Math.round(Date.now() / 1000)
     item.value = {
-      id: idOf(`${props.catalog}:${props.chapter}`), source_id: null, path: '', folder: '', name: props.title || t('Capítulo'), format: 'cbz', kind: 'comic',
+      // its path is its key: what was read of it goes to the other devices (see handoff.ts)
+      id: idOf(`${props.catalog}:${props.chapter}`), source_id: null, path: `chapter:${props.catalog}:${props.chapter}`, folder: '', name: props.title || t('Capítulo'), format: 'cbz', kind: 'comic',
       size: 0, modified: now, title: props.title || t('Capítulo'), series: null, number: null, author: null, year: null, summary: null,
-      pages: urls.length, direction: 'ltr', cover: false, state: 'ready', error: null, added: now, updated: now, meta: {}, progress: null,
+      pages: urls.length, direction: 'ltr', cover: false, state: 'ready', error: null, added: now, updated: now, meta: {},
+      progress: sharedProgress({ path: `chapter:${props.catalog}:${props.chapter}` }),
       page_sizes: [], bookmarks: [],
     }
   } catch (err: any) {

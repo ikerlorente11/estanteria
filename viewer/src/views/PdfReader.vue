@@ -1,5 +1,6 @@
 <template>
   <div ref="root" class="es-reader es-pdf-reader" :class="`es-bg-${settings.background}`" tabindex="0" @keydown="onKey">
+    <HandoffBanner :offer="handoffOffer" @go="handoffGo" @dismiss="handoff.dismiss()" />
     <header class="es-rtop">
       <button class="es-rbtn" :title="t('Volver (Esc)')" @click="leave"><i class="es-i es-i-back" aria-hidden="true"></i></button>
       <div class="es-rtitle">
@@ -39,7 +40,10 @@ import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import type { ItemDetail } from '../lib/api'
 import { t } from '../lib/i18n'
-import { loadSettings, saveSettings, shortTitle, useStore } from '../lib/store'
+import { deviceName, loadSettings, saveSettings, shortTitle, useStore } from '../lib/store'
+import { recordProgress, useHandoff } from '../lib/handoff'
+import HandoffBanner from './HandoffBanner.vue'
+import type { Progress } from '../lib/api'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -50,6 +54,10 @@ const props = defineProps<{ item: ItemDetail; startPage?: number }>()
 const emit = defineEmits<{ changed: [] }>()
 const store = useStore()
 const item = props.item
+// read on since on another device: offered to go there (see handoff.ts)
+const handoff = useHandoff(store, item.id)
+const handoffOffer = handoff.offer
+function handoffGo(p: Progress) { goTo(p.page ?? 0); handoff.saved() }
 const settings = reactive(loadSettings())
 const root = ref<HTMLElement>()
 const stage = ref<HTMLElement>()
@@ -167,7 +175,10 @@ function queueSave() {
 function save() {
   if (!total.value) return
   const finished = page.value >= total.value - 1
-  store.api.setProgress(item.id, { page: page.value, percent: (page.value + 1) / total.value, finished, device: 'web' }).then(() => emit('changed')).catch(() => {})
+  const update = { page: page.value, percent: (page.value + 1) / total.value, finished, device: deviceName(store), updated: Date.now() / 1000 }
+  store.api.setProgress(item.id, update).then(() => emit('changed')).catch(() => {})
+  recordProgress(item, update)
+  handoff.saved()
 }
 
 function leave() {

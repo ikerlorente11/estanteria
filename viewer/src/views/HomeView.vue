@@ -54,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import { useSync } from '../lib/favorites'
 import PullRefresh from './PullRefresh.vue'
 import { lookForNew } from '../lib/refresh'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -65,6 +66,8 @@ import ItemCard from './ItemCard.vue'
 import AddButton from './AddButton.vue'
 
 const store = useStore()
+// what is shared with the other devices, kept in step from the first page (see sync.ts)
+useSync(store)
 const { state, go } = store
 const going = ref<Item[]>([])
 const recent = ref<Item[]>([])

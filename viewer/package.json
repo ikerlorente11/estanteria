@@ -15,7 +15,7 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --experimental-strip-types test/layout.test.ts && node --experimental-strip-types test/views.test.ts && node --experimental-strip-types test/offline.test.ts && node --experimental-strip-types test/books.test.ts && node --experimental-strip-types test/ondevice.test.ts && node --experimental-strip-types test/catalogs.test.ts && node --experimental-strip-types test/zipstore.test.ts"
+    "test": "node --experimental-strip-types test/layout.test.ts && node --experimental-strip-types test/views.test.ts && node --experimental-strip-types test/offline.test.ts && node --experimental-strip-types test/books.test.ts && node --experimental-strip-types test/ondevice.test.ts && node --experimental-strip-types test/catalogs.test.ts && node --experimental-strip-types test/zipstore.test.ts && node --experimental-strip-types test/sync.test.ts"
   },
   "dependencies": {
     "pdfjs-dist": "4.10.38"

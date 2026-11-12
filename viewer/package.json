@@ -15,7 +15,7 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --experimental-strip-types test/layout.test.ts && node --experimental-strip-types test/views.test.ts && node --experimental-strip-types test/offline.test.ts && node --experimental-strip-types test/books.test.ts && node --experimental-strip-types test/ondevice.test.ts && node --experimental-strip-types test/catalogs.test.ts && node --experimental-strip-types test/zipstore.test.ts && node --experimental-strip-types test/sync.test.ts && node --experimental-strip-types test/accounts.test.ts"
+    "test": "node --experimental-strip-types --import ./test/setup.ts test/layout.test.ts && node --experimental-strip-types --import ./test/setup.ts test/views.test.ts && node --experimental-strip-types --import ./test/setup.ts test/offline.test.ts && node --experimental-strip-types --import ./test/setup.ts test/books.test.ts && node --experimental-strip-types --import ./test/setup.ts test/ondevice.test.ts && node --experimental-strip-types --import ./test/setup.ts test/catalogs.test.ts && node --experimental-strip-types --import ./test/setup.ts test/zipstore.test.ts && node --experimental-strip-types --import ./test/setup.ts test/sync.test.ts && node --experimental-strip-types --import ./test/setup.ts test/accounts.test.ts"
   },
   "dependencies": {
     "pdfjs-dist": "4.10.38"

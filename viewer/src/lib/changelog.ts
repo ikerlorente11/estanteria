@@ -16,6 +16,22 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.4.0',
+      date: '2026-11-12',
+      notes: [
+        { es: 'Favoritos: marca con la estrella series, archivos y series de los catálogos, y tenlos juntos en «Favoritos»; con tu servidor, en todos tus dispositivos.',
+          en: 'Favourites: star series, files and catalog series and find them together in «Favoritos»; with your server, on all your devices.' },
+        { es: '«Mantenerme al día» en una serie de MangaDex o Suwayomi: tu servidor descarga cada capítulo nuevo según sale, y lo que el catálogo retire se queda en tu nube.',
+          en: '«Keep me up to date» on a MangaDex or Suwayomi series: your server downloads each new chapter as it comes out, and what the catalog takes down stays in your cloud.' },
+        { es: 'Con tu servidor conectado, lo que descargas de un catálogo se queda en el dispositivo y además se guarda en tu nube; lo que bajó el servidor sale marcado.',
+          en: 'With your server connected, what you download from a catalog stays on the device and is also saved to your cloud; what the server fetched shows as downloaded.' },
+        { es: 'Sigue donde ibas en otro dispositivo: «Ibas por la página 45 en el móvil · Ir allí»; gana siempre lo último que leíste, aunque un dispositivo estuviera sin conexión.',
+          en: 'Pick up where you were on another device: «You were on page 45 on the phone · Go there»; what you read last always wins, even if a device was offline.' },
+        { es: 'Tus bibliotecas Suwayomi y catálogos son los mismos en todos tus dispositivos, y el progreso de archivos sueltos y capítulos leídos en línea también viaja.',
+          en: 'Your Suwayomi libraries and catalogs are the same on all your devices, and the progress of loose files and chapters read online travels too.' },
+      ],
+    },
+    {
       version: '0.3.0',
       date: '2026-11-12',
       notes: [
@@ -53,6 +69,22 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.5.0',
+      date: '2026-11-12',
+      notes: [
+        { es: 'Favoritos: marca con la estrella series, archivos y series de los catálogos, y tenlos juntos en «Favoritos»; con tu servidor, en todos tus dispositivos.',
+          en: 'Favourites: star series, files and catalog series and find them together in «Favoritos»; with your server, on all your devices.' },
+        { es: '«Mantenerme al día» en una serie de MangaDex o Suwayomi: tu servidor descarga cada capítulo nuevo según sale, y lo que el catálogo retire se queda en tu nube.',
+          en: '«Keep me up to date» on a MangaDex or Suwayomi series: your server downloads each new chapter as it comes out, and what the catalog takes down stays in your cloud.' },
+        { es: 'Con tu servidor conectado, lo que descargas de un catálogo se queda en el PC y además se guarda en tu nube; lo que bajó el servidor sale marcado.',
+          en: 'With your server connected, what you download from a catalog stays on the device and is also saved to your cloud; what the server fetched shows as downloaded.' },
+        { es: 'Sigue donde ibas en otro dispositivo: «Ibas por la página 45 en el móvil · Ir allí»; gana siempre lo último que leíste, aunque un dispositivo estuviera sin conexión.',
+          en: 'Pick up where you were on another device: «You were on page 45 on the phone · Go there»; what you read last always wins, even if a device was offline.' },
+        { es: 'Tus bibliotecas Suwayomi y catálogos son los mismos en todos tus dispositivos, y el progreso de archivos sueltos y capítulos leídos en línea también viaja.',
+          en: 'Your Suwayomi libraries and catalogs are the same on all your devices, and the progress of loose files and chapters read online travels too.' },
+      ],
+    },
     {
       version: '0.4.0',
       date: '2026-11-12',

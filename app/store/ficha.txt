@@ -1,0 +1,95 @@
+FICHA DE GOOGLE PLAY · La Estantería (com.ikerlorente11.estanteria)
+Idioma: español (es-ES). Los números entre paréntesis son caracteres usados / límite de Play.
+
+========================================================================
+DESCRIPCIÓN BREVE (75/80)
+========================================================================
+Lector de cómics, manga y libros: tus archivos, sin conexión y sin cuentas.
+
+========================================================================
+DESCRIPCIÓN COMPLETA (2679/4000)
+========================================================================
+La Estantería es un lector para tus cómics, manga y libros. Elige las carpetas del móvil o la tableta donde los guardas y aparecen ordenados por series, con sus portadas, listos para leer. Sin cuentas ni registro: tus archivos se leen en el propio dispositivo, también sin conexión.
+
+FORMATOS
+• Cómics y manga: CBZ, CBR (también RAR5), CB7, CBT y ZIP, con imágenes JPEG, PNG, WebP, AVIF o JPEG XL.
+• Libros: EPUB (también de maquetación fija), MOBI, AZW3, PRC, FB2, FBZ y TXT.
+• Documentos: PDF (como documento o página a página) y DjVu.
+
+LECTOR DE CÓMICS Y MANGA
+• Una página, dos páginas o tira vertical continua.
+• Sentido manga, de derecha a izquierda, y la portada sola en el modo de dos páginas.
+• Ajuste al ancho, al alto o a la pantalla, fondo negro, oscuro o blanco, y transición al pasar página.
+
+LECTOR DE LIBROS
+• Elige letra, tamaño, interlineado y márgenes; tema claro, sepia u oscuro; por páginas o con desplazamiento.
+• Índice, marcadores, notas y subrayados.
+• Convierte un PDF con texto a EPUB para leerlo con tu letra.
+
+TU ESTANTERÍA
+• Las carpetas que elijas, con sus subcarpetas, se ordenan por series y números.
+• Inicio con lo que estás leyendo, lo último que has añadido y tus series.
+• Favoritos: marca con la estrella series y archivos y tenlos a mano.
+• Sigue donde lo dejaste, en cada archivo.
+• Abre archivos sueltos desde cualquier otra app con «Abrir con».
+• Desliza hacia abajo para buscar archivos nuevos.
+• Pasa página con las teclas de volumen y mantén la pantalla encendida mientras lees.
+
+CATÁLOGOS PÚBLICOS (opcional)
+• Descubre y descarga libros de dominio público de Project Gutenberg, textos.info, unglue.it e Internet Archive, o añade cualquier catálogo OPDS.
+• Lo que descargas se guarda en tu estantería, cada serie en su carpeta, para leerlo sin conexión.
+
+TUS BIBLIOTECAS (opcional)
+• Conecta tus propios servidores Komga o Kavita, catálogos OPDS y carpetas WebDAV con su dirección y tus credenciales; navega por ellos y descarga lo que quieras leer.
+• Descargas solo con wifi si lo prefieres, y un límite para la caché de páginas.
+
+PRIVACIDAD
+• Sin cuentas, sin anuncios y sin analíticas. La app no recoge datos: tu progreso, tus notas y tus ajustes se guardan en el dispositivo.
+• Solo se conecta a internet cuando tú lo pides, a los catálogos y bibliotecas que añades.
+• Bloqueo opcional con la huella, la cara o el PIN del dispositivo.
+• Copia de seguridad de tus ajustes, progreso y notas en un archivo.
+
+Disponible en español e inglés, con tema claro y oscuro, en móvil y tableta, en vertical y en horizontal.
+
+La Estantería no incluye cómics ni libros: lee los archivos que ya tienes y los que descargas de catálogos públicos.
+
+========================================================================
+NOTAS DE LA VERSIÓN (máx. 500 cada una; de la más nueva a la más antigua)
+========================================================================
+
+--- Próxima versión (para la siguiente subida a Play) · 402/500 ---
+• Bibliotecas Komga, Kavita, OPDS y WebDAV: navégalas en Catálogos y descarga lo que quieras leer.
+• Nuevo catálogo: Internet Archive, con cómics clásicos y libros de dominio público.
+• Favoritos: marca con la estrella series y archivos y tenlos juntos.
+• Tus marcadores, notas y subrayados, en todos tus dispositivos con el mismo archivo.
+• Desplegables más cómodos en la tableta y otras correcciones.
+
+--- 0.4.3 (actualización automática) · 151/500 ---
+Corrección: con un servidor conectado, las fuentes de tus bibliotecas Suwayomi vuelven a aparecer en Catálogos aunque las bibliotecas tarden en cargar.
+
+--- 0.4.2 (actualización automática) · 310/500 ---
+• Conecta bibliotecas Komga, Kavita, catálogos OPDS y carpetas WebDAV: se navegan en Catálogos y lo que abres se descarga para leerlo.
+• Internet Archive, nuevo catálogo: cómics clásicos y libros de dominio público.
+• Los desplegables se abren junto a su campo (en la tableta salían en lo alto de la pantalla).
+
+--- 0.4.1 (actualización automática) · 156/500 ---
+• Tus marcadores, notas y subrayados llegan a tus otros dispositivos que tengan el mismo archivo.
+• Correcciones al leer sin conexión con más de una cuenta.
+
+--- 0.4.0 (actualización automática) · 294/500 ---
+• Favoritos: marca con la estrella series, archivos y series de los catálogos y tenlos juntos.
+• Sigue donde ibas en otro dispositivo: «Ibas por la página 45 en el móvil · Ir allí».
+• Con un servidor conectado: sigue series para recibir cada capítulo nuevo y guarda en tu nube lo que descargas.
+
+--- 0.3.0 (Google Play) · 182/500 ---
+• Descargas para leer sin conexión mucho más rápidas: el cómic o el PDF baja entero y varias descargas van a la vez.
+• Cancelar detiene al momento una descarga o una subida en curso.
+
+--- 0.2.1 (actualización automática) · 259/500 ---
+• Lector: las barras se muestran o esconden tocando el centro; en los libros, los márgenes también pasan página.
+• Catálogos: elige varios idiomas a la vez.
+• Descargas: botón «Cancelar» a la vista y «Parar todo».
+• Ajustes muestra la versión y sus novedades.
+
+--- 0.2.0 (Google Play) · 240/500 ---
+Primera versión: lector de cómics, manga y libros de tu dispositivo (CBZ, CBR, CB7, PDF, EPUB, MOBI, FB2, DjVu…), con catálogos públicos y bibliotecas opcionales. Pantalla de inicio clara u oscura y sentido de lectura como ajuste para todo.

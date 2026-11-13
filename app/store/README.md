@@ -6,54 +6,22 @@ Lo que pide Play Console para publicar La Estantería (paquete `com.ikerlorente1
 
 | Archivo | Para qué |
 | --- | --- |
-| `icono-512.png` | Icono de la aplicación (512 × 512) |
-| `grafico-destacado-1024x500.png` | Gráfico destacado |
-| `captura-1.png` … `captura-4.png` | Capturas de teléfono (1080 × 1920) |
+| `icono-512.png` | Icono de la aplicación: 512 × 512, PNG sin transparencia (Play aplica su máscara) |
+| `grafico-destacado-1024x500.png` | Gráfico destacado: 1024 × 500, PNG de 24 bits |
+| `capturas-movil/01…08-*.png` | Capturas de teléfono: 1080 × 1920 (9:16), en el orden en que se suben |
+| `capturas-tablet/01…08-*.png` | Capturas de tablet de 7" y 10": 2560 × 1440 (16:9, la tablet en horizontal) |
 
-Se rehacen con `make_icon.py` (el icono de la app, el adaptativo, el splash y el de 512) y `make_store.py`
-(gráfico destacado y capturas enmarcadas a partir de capturas de la app), con Pillow:
-`python make_icon.py <salida-iconos> <salida-play>` y luego `python make_store.py <salida-play>`
-(este último espera las capturas en bruto en `shots/` junto al script).
+`make_icon.py` hace el icono de la app, el adaptativo y el splash. `make_store.py` (común a todas las apps, con
+Pillow y Segoe UI) rehace `icono-512.png`, el gráfico destacado y las capturas enmarcadas a partir de
+`icono-fuente.png`, las capturas en bruto de `crudas/movil` y `crudas/tablet` (emuladores Pixel 7 y Pixel Tablet,
+Android 15, con el contenido de muestra de `seed`: series inventadas y clásicos de dominio público) y
+`store.json` (colores, lema y titular de cada captura): `python make_store.py`.
 
 ## Textos
 
+Descripción breve, descripción completa y notas de cada versión, listas para pegar: **`ficha.txt`**.
+
 **Nombre:** La Estantería
-
-**Descripción breve** (80 caracteres como mucho):
-
-> Lector de cómics, manga y libros: tus archivos, sin conexión y sin cuentas.
-
-**Descripción completa:**
-
-> La Estantería es un lector para tus cómics, manga y libros. Elige las carpetas del móvil donde los guardas y aparecen ordenados por series, con sus portadas, listos para leer. Sin cuentas, sin anuncios y sin conexión: tus archivos se leen en el propio dispositivo.
->
-> FORMATOS
-> • Cómics y manga: CBZ, CBR (también RAR5), CB7, CBT y ZIP, con imágenes JPEG, PNG, WebP, AVIF o JPEG XL.
-> • Libros: EPUB (también de maquetación fija), MOBI, AZW3, PRC, FB2, FBZ y TXT.
-> • Documentos: PDF (como documento o página a página) y DjVu.
->
-> LECTURA
-> • Lector de cómics con página simple, doble página, tira vertical y modo manga (de derecha a izquierda).
-> • Lector de libros con tipografía, tamaño, márgenes y paginado o desplazamiento a tu gusto; los ajustes se comparten entre formatos.
-> • Marcadores, notas y subrayados.
-> • Pasa página con las teclas de volumen y mantén la pantalla encendida mientras lees.
->
-> TU ESTANTERÍA
-> • Las carpetas del dispositivo, con sus subcarpetas, como series.
-> • Abre archivos sueltos desde cualquier otra app.
-> • Sigue leyendo donde lo dejaste.
-> • Guarda una copia donde quieras, compártela o bórrala.
-> • Desliza hacia abajo para buscar lo nuevo.
->
-> CATÁLOGOS Y BIBLIOTECAS (opcional)
-> • Añade catálogos públicos (como Project Gutenberg o cualquier catálogo OPDS) y descarga lo que quieras leer; las series se descargan enteras, cada una en su carpeta.
-> • Conecta tus propios servidores con su dirección y tus credenciales, y sube a ellos tus archivos o carpetas enteras.
->
-> PRIVACIDAD
-> • Sin cuentas ni registro. La app no recoge datos: tu progreso y tus notas se guardan en el dispositivo.
-> • Bloqueo opcional con la huella, la cara o el PIN del dispositivo.
->
-> Disponible en español e inglés, con tema claro y oscuro.
 
 **Categoría:** Libros y obras de consulta (Books & Reference). **Etiquetas:** lector de cómics, lector de libros electrónicos.
 

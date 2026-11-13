@@ -1,17 +1,55 @@
 {
   "name": "La Estantería",
-  "bg_top": "#342822", "bg_bottom": "#141114", "accent": "#e8913a",
-  "text": "#faf4ec", "subtext": "#decebe",
-  "icon": {"src": "icono-fuente.png", "bg": "#261e1b"},
-  "feature": {"shot": "01-inicio.jpg", "name_size": 66, "tagline": ["Cómics, manga y libros,", "en tu móvil y sin conexión"]},
+  "bg_top": "#342822",
+  "bg_bottom": "#141114",
+  "accent": "#e8913a",
+  "text": "#faf4ec",
+  "subtext": "#decebe",
+  "icon": {
+    "src": "icono-fuente.png",
+    "bg": "#261e1b"
+  },
+  "feature": {
+    "shot": "01-inicio.jpg",
+    "name_size": 66,
+    "tagline": [
+      "Cómics, manga y libros,",
+      "en tu móvil y sin conexión"
+    ]
+  },
   "shots": [
-    {"file": "01-inicio.jpg", "caption": "Tus cómics, manga y libros, juntos"},
-    {"file": "02-doble.jpg", "caption": "Lee a una página, a dos o en tira"},
-    {"file": "03-serie.jpg", "caption": "Cada serie en su estante, en orden"},
-    {"file": "04-libro.jpg", "caption": "Libros con tu letra, tamaño y tema"},
-    {"file": "05-manga.jpg", "caption": "Manga de derecha a izquierda"},
-    {"file": "06-catalogo.jpg", "caption": "Clásicos libres, a un toque"},
-    {"file": "07-estanteria.jpg", "caption": "Elige tus carpetas y listo"},
-    {"file": "08-ajustes.jpg", "caption": "Sin cuentas, sin anuncios, sin rastreo"}
+    {
+      "file": "01-inicio.jpg",
+      "caption": "Tus cómics, manga y libros, juntos"
+    },
+    {
+      "file": "02-doble.jpg",
+      "caption": "Lee a una página, a dos o en tira",
+      "caption_movil": "Cómics y manga a pantalla completa"
+    },
+    {
+      "file": "03-serie.jpg",
+      "caption": "Cada serie en su estante, en orden"
+    },
+    {
+      "file": "04-libro.jpg",
+      "caption": "Libros con tu letra, tamaño y tema"
+    },
+    {
+      "file": "05-manga.jpg",
+      "caption": "Manga de derecha a izquierda"
+    },
+    {
+      "file": "06-catalogo.jpg",
+      "caption": "Miles de clásicos libres, a un toque"
+    },
+    {
+      "file": "07-estanteria.jpg",
+      "caption": "Elige tus carpetas y listo"
+    },
+    {
+      "file": "08-ajustes.jpg",
+      "caption": "Sin cuentas, sin anuncios, sin rastreo"
+    }
   ]
 }

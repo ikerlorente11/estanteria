@@ -14,7 +14,9 @@ Lo que pide Play Console para publicar La Estantería (paquete `com.ikerlorente1
 `make_icon.py` hace el icono de la app, el adaptativo y el splash. `make_store.py` (común a todas las apps, con
 Pillow y Segoe UI) rehace `icono-512.png`, el gráfico destacado y las capturas enmarcadas a partir de
 `icono-fuente.png`, las capturas en bruto de `crudas/movil` y `crudas/tablet` (emuladores Pixel 7 y Pixel Tablet,
-Android 15, con el contenido de muestra de `seed`: series inventadas y clásicos de dominio público) y
+Android 15, con contenido de dominio público: Little Nemo de Winsor McCay (1905-1911), Planet Comics
+(1941 y 1953) y Pirates Comics (1950) de Internet Archive, Hokusai Manga (1814) y clásicos en EPUB de
+Standard Ebooks (Don Quixote, Alice in Wonderland, Frankenstein, Dracula, Moby-Dick, Treasure Island)) y
 `store.json` (colores, lema y titular de cada captura): `python make_store.py`.
 
 ## Textos

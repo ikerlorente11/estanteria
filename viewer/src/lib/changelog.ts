@@ -16,6 +16,14 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.4.3',
+      date: '2026-11-13',
+      notes: [
+        { es: 'Con tu servidor conectado, las fuentes de tus bibliotecas Suwayomi ya salen en Catálogos aunque las bibliotecas lleguen del servidor después de abrir la página (salían 0).',
+          en: 'With your server connected, the sources of your Suwayomi libraries now show in Catalogs even when the libraries arrive from the server after the page opens (they showed 0).' },
+      ],
+    },
+    {
       version: '0.4.2',
       date: '2026-11-12',
       notes: [

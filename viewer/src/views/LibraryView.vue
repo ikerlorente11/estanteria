@@ -100,7 +100,7 @@
 
       <!-- at the top of «Todas»: the libraries of this PC, each like a folder -->
       <section v-if="pcLibraries.length" class="es-section">
-        <h2 class="es-h2">{{ t('En este PC') }}</h2>
+        <h2 class="es-h2">{{ store.platform === 'desktop' ? t('En este PC') : t('En este dispositivo') }}</h2>
         <div class="es-grid">
           <a v-for="f in pcLibraries" :key="f.path" href="#" class="es-series-card es-folder" :title="f.name" @click.prevent="setSource(f.path)">
             <Cover :id="f.coverItem || 0" :has="!!f.coverItem && f.coverHas" icon="es-i-computer" />

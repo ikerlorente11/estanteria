@@ -16,6 +16,14 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.4.4',
+      date: '2026-11-13',
+      notes: [
+        { es: 'En Estantería → Todas, las carpetas del móvil salen bajo «En este dispositivo» (ponía «En este PC»).',
+          en: 'In Shelf → All, the phone’s folders now show under “On this device” (it said “On this PC”).' },
+      ],
+    },
+    {
       version: '0.4.3',
       date: '2026-11-13',
       notes: [

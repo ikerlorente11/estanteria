@@ -64,6 +64,7 @@ export const EN_LIBRARY: Record<string, string> = {
   '{n} carpetas': '{n} folders',
   'Más': 'More',
   'En este PC': 'On this PC',
+  'En este dispositivo': 'On this device',
   'Este PC': 'This PC',
   '{n} archivo': '{n} file',
   '{n} archivos': '{n} files',

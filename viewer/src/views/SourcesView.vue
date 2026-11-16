@@ -3,10 +3,32 @@
     <header class="es-page-head">
       <h1 class="es-h1">{{ t('Bibliotecas') }}</h1>
       <span class="es-grow"></span>
-      <button v-if="!adding && (store.libraries || state.server)" class="es-btn es-primary" @click="startAdd"><i class="es-i es-i-add" aria-hidden="true"></i> {{ t('Añadir biblioteca') }}</button>
+      <button v-if="!adding && !joining && canJoin" class="es-btn" @click="startJoin"><i class="es-i es-i-share" aria-hidden="true"></i> {{ t('Unirse con una invitación') }}</button>
+      <button v-if="!adding && !joining && (store.libraries || state.server)" class="es-btn es-primary" @click="startAdd"><i class="es-i es-i-add" aria-hidden="true"></i> {{ t('Añadir biblioteca') }}</button>
     </header>
     <p v-if="store.libraries" class="es-muted">{{ t('Tus servidores (un servidor propio, Komga, Kavita…): conéctate con su dirección y tus credenciales y lo que tienen aparece en tu estantería. Puedes tener varios a la vez.') }}</p>
     <p v-else-if="state.server" class="es-muted">{{ t('{server} lee la carpeta «{folder}» de tu nube. Añade bibliotecas de otros (un Komga, un Kavita, un catálogo OPDS, una carpeta WebDAV) y sus cómics y libros aparecen junto a los tuyos, con el progreso guardado allí cuando el servidor lo permite.', { server: serverLabel(store), folder: store.readingRoot }) }}</p>
+
+    <!-- an app: a friend's invitation to the catalog of their server -->
+    <form v-if="joining" class="es-form" @submit.prevent="join">
+      <p class="es-muted es-small">{{ t('Si alguien te ha invitado a su catálogo, pega aquí el enlace de la invitación. Lo que descargues se queda en este dispositivo.') }}</p>
+      <label>{{ t('Enlace de la invitación') }} <input v-model="invitation" type="url" required autocomplete="off" autocapitalize="none" placeholder="https://…/invitacion/ABCD-EFGH-JKLM" /></label>
+      <div class="es-form-actions">
+        <button class="es-btn es-primary" type="submit" :disabled="saving"><span v-if="saving" class="es-spin"></span> {{ t('Unirse') }}</button>
+        <button class="es-btn" type="button" @click="joining = false">{{ t('Cancelar') }}</button>
+      </div>
+    </form>
+
+    <!-- a link just made (another device of a guest, or a new guest): to copy or share -->
+    <div v-if="link" class="es-form es-guest-link">
+      <p>{{ link.text }}</p>
+      <input :value="link.url" readonly @focus="($event.target as HTMLInputElement).select()" />
+      <p class="es-muted es-small">{{ link.note }}</p>
+      <div class="es-form-actions">
+        <button class="es-btn es-primary" type="button" @click="copyLink"><i class="es-i es-i-share" aria-hidden="true"></i> {{ canShare ? t('Compartir') : t('Copiar') }}</button>
+        <button class="es-btn" type="button" @click="link = null">{{ t('Hecho') }}</button>
+      </div>
+    </div>
 
     <!-- an app: a library it connects by itself -->
     <form v-if="adding && store.libraries" class="es-form" @submit.prevent="saveLibrary">
@@ -45,8 +67,8 @@
       <li v-for="l in store.libraries.list.value" :key="l.id" class="es-source">
         <span class="es-source-icon"><i class="es-i" :class="l.type === 'server' ? 'es-i-cloud' : 'es-i-server'" aria-hidden="true"></i></span>
         <span class="es-source-text">
-          <strong>{{ l.name }} <small class="es-muted">{{ t(LIBRARY_TYPES[l.type].label) }}</small></strong>
-          <small class="es-muted es-ellipsis">{{ l.url }}<template v-if="l.username"> · {{ l.username }}</template></small>
+          <strong>{{ l.name }} <small class="es-muted">{{ isGuestLibrary(l) ? t('Invitación') : t(LIBRARY_TYPES[l.type].label) }}</small></strong>
+          <small class="es-muted es-ellipsis">{{ isGuestLibrary(l) ? guestServer(l) : l.url }}<template v-if="l.username"> · {{ l.username }}</template></small>
           <small v-if="l.error" class="es-source-bad">{{ l.error }}</small>
           <small v-else-if="l.type === 'server' && state.server && state.status" class="es-muted">{{ plural(state.status.archivador.total, '{n} elemento', '{n} elementos') }}<template v-if="state.status.archivador.pending"> · {{ t('{n} abriéndose', { n: state.status.archivador.pending }) }}</template></small>
         </span>
@@ -54,8 +76,9 @@
           <a v-if="l.type === 'server' && state.server" href="#" class="es-btn es-small" @click.prevent="go({ v: 'library', source: 'archivador' })">{{ t('Ver') }}</a>
           <a v-if="CATALOG_LIBRARY_TYPES.includes(l.type)" href="#" class="es-btn es-small" @click.prevent="go({ v: 'catalog', kind: `lib:${l.id}` })">{{ t('Ver') }}</a>
           <a v-if="l.type === 'suwayomi'" href="#" class="es-btn es-small" @click.prevent="go({ v: 'extensions', library: l.id })">{{ t('Extensiones') }}</a>
+          <button v-if="isGuestLibrary(l)" class="es-btn es-small" :disabled="saving" :title="t('Usar esta invitación también en otro dispositivo tuyo')" @click="pair(l)"><i class="es-i es-i-computer" aria-hidden="true"></i> {{ t('Otro dispositivo') }}</button>
           <template v-if="!l.fixed">
-            <button class="es-btn es-small" :title="t('Cambiar')" @click="startEditLibrary(l)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
+            <button v-if="!isGuestLibrary(l)" class="es-btn es-small" :title="t('Cambiar')" @click="startEditLibrary(l)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
             <button class="es-btn es-small" :title="t('Quitar')" :disabled="saving" @click="removeLibrary(l)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
           </template>
         </span>
@@ -101,6 +124,48 @@
       </li>
     </ul>
 
+    <!-- who administers the server: friends invited to its catalog -->
+    <template v-if="guestsInfo?.admin && guestsInfo.enabled">
+      <header class="es-page-head es-subhead">
+        <h2 class="es-h2">{{ t('Invitados') }}</h2>
+        <span class="es-grow"></span>
+        <button v-if="!inviting" class="es-btn es-small" @click="inviting = true"><i class="es-i es-i-add" aria-hidden="true"></i> {{ t('Invitar') }}</button>
+      </header>
+      <p class="es-muted">{{ t('Tus amigos leen el catálogo de tu Suwayomi desde su app: cada uno instala sus propias extensiones (no ven las tuyas) y lo que descargan se queda en su dispositivo, nunca en tu servidor.') }}</p>
+      <form v-if="inviting" class="es-form" @submit.prevent="invite">
+        <label>{{ t('¿A quién invitas?') }} <input v-model="guestName" type="text" required maxlength="80" :placeholder="t('Su nombre, para reconocerlo')" /></label>
+        <div class="es-form-actions">
+          <button class="es-btn es-primary" type="submit" :disabled="saving"><span v-if="saving" class="es-spin"></span> {{ t('Crear invitación') }}</button>
+          <button class="es-btn" type="button" @click="inviting = false">{{ t('Cancelar') }}</button>
+        </div>
+      </form>
+      <ul class="es-sources">
+        <li v-for="g in guestsInfo.guests" :key="g.id" class="es-source">
+          <span class="es-source-icon"><i class="es-i es-i-server" aria-hidden="true"></i></span>
+          <span class="es-source-text">
+            <strong>{{ g.name }}</strong>
+            <small class="es-muted">{{ plural(g.devices, '{n} dispositivo', '{n} dispositivos') }} · {{ plural(g.extensions, '{n} extensión', '{n} extensiones') }}<template v-if="g.bytes"> · {{ size(g.bytes) }}</template></small>
+            <small class="es-muted">{{ g.last_seen ? t('Último uso {ago}', { ago: ago(g.last_seen) }) : t('Aún no lo ha usado') }}</small>
+          </span>
+          <span class="es-source-actions">
+            <button class="es-btn es-small" :disabled="saving" :title="t('Un enlace para otro dispositivo suyo (con sus extensiones)')" @click="inviteDevice(g.id, g.name)"><i class="es-i es-i-computer" aria-hidden="true"></i></button>
+            <button class="es-btn es-small" :disabled="saving" :title="t('Quitarle el acceso')" @click="dropGuest(g.id, g.name)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
+          </span>
+        </li>
+        <li v-for="i in guestsInfo.invites" :key="`i${i.id}`" class="es-source es-source-off">
+          <span class="es-source-icon"><i class="es-i es-i-share" aria-hidden="true"></i></span>
+          <span class="es-source-text">
+            <strong>{{ i.name }} <small class="es-muted">{{ i.guest_id ? t('otro dispositivo') : t('invitación sin usar') }}</small></strong>
+            <small class="es-muted">{{ t('Caduca {when}', { when: until(i.expires) }) }}</small>
+          </span>
+          <span class="es-source-actions">
+            <button class="es-btn es-small" :disabled="saving" :title="t('Anular la invitación')" @click="dropInvite(i.id)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
+          </span>
+        </li>
+        <li v-if="!guestsInfo.guests.length && !guestsInfo.invites.length" class="es-source es-muted">{{ t('Nadie todavía: crea una invitación con «Invitar».') }}</li>
+      </ul>
+    </template>
+
   </section>
 </template>
 
@@ -111,8 +176,10 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { Source, SourceKind, SourceKindInfo } from '../lib/api'
 import { plural, t } from '../lib/i18n'
 import { LIBRARY_TYPES, nameFromUrl, type Library, type LibraryType } from '../lib/libraries'
-import { serverLabel, useStore } from '../lib/store'
-import { CATALOG_LIBRARY_TYPES } from '../lib/devicelibraries'
+import { deviceName, serverLabel, useStore } from '../lib/store'
+import { CATALOG_LIBRARY_TYPES, suwayomiServer } from '../lib/devicelibraries'
+import { guestServer, isGuestLibrary, joinWithInvitation, leaveGuest, pairDevice, parseInvitation, type GuestsStatus } from '../lib/guests'
+import { browserNet } from '../lib/net'
 
 /** The libraries: in an app, the servers it connects by itself (a server of its own, Komga, Kavita…); on
  * the web of a server, the outside libraries that server connects (add one, see how each is doing, scan,
@@ -172,16 +239,128 @@ async function saveLibrary() {
   saving.value = false
 }
 async function removeLibrary(l: Library) {
-  if (!window.confirm(t('¿Quitar «{name}»? Se olvida su contraseña y sus elementos dejan de estar en tu estantería (lo descargado y lo leído se quedan en este dispositivo).', { name: l.name }))) return
+  const guest = isGuestLibrary(l)
+  const question = guest
+    ? t('¿Salir de «{name}»? Este dispositivo deja de tener acceso a ese catálogo (lo descargado se queda aquí). Para volver hará falta otra invitación.', { name: l.name })
+    : t('¿Quitar «{name}»? Se olvida su contraseña y sus elementos dejan de estar en tu estantería (lo descargado y lo leído se quedan en este dispositivo).', { name: l.name })
+  if (!window.confirm(question)) return
   saving.value = true
   try {
+    const server = guest ? suwayomiServer(l.id) : null
+    if (server) await leaveGuest(net, l, server.auth)
     await store.libraries!.remove(l.id)
     store.notify(t('«{name}» quitada.', { name: l.name }))
   } catch (err: any) { store.notify(err?.message || String(err), true) }
   saving.value = false
 }
 
+// ---- invitations: joining a friend's catalog, another device of one's own, and (who administers the server) guests ----
+const net = store.net || browserNet
+const joining = ref(false)
+const invitation = ref('')
+const canJoin = computed(() => !!store.libraries?.types.includes('suwayomi'))
+const link = ref<{ url: string; text: string; note: string } | null>(null)
+const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+const guestsInfo = ref<GuestsStatus | null>(null)
+const inviting = ref(false)
+const guestName = ref('')
+
+function startJoin() {
+  adding.value = false
+  link.value = null
+  invitation.value = ''
+  joining.value = true
+}
+async function join() {
+  const found = parseInvitation(invitation.value)
+  if (!found) { store.notify(t('Eso no parece el enlace de una invitación (…/invitacion/ABCD-EFGH-JKLM).'), true); return }
+  saving.value = true
+  try {
+    const got = await joinWithInvitation(net, found, deviceName(store))
+    const host = (() => { try { return new URL(found.server).hostname } catch (_) { return found.server } })()
+    const saved = await store.libraries!.save({ type: 'suwayomi', name: t('Catálogo de {host}', { host }), url: got.url, username: got.name, secret: got.key })
+    store.notify(t('Ya estás dentro de «{name}». Instala las extensiones que quieras y sus fuentes saldrán en Catálogos.', { name: saved.name }))
+    joining.value = false
+    go({ v: 'extensions', library: saved.id })
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  saving.value = false
+}
+async function pair(l: Library) {
+  const server = suwayomiServer(l.id)
+  if (!server) return
+  saving.value = true
+  try {
+    const got = await pairDevice(net, l, server.auth)
+    showLink(got.link, t('Abre La Estantería en tu otro dispositivo, ve a Bibliotecas › Unirse con una invitación y pega este enlace:'),
+             t('Sirve una sola vez, durante 15 minutos. Tendrás las mismas extensiones.'))
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  saving.value = false
+}
+function showLink(url: string, text: string, note: string) {
+  link.value = { url, text, note }
+  joining.value = false
+  inviting.value = false
+}
+async function copyLink() {
+  if (!link.value) return
+  try {
+    if (canShare) await navigator.share({ title: t('Invitación a La Estantería'), text: link.value.url })
+    else { await navigator.clipboard.writeText(link.value.url); store.notify(t('Enlace copiado.')) }
+  } catch (err: any) {
+    if (err?.name !== 'AbortError') store.notify(t('No se pudo copiar: selecciónalo y cópialo a mano.'), true)
+  }
+}
+
+async function loadGuests() {
+  if (!state.connected || !state.server) { guestsInfo.value = null; return }
+  try { guestsInfo.value = await store.api.guests() } catch (_) { guestsInfo.value = null }   // an older server: no guests
+}
+async function invite() {
+  saving.value = true
+  try {
+    const got = await store.api.inviteGuest(guestName.value.trim())
+    showLink(got.link, t('Envía este enlace a {name}:', { name: got.name }),
+             t('Sirve una sola vez y caduca en 7 días. Con él instala La Estantería y va a Bibliotecas › Unirse con una invitación.'))
+    guestName.value = ''
+    await loadGuests()
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  saving.value = false
+}
+async function inviteDevice(id: number, name: string) {
+  saving.value = true
+  try {
+    const got = await store.api.inviteGuestDevice(id)
+    showLink(got.link, t('Un enlace para otro dispositivo de {name}:', { name }), t('Sirve una sola vez y caduca en 7 días. Tendrá sus mismas extensiones.'))
+    await loadGuests()
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+  saving.value = false
+}
+async function dropGuest(id: number, name: string) {
+  if (!window.confirm(t('¿Quitarle el acceso a {name}? Todos sus dispositivos dejan de poder entrar al momento (lo que haya descargado se queda en ellos).', { name }))) return
+  saving.value = true
+  try { await store.api.dropGuest(id); store.notify(t('{name} ya no tiene acceso.', { name })); await loadGuests() } catch (err: any) { store.notify(err?.message || String(err), true) }
+  saving.value = false
+}
+async function dropInvite(id: number) {
+  saving.value = true
+  try { await store.api.dropGuestInvite(id); await loadGuests() } catch (err: any) { store.notify(err?.message || String(err), true) }
+  saving.value = false
+}
+function size(bytes: number): string {
+  if (bytes < 1e6) return `${Math.max(1, Math.round(bytes / 1e3))} kB`
+  if (bytes < 1e9) return `${Math.round(bytes / 1e6)} MB`
+  return `${(bytes / 1e9).toFixed(1)} GB`
+}
+function until(epoch: number): string {
+  const min = Math.round((epoch - Date.now() / 1000) / 60)
+  if (min < 60) return t('en {n} min', { n: Math.max(1, min) })
+  const h = Math.round(min / 60)
+  if (h < 48) return t('en {n} h', { n: h })
+  return t('en {n} días', { n: Math.round(h / 24) })
+}
+
 async function load() {
+  loadGuests()
   if (!state.connected || !state.server) return
   try {
     if (!kinds.value.length) kinds.value = await store.api.sourceKinds()
@@ -189,6 +368,8 @@ async function load() {
   } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
 function startAdd() {
+  joining.value = false
+  link.value = null
   if (store.libraries) {
     Object.assign(lib, { id: '', type: store.libraries.types[0], name: '', url: '', username: '', secret: '' })
     adding.value = true

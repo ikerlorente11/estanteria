@@ -13,14 +13,15 @@
 
     <p v-if="!server" class="es-banner es-banner-error">{{ t('Ese servidor Suwayomi ya no está entre tus bibliotecas.') }}</p>
     <template v-else>
-      <p class="es-muted">{{ t('Las extensiones se instalan en tu servidor Suwayomi; sus fuentes salen en Catálogos, en todos tus dispositivos.') }}</p>
+      <p v-if="guest" class="es-muted">{{ t('Estas son tus extensiones en este catálogo compartido: instala las que quieras y sus fuentes salen en Catálogos. Lo que descargues se queda en tu dispositivo.') }}</p>
+      <p v-else class="es-muted">{{ t('Las extensiones se instalan en tu servidor Suwayomi; sus fuentes salen en Catálogos, en todos tus dispositivos.') }}</p>
       <div v-if="installedCount" class="es-banner es-ext-read">
         <span>{{ plural(installedCount, 'Tienes {n} extensión instalada: sus mangas se leen desde Catálogos.', 'Tienes {n} extensiones instaladas: sus mangas se leen desde Catálogos.') }}</span>
         <button class="es-btn es-primary es-small" @click="store.go({ v: 'catalogs' })"><i class="es-i es-i-cloud" aria-hidden="true"></i> {{ t('Ir a Catálogos') }}</button>
       </div>
 
       <!-- the repositories the server reads -->
-      <details class="es-ext-repos">
+      <details v-if="!guest" class="es-ext-repos">
         <summary>{{ plural(stores.length, '{n} repositorio', '{n} repositorios') }}</summary>
         <ul class="es-sources">
           <li v-for="r in stores" :key="r.indexUrl" class="es-source">
@@ -77,6 +78,7 @@ import Pick from './Pick.vue'
 import { computed, onMounted, ref } from 'vue'
 import { languageName } from '../lib/catalogs'
 import { setSuwayomiHidden, suwayomiHidden, suwayomiServer, suwayomiSourcesNow, suwayomiSourcesOf } from '../lib/devicelibraries'
+import { isGuestLibrary } from '../lib/guests'
 import { language, plural, t } from '../lib/i18n'
 import { browserNet } from '../lib/net'
 import { netImageNow } from '../lib/netimages'
@@ -92,6 +94,8 @@ const store = useStore()
 const net = store.net || browserNet
 const server = suwayomiServer(props.library)
 const lib = computed(() => store.libraries?.list.value.find((l) => l.id === props.library))
+/** a friend's catalog (an invitation): its repositories are not theirs to change */
+const guest = computed(() => isGuestLibrary(lib.value))
 const extensions = ref<SuwayomiExtension[]>([])
 const stores = ref<SuwayomiStore[]>([])
 const loading = ref(false)
@@ -140,7 +144,7 @@ async function load(refresh = false) {
   loading.value = true
   error.value = ''
   try {
-    const [ext, st] = await Promise.all([suwayomiExtensions(net, server, refresh), suwayomiStores(net, server)])
+    const [ext, st] = await Promise.all([suwayomiExtensions(net, server, refresh), guest.value ? Promise.resolve([]) : suwayomiStores(net, server)])
     extensions.value = ext
     stores.value = st
     if (!ext.length && !refresh) extensions.value = await suwayomiExtensions(net, server, true)

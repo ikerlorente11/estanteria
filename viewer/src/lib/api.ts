@@ -458,6 +458,14 @@ export class Api {
     })
   }
 
+  // ---- guests: friends who read the shared catalog of this server (only who administers it sees them) ----
+  guests() { return this.call<import('./guests.ts').GuestsStatus>('/api/guests') }
+  inviteGuest(name: string) { return this.call<import('./guests.ts').NewInvite>('/api/guests/invites', { method: 'POST', body: JSON.stringify({ name }) }) }
+  /** another device for a guest who lost theirs: the same guest, with their extensions */
+  inviteGuestDevice(id: number) { return this.call<import('./guests.ts').NewInvite>(`/api/guests/${id}/invites`, { method: 'POST' }) }
+  dropGuestInvite(id: number) { return this.call<{ ok: boolean }>(`/api/guests/invites/${id}`, { method: 'DELETE' }) }
+  dropGuest(id: number) { return this.call<{ ok: boolean }>(`/api/guests/${id}`, { method: 'DELETE' }) }
+
   // ---- series followed: their new chapters come by themselves ----
   follows() { return this.call<Follow[]>('/api/follows') }
   follow(req: FollowRequest) { return this.call<Follow>('/api/follows', { method: 'POST', body: JSON.stringify(req) }) }

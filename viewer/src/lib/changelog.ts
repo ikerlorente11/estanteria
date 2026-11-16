@@ -16,6 +16,16 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.4.5',
+      date: '2026-11-16',
+      notes: [
+        { es: 'Invitaciones: si alguien te invita a su catálogo, pega el enlace en Bibliotecas › «Unirse con una invitación». Instalas tus propias extensiones y lo que descargas se queda en tu dispositivo; «Otro dispositivo» da un enlace para usarla también en otro tuyo.',
+          en: 'Invitations: if someone invites you to their catalog, paste the link in Libraries › “Join with an invitation”. You install your own extensions and what you download stays on your device; “Another device” gives a link to use it on another one of yours.' },
+        { es: 'Si administras el servidor, Bibliotecas › Invitados: invita a amigos a tu catálogo de Suwayomi, mira su uso y quítales el acceso cuando quieras.',
+          en: 'If you run the server, Libraries › Guests: invite friends to your Suwayomi catalog, see their use and take away their access whenever you want.' },
+      ],
+    },
+    {
       version: '0.4.4',
       date: '2026-11-13',
       notes: [
@@ -109,6 +119,16 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.5.3',
+      date: '2026-11-16',
+      notes: [
+        { es: 'Invitaciones: si alguien te invita a su catálogo, pega el enlace en Bibliotecas › «Unirse con una invitación». Instalas tus propias extensiones y lo que descargas se queda en tu dispositivo; «Otro dispositivo» da un enlace para usarla también en otro tuyo.',
+          en: 'Invitations: if someone invites you to their catalog, paste the link in Libraries › “Join with an invitation”. You install your own extensions and what you download stays on your device; “Another device” gives a link to use it on another one of yours.' },
+        { es: 'Si administras el servidor, Bibliotecas › Invitados: invita a amigos a tu catálogo de Suwayomi, mira su uso y quítales el acceso cuando quieras.',
+          en: 'If you run the server, Libraries › Guests: invite friends to your Suwayomi catalog, see their use and take away their access whenever you want.' },
+      ],
+    },
     {
       version: '0.5.2',
       date: '2026-11-12',

@@ -45,7 +45,15 @@
                    :title="t('Ver solo los catálogos y fuentes de estos idiomas')" />
       </div>
 
-      <div v-if="shown.length" class="es-catalogs">
+      <!-- the catalogs added here (the ready ones, a repository's, an OPDS), in a group of their own like the others -->
+      <header v-if="shown.length" class="es-page-head es-subhead">
+        <button class="es-collapse" :aria-expanded="!isCollapsed('catalogs')" @click="toggleCollapsed('catalogs')">
+          <i class="es-i es-i-chevron" :class="{ 'es-collapse-closed': isCollapsed('catalogs') }" aria-hidden="true"></i>
+          <h2 class="es-h2">{{ t('Tus catálogos') }}</h2>
+          <span class="es-chip-count">{{ shown.length }}</span>
+        </button>
+      </header>
+      <div v-if="shown.length && !isCollapsed('catalogs')" class="es-catalogs">
         <div v-for="c in shown" :key="c.id" class="es-catalog">
           <a href="#" class="es-catalog-open" @click.prevent="go({ v: 'catalog', kind: c.id })">
             <span class="es-catalog-mark" aria-hidden="true">{{ c.name.slice(0, 1) }}</span>

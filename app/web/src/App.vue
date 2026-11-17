@@ -14,11 +14,11 @@
         </div>
         <nav class="es-nav">
           <a href="#" :class="{ on: view.v === 'home' }" @click.prevent="go({ v: 'home' })"><span class="es-ni"><i class="es-i es-i-home" aria-hidden="true"></i></span> {{ t('Inicio') }}</a>
-          <a href="#" :class="{ on: view.v === 'library' }" @click.prevent="go({ v: 'library' })"><span class="es-ni"><i class="es-i es-i-grid" aria-hidden="true"></i></span> {{ t('Estantería') }}</a>
+          <a href="#" :class="{ on: view.v === 'library' || (phone && (view.v === 'collections' || view.v === 'collection')) }" @click.prevent="go({ v: 'library' })"><span class="es-ni"><i class="es-i es-i-grid" aria-hidden="true"></i></span> {{ t('Estantería') }}</a>
           <a href="#" :class="{ on: view.v === 'favorites' }" @click.prevent="go({ v: 'favorites' })"><span class="es-ni"><i class="es-i es-i-star" aria-hidden="true"></i></span> {{ t('Favoritos') }}</a>
-          <a href="#" :class="{ on: view.v === 'collections' || view.v === 'collection' }" @click.prevent="go({ v: 'collections' })"><span class="es-ni"><i class="es-i es-i-list" aria-hidden="true"></i></span> {{ t('Colecciones') }}</a>
+          <a href="#" class="es-wide-only" :class="{ on: view.v === 'collections' || view.v === 'collection' }" @click.prevent="go({ v: 'collections' })"><span class="es-ni"><i class="es-i es-i-list" aria-hidden="true"></i></span> {{ t('Colecciones') }}</a>
           <a href="#" :class="{ on: view.v === 'catalogs' || view.v === 'catalog' }" @click.prevent="go({ v: 'catalogs' })"><span class="es-ni"><i class="es-i es-i-cloud" aria-hidden="true"></i></span> {{ t('Catálogos') }}</a>
-          <a href="#" :class="{ on: view.v === 'sources' }" @click.prevent="go({ v: 'sources' })"><span class="es-ni"><i class="es-i es-i-server" aria-hidden="true"></i></span> {{ t('Bibliotecas') }}</a>
+          <a href="#" class="es-wide-only" :class="{ on: view.v === 'sources' }" @click.prevent="go({ v: 'sources' })"><span class="es-ni"><i class="es-i es-i-server" aria-hidden="true"></i></span> {{ t('Bibliotecas') }}</a>
         </nav>
         <div class="es-lib">
           <div class="es-libh">{{ t('Series') }} <small class="es-muted">{{ state.series.length }}</small></div>
@@ -36,11 +36,13 @@
       </aside>
 
       <main ref="mainEl" class="es-main">
-        <!-- «back» when not on a main page; the settings on a phone (the bar at the bottom has no room for them) -->
+        <!-- «back» when not on a main page; the libraries and the settings on a phone (the bar at the bottom has room for
+             the four pages used most only) -->
         <div class="es-topbar">
           <button v-if="!isRoot" class="es-topbtn" type="button" :aria-label="t('Volver')" :title="t('Volver')" @click="back()"><i class="es-i es-i-back" aria-hidden="true"></i></button>
           <span class="es-grow"></span>
-          <button class="es-topbtn es-topbtn-settings" :class="{ on: view.v === 'setup' }" type="button" :aria-label="t('Ajustes')" @click="go({ v: 'setup' } as any)"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
+          <button class="es-topbtn es-phone-only" :class="{ on: view.v === 'sources' || view.v === 'extensions' }" type="button" :aria-label="t('Bibliotecas')" :title="t('Bibliotecas')" @click="go({ v: 'sources' })"><i class="es-i es-i-server" aria-hidden="true"></i></button>
+          <button class="es-topbtn es-phone-only" :class="{ on: view.v === 'setup' }" type="button" :aria-label="t('Ajustes')" @click="go({ v: 'setup' } as any)"><i class="es-i es-i-settings" aria-hidden="true"></i></button>
         </div>
         <p v-if="offline && !offline.state.online" class="es-offline-banner">
           <i class="es-i es-i-cloud" aria-hidden="true"></i>
@@ -49,6 +51,11 @@
           <button class="es-btn es-small" @click="refresh()">{{ t('Reintentar') }}</button>
         </p>
         <p v-if="state.error && view.v !== 'sources'" class="es-banner es-banner-error">{{ state.error }} <button class="es-btn es-small" @click="go({ v: 'sources' })">{{ t('Bibliotecas') }}</button></p>
+        <!-- on a phone, the shelf and its collections are one tab: which of the two -->
+        <div v-if="shelfTab" class="es-chips es-chips-big es-phone-only es-savedtabs" role="tablist">
+          <button class="es-chip" :class="{ on: view.v === 'library' }" role="tab" :aria-selected="view.v === 'library'" @click="go({ v: 'library' }, true)"><i class="es-i es-i-grid" aria-hidden="true"></i>{{ t('Estantería') }}</button>
+          <button class="es-chip" :class="{ on: view.v === 'collections' }" role="tab" :aria-selected="view.v === 'collections'" @click="go({ v: 'collections' }, true)"><i class="es-i es-i-list" aria-hidden="true"></i>{{ t('Colecciones') }}</button>
+        </div>
         <template v-if="store">
           <SettingsView v-if="view.v === 'setup'" />
           <HomeView v-else-if="view.v === 'home'" />
@@ -138,6 +145,15 @@ function go(next: View | { v: 'setup' }, replace = false) {
   else window.location.hash = query
   hash.value = `#${query}`
 }
+/** a phone's screen: the tabs go at the bottom (as android.css says) */
+const phoneQuery = window.matchMedia('(max-width: 760px)')
+const phone = ref(phoneQuery.matches)
+phoneQuery.addEventListener('change', (e) => { phone.value = e.matches })
+/** the shelf as a whole or its collections: the «Estantería» tab of a phone */
+const shelfTab = computed(() => {
+  const v = view.value as any
+  return v.v === 'collections' || (v.v === 'library' && !v.folder && !v.source)
+})
 /** the main pages (the tabs): no «back» there */
 const isRoot = computed(() => {
   const v = view.value as any

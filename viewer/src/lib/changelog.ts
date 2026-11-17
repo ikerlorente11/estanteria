@@ -16,6 +16,16 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.5.3',
+      date: '2026-11-17',
+      notes: [
+        { es: 'La barra de abajo, con cuatro pestañas: Inicio, Estantería, Favoritos y Catálogos. Colecciones va dentro de Estantería, y Bibliotecas y Ajustes arriba a la derecha.',
+          en: 'The bar at the bottom, with four tabs: Home, Shelf, Favorites and Catalogs. Collections are inside Shelf, and Libraries and Settings at the top right.' },
+        { es: 'Catálogos: los que has añadido (MangaDex, textos.info…) van en su propio grupo plegable, «Tus catálogos», como los demás.',
+          en: 'Catalogs: the ones you added (MangaDex, textos.info…) go in a foldable group of their own, “Your catalogs”, like the rest.' },
+      ],
+    },
+    {
       version: '0.5.2',
       date: '2026-11-17',
       notes: [
@@ -151,6 +161,14 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.6.3',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Catálogos: los que has añadido (MangaDex, textos.info…) van en su propio grupo plegable, «Tus catálogos», como los demás.',
+          en: 'Catalogs: the ones you added (MangaDex, textos.info…) go in a foldable group of their own, “Your catalogs”, like the rest.' },
+      ],
+    },
     {
       version: '0.6.2',
       date: '2026-11-17',

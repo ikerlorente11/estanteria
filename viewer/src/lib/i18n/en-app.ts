@@ -396,6 +396,7 @@ export const EN_APP: Record<string, string> = {
   '¿Borrar «{title}» de todos lados? Se borra de {server} (queda un tiempo en su papelera), de este dispositivo y de tus colecciones y favoritos.': 'Delete “{title}” everywhere? It is deleted from {server} (it stays a while in its trash), from this device and from your collections and favorites.',
   '«{title}» borrado.': '“{title}” deleted.',
   'Borrar serie': 'Delete series',
+  'Tus catálogos': 'Your catalogs',
   '{n} copia de aquí': '{n} copy on here',
   '{n} copias de aquí': '{n} copies on here',
   '¿Quitar de este dispositivo {n} copia de «{what}»? Lo que esté en {server} se queda allí.': 'Remove {n} copy of “{what}” from this device? What is in {server} stays there.',

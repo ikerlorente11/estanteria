@@ -46,6 +46,11 @@ html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, Roboto, sans-ser
   .es-btn { min-height: 38px; }
   .es-back { display: none; }
 }
-/* the settings button of the top bar: only on a phone (on a wide screen they are at the bottom of the sidebar) */
-.es-topbtn-settings { display: none; }
-@media (max-width: 760px) { .es-topbtn-settings { display: inline-flex; } }
+/* on a phone the bar at the bottom has the four pages used most: «Bibliotecas» and «Ajustes» go to the top bar, and
+   «Colecciones» into the «Estantería» tab (on a wide screen, all of them in the sidebar) */
+.es-phone-only { display: none !important; }
+@media (max-width: 760px) {
+  .es-phone-only { display: inline-flex !important; }
+  .es-nav a.es-wide-only { display: none; }
+  .es-savedtabs.es-phone-only { display: flex !important; padding: 2px 16px 0; }
+}

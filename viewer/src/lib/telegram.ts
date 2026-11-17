@@ -22,6 +22,7 @@ import type { Feed, FeedEntry } from './opds.ts'
 import { DEVICE_SECRET_PREFIX } from './prefs.ts'
 import type { TelegramApp } from './store.ts'
 import { formatOfName, sizeText } from './webdav.ts'
+import { storeZip } from './zipstore.ts'
 
 /** documents asked for each time (Telegram gives up to 100) */
 export const PAGE = 100
@@ -155,7 +156,7 @@ export function chatFeed(account: string, chat: { peer: string; title: string },
     return {
       id: href, title: m.caption.split('\n')[0].slice(0, 120) || when, author: null, summary: m.caption || null, cover: null, language: null,
       offers: [], href: null, detail: [m.kind === 'video' ? durationText(m.duration) : '', m.size ? sizeText(m.size) : '', when].filter(Boolean).join(' · '),
-      media: { kind: m.kind, album: m.album, duration: m.duration, size: m.size },
+      media: { kind: m.kind, album: m.album, duration: m.duration, size: m.size, date: m.date },
     }
   })
   const total = counts ? counts[media] : page.total
@@ -585,6 +586,16 @@ export class TelegramLink {
     return going
   }
 
+  /** An image at full size, its bytes (to keep it: not kept here). */
+  async photoBytes(peer: string, id: number, signal?: AbortSignal): Promise<Uint8Array> {
+    const client = await this.connected()
+    const m = await this.message(peer, id)
+    if (!m?.photo) throw new Error(t('Esa imagen ya no está en Telegram'))
+    const bytes: Uint8Array | undefined = await client.downloadMedia(m, { signal })
+    if (!bytes?.length) throw new Error(t('Telegram no dio la imagen'))
+    return bytes
+  }
+
   /** An image at full size, as a blob URL (the last few are kept; older ones are let go). */
   photo(peer: string, id: number): Promise<string> {
     const key = `${peer}/${id}`
@@ -657,6 +668,48 @@ export async function telegramFile(link: TelegramLink, href: string): Promise<St
   if (!(await link.resume())) throw new Error(t('La sesión de Telegram se cerró: vuelve a entrar'))
   if (link.account?.id !== ref.account) throw new Error(t('Ese archivo es de otra cuenta de Telegram'))
   return link.file(ref.peer, ref.message)
+}
+
+// ---- images kept as a comic (CBZ), to read and to put in collections ----
+const xml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** The ComicInfo.xml of images kept from a chat: its name, its series (a collection, or the chat) and where they came from. */
+export function photosComicInfo(info: { title: string; series: string; chat: string; pages: number; date?: number }): string {
+  const day = info.date ? new Date(info.date * 1000) : null
+  return '<?xml version="1.0" encoding="utf-8"?>\n<ComicInfo>'
+    + `<Title>${xml(info.title)}</Title><Series>${xml(info.series)}</Series><PageCount>${info.pages}</PageCount>`
+    + (day ? `<Year>${day.getFullYear()}</Year><Month>${day.getMonth() + 1}</Month><Day>${day.getDate()}</Day>` : '')
+    + `<Notes>${xml(t('Imágenes de «{chat}», en Telegram', { chat: info.chat }))}</Notes></ComicInfo>`
+}
+
+/** The images of a chat (`messages`, in the order to read) packed as a CBZ: each fetched at full size, telling how
+ * many came; with its ComicInfo.xml. */
+export async function telegramPhotosCbz(link: TelegramLink, peer: string, messages: number[], comicInfo: string,
+                                        progress: (done: number, total: number) => void, signal: AbortSignal): Promise<Blob> {
+  const files: { name: string; data: Uint8Array }[] = [{ name: 'ComicInfo.xml', data: new TextEncoder().encode(comicInfo) }]
+  const width = String(messages.length).length < 3 ? 3 : String(messages.length).length
+  progress(0, messages.length)
+  for (const [i, id] of messages.entries()) {
+    if (signal.aborted) throw cancelled()
+    files.push({ name: `${String(i + 1).padStart(width, '0')}.jpg`, data: await link.photoBytes(peer, id, signal) })
+    progress(i + 1, messages.length)
+  }
+  if (signal.aborted) throw cancelled()
+  return new Blob([storeZip(files) as BlobPart], { type: 'application/vnd.comicbook+zip' })
+}
+
+/** A blob as a file to keep (Keeper.stream), a piece at a time. */
+export function blobSource(blob: Blob): StreamSource {
+  return {
+    size: blob.size,
+    async *read(signal) {
+      const PIECE = 4 * 2 ** 20
+      for (let at = 0; at < blob.size; at += PIECE) {
+        if (signal.aborted) throw cancelled()
+        yield new Uint8Array(await blob.slice(at, at + PIECE).arrayBuffer())
+      }
+    },
+  }
 }
 
 // ---- one link per library, for all the app ----

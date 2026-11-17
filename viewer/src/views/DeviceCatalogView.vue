@@ -76,6 +76,22 @@
         <a v-for="n in feed.navigation" :key="n.href" href="#" class="es-chip" :title="n.subtitle || ''" @click.prevent="open(n.href)">{{ n.title }}</a>
       </div>
 
+      <!-- Telegram's images: some chosen, kept as a comic and put in collections -->
+      <template v-if="isTelegramPhotos && canSave">
+        <div class="es-series-actions">
+          <button v-if="!selecting" class="es-btn es-small" @click="selecting = true"><i class="es-i es-i-check" aria-hidden="true"></i> {{ t('Seleccionar') }}</button>
+          <template v-else>
+            <button class="es-btn es-small es-primary" :disabled="!selected.length || saving" @click="saving = true">
+              <i class="es-i es-i-download" aria-hidden="true"></i> {{ t('Guardar ({n})', { n: selected.length }) }}
+            </button>
+            <button class="es-btn es-small" @click="selectAll">{{ allSelected ? t('Ninguna') : t('Todas') }}</button>
+            <button class="es-btn es-small" @click="stopSelecting">{{ t('Cancelar') }}</button>
+            <small class="es-muted">{{ t('Toca las imágenes que quieres guardar (un álbum va entero).') }}</small>
+          </template>
+        </div>
+        <TelegramSave v-if="saving && selected.length" :link="telegram()" :peer="selectedPeer" :messages="selectedInOrder" :chat="feed.title || def.name"
+                      :suggested="suggestedName" :date="selectedDate" @done="stopSelecting" @cancel="saving = false" />
+      </template>
       <!-- a whole series: every chapter not downloaded yet, into the queue (a few at a time) -->
       <div v-if="entries.length && entries[0].chapter && canSave" class="es-series-actions">
         <button class="es-btn es-small" :disabled="gathering || !missing" @click="downloadAll">
@@ -107,8 +123,10 @@
         </div>
       </div>
       <!-- Telegram's images and videos: seen right here, nothing saved (an album, one tile; an image opens them all in the reader) -->
-      <div v-else-if="entries.length && isTelegram && entries[0].media" class="es-tg-media">
-        <button v-for="tile in tiles" :key="tile.first.id" class="es-tg-tile" :title="tile.first.summary || tile.first.title" @click="openTile(tile)">
+      <div v-else-if="entries.length && isTelegram && entries[0].media" class="es-tg-media" :class="{ 'es-tg-selecting': selecting }">
+        <button v-for="tile in tiles" :key="tile.first.id" class="es-tg-tile" :class="{ 'es-tg-picked': selecting && isPicked(tile) }"
+                :aria-pressed="selecting ? isPicked(tile) : undefined" :title="tile.first.summary || tile.first.title" @click="selecting ? pick(tile) : openTile(tile)">
+          <span v-if="selecting" class="es-tg-tile-pick"><i v-if="isPicked(tile)" class="es-i es-i-check" aria-hidden="true"></i></span>
           <img v-if="thumbs[tile.first.id]" :src="thumbs[tile.first.id]!" alt="" loading="lazy" />
           <span v-else class="es-cover-none"><i class="es-i" :class="tile.first.media!.kind === 'video' ? 'es-i-play' : 'es-i-page'" aria-hidden="true"></i></span>
           <span v-if="tile.first.media!.kind === 'video'" class="es-tg-tile-tag"><i class="es-i es-i-play" aria-hidden="true"></i> {{ durationText(tile.first.media!.duration) }}</span>
@@ -211,6 +229,7 @@ import {
   durationText, isTelegramHref, parseAddress, parseFileHref, photosChapter, setTelegramHidden, telegramFeed, telegramFile, telegramHidden, telegramLink,
 } from '../lib/telegram'
 import TelegramVideo from './TelegramVideo.vue'
+import TelegramSave from './TelegramSave.vue'
 
 /** A catalog the app reads by itself: its sections, what it offers and its search. A book or a comic is
  * downloaded to this device's shelf to be read (and stays there); a chapter is read page by page. */
@@ -305,6 +324,46 @@ watch(() => (isTelegram.value ? entries.value : []), (list) => {
     telegram().thumb(msg.peer, msg.message).then((url) => { thumbs[e.id] = url }).catch(() => {})
   }
 })
+// ---- images chosen to keep (TelegramSave): an album goes whole ----
+const isTelegramPhotos = computed(() => isTelegram.value && entries.value[0]?.media?.kind === 'photo')
+const selecting = ref(false)
+const saving = ref(false)
+const selected = ref<number[]>([])
+const messagesOf = (tile: Tile) => (tile.first.media?.album
+  ? entries.value.filter((e) => e.media?.album === tile.first.media!.album)
+  : [tile.first]).map((e) => parseFileHref(e.id)!.message)
+const isPicked = (tile: Tile) => messagesOf(tile).every((m) => selected.value.includes(m))
+function pick(tile: Tile) {
+  const these = messagesOf(tile)
+  selected.value = isPicked(tile) ? selected.value.filter((m) => !these.includes(m)) : [...new Set([...selected.value, ...these])]
+}
+const allSelected = computed(() => tiles.value.length > 0 && tiles.value.every(isPicked))
+function selectAll() {
+  selected.value = allSelected.value ? [] : entries.value.filter((e) => e.media?.kind === 'photo').map((e) => parseFileHref(e.id)!.message)
+}
+function stopSelecting() {
+  selecting.value = false
+  saving.value = false
+  selected.value = []
+}
+// a different chat or tab: nothing chosen
+watch(() => props.path, stopSelecting)
+/** the images chosen, oldest first (the order they were sent, the order they are read) */
+const selectedInOrder = computed(() => [...selected.value].sort((a, b) => a - b))
+const selectedPeer = computed(() => (entries.value[0] ? parseFileHref(entries.value[0].id)!.peer : ''))
+const selectedEntries = computed(() => entries.value.filter((e) => selected.value.includes(parseFileHref(e.id)!.message)))
+const selectedDate = computed(() => {
+  const dates = selectedEntries.value.map((e) => e.media?.date || 0).filter((d) => d > 0)
+  return dates.length ? Math.min(...dates) : undefined
+})
+/** its name: what was said with the first of them, else the chat and the day */
+const suggestedName = computed(() => {
+  const first = [...selectedEntries.value].sort((a, b) => parseFileHref(a.id)!.message - parseFileHref(b.id)!.message)
+    .find((e) => e.summary)?.summary?.split('\n')[0].trim()
+  const day = selectedDate.value ? new Date(selectedDate.value * 1000).toLocaleDateString() : ''
+  return (first || [feed.value?.title || props.def.name, day].filter(Boolean).join(' ')).slice(0, 120)
+})
+
 /** a video plays over the page; an image opens the images shown in the reader, oldest first, from that one */
 const playing = ref<{ peer: string; message: number; title: string } | null>(null)
 function openTile(tile: Tile) {

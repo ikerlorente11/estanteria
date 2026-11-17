@@ -32,7 +32,7 @@ export interface FeedEntry {
   /** a short line under the title (a chapter's number and group) */
   detail?: string | null
   /** an image or a video to see right here (Telegram), not a file to download */
-  media?: { kind: 'photo' | 'video'; album: string | null; duration: number; size: number }
+  media?: { kind: 'photo' | 'video'; album: string | null; duration: number; size: number; date?: number }
 }
 
 export interface Feed {

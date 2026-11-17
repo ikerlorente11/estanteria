@@ -76,7 +76,7 @@ const media = {
 const photos = chatFeed('42', { peer: '-1001', title: 'Tiras' }, media, { peer: '-1001', before: null, q: '', media: 'photos' }, counts)
 assert.equal(photos.subtitle, '40 imágenes')
 assert.equal(photos.entries[0].title, 'Mafalda')
-assert.deepEqual(photos.entries[0].media, { kind: 'photo', album: '99', duration: 0, size: 0 })
+assert.deepEqual(photos.entries[0].media, { kind: 'photo', album: '99', duration: 0, size: 0, date: 1700000000 })
 assert.deepEqual(photos.entries[0].offers, [])
 assert.equal(photos.search, 'tg:-1001?media=photos&q={searchTerms}')
 assert.deepEqual(parseAddress(photos.next!), { peer: '-1001', before: 150, q: '', media: 'photos' })
@@ -212,5 +212,15 @@ assert.equal(await web.get('de-siempre'), 'SESION-NUEVA')
 assert.equal(await web.get('nueva'), null)
 assert.equal(telegramSignedIn['de-siempre'], true)
 assert.equal(telegramSignedIn['nueva'], false)
+
+// ---- images kept as a comic: what its ComicInfo.xml says, and a blob read a piece at a time ----
+const { photosComicInfo, blobSource } = await import('../src/lib/telegram.ts')
+const info = photosComicInfo({ title: 'Tiras <1>', series: 'Mafalda & cía', chat: 'Humor', pages: 3, date: 1700000000 })
+assert.match(info, /<Title>Tiras &lt;1&gt;<\/Title><Series>Mafalda &amp; cía<\/Series><PageCount>3<\/PageCount><Year>2023<\/Year>/)
+assert.match(info, /<Notes>Imágenes de «Humor», en Telegram<\/Notes>/)
+const blob = new Blob([new Uint8Array(10 * 2 ** 20).fill(7)])
+const parts: number[] = []
+for await (const piece of blobSource(blob).read(new AbortController().signal)) parts.push(piece.length)
+assert.deepEqual(parts, [4 * 2 ** 20, 4 * 2 ** 20, 2 * 2 ** 20])
 
 console.log('telegram ok')

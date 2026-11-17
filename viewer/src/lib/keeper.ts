@@ -45,6 +45,9 @@ export interface Keeper {
   stream(key: string, file: StreamSource, name: string, meta: CatalogMeta, progress: KeepProgress, signal: AbortSignal): Promise<number>
   /** asks again what was kept (the server's keeper: what it fetched by itself meanwhile) */
   load?(): Promise<void>
+  /** an app: the server's item of what was just kept here, once it went up (null: no server, or it did not go up).
+   * What is put in a collection right after keeping it is put there with it, so every device has it. */
+  uploaded?(id: number): Promise<Item | null>
 }
 
 const seriesFolder = (meta: CatalogMeta) => meta.series || seriesOfTitle(meta.title)
@@ -58,15 +61,20 @@ function deviceKeeper(store: Store): Keeper {
   // up to the server one after another, behind the downloads (the folders of a new series are made once)
   let ups: Promise<void> = Promise.resolve()
   let told = false
+  /** what went up of what was kept here, by its id here (see Keeper.uploaded) */
+  const upped = new Map<number, Promise<Item | null>>()
   /** `key`: only for what the page fetched by itself (see Keeper.stream); the rest goes up as always, without it */
   function toServer(item: Item, meta: CatalogMeta, key?: string) {
     if (!store.state.server) return
+    let done: (it: Item | null) => void = () => {}
+    upped.set(item.id, new Promise((r) => { done = r }))
     ups = ups.then(async () => {
-      if (!store.state.server) return
+      if (!store.state.server) return done(null)
       const dest = `${catalogFolder(meta, store.state.status?.folders || [])}/${item.name}`
       try {
-        await shelf.backend.upload(item.id, dest, () => {}, key)
+        done((await shelf.backend.upload(item.id, dest, () => {}, key)).item)
       } catch (err: any) {
+        done(null)
         if (err?.status === 409 || /ya hay/i.test(String(err?.message || err))) return      // it is there already
         if (!told) store.notify(t('No se pudo subir «{title}» a {server}: {error}', { title: meta.title, server: store.serverName || t('tu servidor'), error: err?.message || String(err) }), true)
         told = true
@@ -78,6 +86,7 @@ function deviceKeeper(store: Store): Keeper {
   return {
     where: 'device',
     has: (id) => id !== undefined && shelf.has(id),
+    uploaded: (id) => upped.get(id) || Promise.resolve(null),
     gotOf(key) {
       const here = catalogGot[key]
       if (here !== undefined && shelf.has(here)) return here

@@ -11,8 +11,9 @@
     </button>
     <!-- on this device: what to do with it -->
     <button v-else class="es-btn es-btn-done" aria-haspopup="menu" :aria-expanded="open" :disabled="!!working" @click="toggle">
-      <span v-if="working" class="es-spin"></span><i v-else class="es-i" :class="local ? 'es-i-page' : 'es-i-check'" aria-hidden="true"></i>
-      {{ working === 'share' ? t('Preparando…') : working === 'save' ? t('Guardando…') : local ? t('Archivo') : t('Descargado') }}
+      <span v-if="working" class="es-spin"></span><i v-else class="es-i" :class="local || !have ? 'es-i-page' : 'es-i-check'" aria-hidden="true"></i>
+      <!-- «Descargado» only when this device has it (without a copy here it is the file's menu: save, share, upload) -->
+      {{ working === 'share' ? t('Preparando…') : working === 'save' ? t('Guardando…') : local || !have ? t('Archivo') : t('Descargado') }}
       <i class="es-i es-i-chevron" aria-hidden="true"></i>
     </button>
     <div v-if="open" class="es-fab-menu es-file-menu" :class="{ 'es-file-menu-end': toEnd }" role="menu" @click.stop>
@@ -37,10 +38,6 @@
         <span class="es-fab-icon"><i class="es-i es-i-computer" aria-hidden="true"></i></span>
         <span class="es-fab-text"><strong>{{ t('Mostrar en el Explorador') }}</strong></span>
       </button>
-      <button v-if="canDelete" class="es-fab-item es-fab-danger" role="menuitem" @click="remove">
-        <span class="es-fab-icon"><i class="es-i es-i-delete" aria-hidden="true"></i></span>
-        <span class="es-fab-text"><strong>{{ t('Borrar') }}</strong><small class="es-muted">{{ local ? t('Quitarlo de la estantería (lo descargado de un catálogo se borra)') : t('Borrar la descarga de este dispositivo') }}</small></span>
-      </button>
     </div>
   </div>
 </template>
@@ -49,8 +46,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ItemDetail } from '../lib/api'
 import { keptAsFile } from '../lib/offline'
-import { DOWNLOADS_ROOT, LOOSE_ROOT } from '../lib/local'
-import { forgetCatalogItems } from '../lib/catalogdownloads'
 import { t } from '../lib/i18n'
 import type { FileToHand } from '../lib/native'
 import { serverLabel, useStore } from '../lib/store'
@@ -58,11 +53,11 @@ import { serverLabel, useStore } from '../lib/store'
 /**
  * The file of an item, in one button: «Descargar» while it is not on this device (a copy kept to read it
  * without connection), and once it is (or when it is a file of this device), a menu of what to do with it:
- * save it where one wants, share it, upload it to the server, delete it.
+ * save it where one wants, share it, upload it to the server (deleting it: DeleteButton).
  * On the web (no copies kept) «Descargar» is the browser's download.
  */
 const props = defineProps<{ item: ItemDetail; local: boolean; /** the server has it already: not offered to upload */ uploaded?: boolean }>()
-const emit = defineEmits<{ upload: []; reveal: []; removed: [] }>()
+const emit = defineEmits<{ upload: []; reveal: [] }>()
 const store = useStore()
 const open = ref(false)
 /** what is being done with it now (the button says so: copying a big file takes a moment) */
@@ -114,7 +109,6 @@ const canSave = computed(() => true)
 const canShare = computed(() => !!store.native?.share || (typeof navigator.share === 'function' && typeof navigator.canShare === 'function'))
 const canUpload = computed(() => !!store.state.server && (props.local || !!props.item.source_id))
 /** a file of the device: those added on their own and the downloads (a file of one's folders stays) */
-const canDelete = computed(() => props.local ? props.item.source_id === -LOOSE_ROOT || props.item.source_id === -DOWNLOADS_ROOT : status.value === 'done')
 
 async function download() {
   const o = offline.value
@@ -176,23 +170,6 @@ async function share() {
     }
   } catch (err: any) { if (err?.name !== 'AbortError') failed(err) }
   working.value = ''
-}
-
-async function remove() {
-  close()
-  try {
-    if (props.local) {
-      await store.shelf?.removeFile(props.item.id)
-      forgetCatalogItems([props.item.id])
-      store.notify(t('Quitado de la estantería.'))
-      // listed again before going back, so the list is not the old one for a moment
-      await store.refresh()
-      emit('removed')
-    } else {
-      await offline.value?.remove(props.item.id)
-      store.notify(t('Descarga borrada de este dispositivo.'))
-    }
-  } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
 
 function close() { open.value = false }

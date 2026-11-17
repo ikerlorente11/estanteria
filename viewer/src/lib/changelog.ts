@@ -16,6 +16,16 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.5.1',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Borrar desde la ficha: «Quitar de este dispositivo» (lo descargado o guardado para leer sin conexión) o «Borrar de todos lados», también de tu servidor (queda un tiempo en su papelera), de tus colecciones y favoritos.',
+          en: 'Delete from an item’s page: “Remove from this device” (what was downloaded or kept to read offline) or “Delete everywhere”, also from your server (it stays a while in its trash), your collections and favorites.' },
+        { es: 'Telegram solo sale en los dispositivos donde has entrado; en otro, añádelo otra vez y vuelve tu misma biblioteca.',
+          en: 'Telegram only shows on the devices where you signed in; on another one, add it again and your same library comes back.' },
+      ],
+    },
+    {
       version: '0.5.0',
       date: '2026-11-17',
       notes: [
@@ -133,6 +143,16 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.6.1',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Borrar desde la ficha: «Quitar de este dispositivo» (lo descargado o guardado para leer sin conexión) o «Borrar de todos lados», también de tu servidor (queda un tiempo en su papelera), de tus colecciones y favoritos.',
+          en: 'Delete from an item’s page: “Remove from this device” (what was downloaded or kept to read offline) or “Delete everywhere”, also from your server (it stays a while in its trash), your collections and favorites.' },
+        { es: 'Telegram solo sale en los dispositivos donde has entrado; en otro, añádelo otra vez y vuelve tu misma biblioteca.',
+          en: 'Telegram only shows on the devices where you signed in; on another one, add it again and your same library comes back.' },
+      ],
+    },
     {
       version: '0.6.0',
       date: '2026-11-17',

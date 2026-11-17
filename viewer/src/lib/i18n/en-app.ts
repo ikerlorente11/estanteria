@@ -383,6 +383,19 @@ export const EN_APP: Record<string, string> = {
   'Vacía: añade cosas con el botón de colección de su ficha, de una serie o de una serie de un catálogo.': 'Empty: add things with the collection button on their page, on a series or on a catalog series.',
   '¿Borrar la colección «{name}»? Lo que tiene se queda donde está; solo deja de estar agrupado.': 'Delete the collection “{name}”? What is in it stays where it is; it is just no longer grouped.',
 
+  // ---- Borrar (DeleteButton) ----
+  'Quitar de este dispositivo': 'Remove from this device',
+  'Sigue en {server}': 'It stays in {server}',
+  'Era la única copia: desaparece': 'It was the only copy: it is gone',
+  'Borrar de todos lados': 'Delete everywhere',
+  'Borrar de {server}': 'Delete from {server}',
+  'De {server} (queda un tiempo en su papelera) y de tus dispositivos': 'From {server} (it stays a while in its trash) and from your devices',
+  '¿Quitar «{title}» de este dispositivo? Sigue en {server}.': 'Remove “{title}” from this device? It stays in {server}.',
+  '¿Borrar «{title}» de este dispositivo? Es la única copia: no se puede recuperar.': 'Delete “{title}” from this device? It is the only copy: it cannot be recovered.',
+  'Quitado de este dispositivo.': 'Removed from this device.',
+  '¿Borrar «{title}» de todos lados? Se borra de {server} (queda un tiempo en su papelera), de este dispositivo y de tus colecciones y favoritos.': 'Delete “{title}” everywhere? It is deleted from {server} (it stays a while in its trash), from this device and from your collections and favorites.',
+  '«{title}» borrado.': '“{title}” deleted.',
+
   // ---- Telegram (libraries.ts, telegram.ts, TelegramLogin.vue, SourcesView, DeviceCatalogView, keeper.ts) ----
   'Telegram': 'Telegram',
   'Tu cuenta de Telegram: tus canales y grupos se navegan en Catálogos, con los cómics y libros que se han mandado a cada uno. Entras con un QR o con tu teléfono, una vez en cada dispositivo; la sesión se queda en él. Lo que descargues se guarda como lo demás.': 'Your Telegram account: browse your channels and groups in Catalogs, with the comics and books sent to each one. Sign in with a QR code or your phone, once on each device; the session stays on it. What you download is kept like everything else.',

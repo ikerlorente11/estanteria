@@ -40,7 +40,8 @@
             </button>
             <FavoriteButton :fav="itemFavorite(item)" />
             <CollectionButton :member="itemFavorite(item)" />
-            <FileButton :item="item" :local="local" :uploaded="uploadedAlready" @upload="local ? startUpload() : toCloud()" @reveal="reveal" @removed="backToList" />
+            <FileButton :item="item" :local="local" :uploaded="uploadedAlready" @upload="local ? startUpload() : toCloud()" @reveal="reveal" />
+            <DeleteButton :item="item" @removed="backToList" />
           </div>
           <form v-if="uploading !== null" class="es-upload" @submit.prevent="upload">
             <label>{{ t('En {server}, dentro de «{folder}»', { server: serverLabel(store), folder: store.readingRoot }) }}
@@ -96,6 +97,7 @@ import Cover from './Cover.vue'
 import FileButton from './FileButton.vue'
 import FavoriteButton from './FavoriteButton.vue'
 import CollectionButton from './CollectionButton.vue'
+import DeleteButton from './DeleteButton.vue'
 import { deviceWhere } from '../lib/handoff'
 import { timeAgo } from '../lib/follows'
 import { itemFavorite } from '../lib/favorites'

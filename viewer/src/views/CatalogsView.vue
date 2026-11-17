@@ -160,6 +160,7 @@ import { isCollapsed, toggleCollapsed } from '../lib/collapse'
 import { LIBRARY_TYPES } from '../lib/libraries'
 import { catalogLibraries, suwayomiHiddenCount, suwayomiLibraries, suwayomiSourcesOf, suwayomiVisibleSources } from '../lib/devicelibraries'
 import { serverLabel, useStore } from '../lib/store'
+import { checkTelegramSession, telegramSignedIn } from '../lib/telegram'
 
 /** The catalogs: in an app, the ones it reads by itself (add, filter by language, remove; repositories);
  * the same on the web of a server, through its network. */
@@ -190,7 +191,9 @@ const languages = computed(() => [...new Set([...(reg?.active || []).flatMap((c)
 /** a catalog «in many languages» shows under each one */
 // ---- the Suwayomi libraries: their sources ----
 const suwayomis = computed(() => (reg ? suwayomiLibraries() : []))
-const libs = computed(() => (reg ? catalogLibraries() : []))
+// a Telegram library only where it is signed in (see SourcesView)
+const libs = computed(() => (reg ? catalogLibraries().filter((l) => l.type !== 'telegram' || telegramSignedIn[l.id] === true) : []))
+onMounted(() => { for (const l of catalogLibraries()) if (l.type === 'telegram') void checkTelegramSession(store, l.id) })
 const sourceErrors = reactive<Record<string, string>>({})
 const img = (url: string) => netImageNow(store.net, url)
 function sourcesShown(id: string) {

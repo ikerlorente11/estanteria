@@ -560,6 +560,9 @@ export class Api {
     return this.call<{ path: string; item: Item | null }>(`/api/uploads/${encodeURIComponent(id)}/finish`, { method: 'POST' })
   }
   cancelUpload(id: string) { return this.call<{ ok: boolean }>(`/api/uploads/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
+  /** Deletes a file of the reading folder for good (OpenCloud keeps it in its trash a while), with its favourite and
+   * its place in collections. */
+  deleteItem(id: number) { return this.call<{ ok: boolean }>(`/api/items/${id}`, { method: 'DELETE' }) }
 
   /** Copies an item of an outside library or a catalogue into the reading folder of the cloud. */
   saveItem(id: number) { return this.call<{ path: string }>(`/api/items/${id}/save`, { method: 'POST' }) }

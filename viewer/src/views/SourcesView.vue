@@ -69,21 +69,19 @@
 
     <!-- an app: the libraries it is connected to -->
     <ul v-if="store.libraries" class="es-sources">
-      <li v-for="l in store.libraries.list.value" :key="l.id" class="es-source">
+      <li v-for="l in shownLibraries" :key="l.id" class="es-source">
         <span class="es-source-icon"><i class="es-i" :class="l.type === 'server' ? 'es-i-cloud' : 'es-i-server'" aria-hidden="true"></i></span>
         <span class="es-source-text">
           <strong>{{ l.name }} <small class="es-muted">{{ isGuestLibrary(l) ? t('Invitación') : t(LIBRARY_TYPES[l.type].label) }}</small></strong>
           <small v-if="l.type === 'telegram'" class="es-muted es-ellipsis">{{ l.username || t('Tu cuenta de Telegram') }}</small>
           <small v-else class="es-muted es-ellipsis">{{ isGuestLibrary(l) ? guestServer(l) : l.url }}<template v-if="l.username"> · {{ l.username }}</template></small>
           <small v-if="l.error" class="es-source-bad">{{ l.error }}</small>
-          <small v-else-if="l.type === 'telegram' && !store.telegram" class="es-muted">{{ t('Esta versión de la app no puede conectar con Telegram.') }}</small>
-          <small v-else-if="l.type === 'telegram' && telegramSignedIn[l.id] === false" class="es-muted">{{ t('Sin sesión en este dispositivo: entra para ver tus canales.') }}</small>
+
           <small v-else-if="l.type === 'server' && state.server && state.status" class="es-muted">{{ plural(state.status.archivador.total, '{n} elemento', '{n} elementos') }}<template v-if="state.status.archivador.pending"> · {{ t('{n} abriéndose', { n: state.status.archivador.pending }) }}</template></small>
         </span>
         <span class="es-source-actions">
           <a v-if="l.type === 'server' && state.server" href="#" class="es-btn es-small" @click.prevent="go({ v: 'library', source: 'archivador' })">{{ t('Ver') }}</a>
-          <button v-if="l.type === 'telegram' && store.telegram && telegramSignedIn[l.id] === false" class="es-btn es-small es-primary" @click="startTelegramLogin(l)">{{ t('Entrar') }}</button>
-          <a v-else-if="CATALOG_LIBRARY_TYPES.includes(l.type)" href="#" class="es-btn es-small" @click.prevent="go({ v: 'catalog', kind: `lib:${l.id}` })">{{ t('Ver') }}</a>
+          <a v-if="CATALOG_LIBRARY_TYPES.includes(l.type)" href="#" class="es-btn es-small" @click.prevent="go({ v: 'catalog', kind: `lib:${l.id}` })">{{ t('Ver') }}</a>
           <a v-if="l.type === 'suwayomi'" href="#" class="es-btn es-small" @click.prevent="go({ v: 'extensions', library: l.id })">{{ t('Extensiones') }}</a>
           <button v-if="isGuestLibrary(l)" class="es-btn es-small" :disabled="saving" :title="t('Usar esta invitación también en otro dispositivo tuyo')" @click="pair(l)"><i class="es-i es-i-computer" aria-hidden="true"></i> {{ t('Otro dispositivo') }}</button>
           <template v-if="!l.fixed">
@@ -92,7 +90,7 @@
           </template>
         </span>
       </li>
-      <li v-if="!store.libraries.list.value.length" class="es-source es-muted">{{ t('Ninguna todavía: añade una con «Añadir biblioteca».') }}</li>
+      <li v-if="!shownLibraries.length" class="es-source es-muted">{{ t('Ninguna todavía: añade una con «Añadir biblioteca».') }}</li>
     </ul>
 
     <!-- the outside libraries a server connects by itself (the web; in an app, when it has a server) -->
@@ -234,6 +232,10 @@ function ago(epoch: number): string {
 // ---- an app's own libraries ----
 const lib = reactive({ id: '' as string, type: 'server' as LibraryType, name: '', url: '', username: '', secret: '' })
 const libInfo = computed(() => LIBRARY_TYPES[lib.type])
+/** the libraries shown: a Telegram one only on a device where it is signed in (the list goes to every device with the
+ * person's settings, its session does not: without it here it would not work). On another device one adds Telegram
+ * again, and signing in to that account takes its library back (telegramDone). */
+const shownLibraries = computed(() => (store.libraries?.list.value || []).filter((l) => l.type !== 'telegram' || telegramSignedIn[l.id] === true))
 /** the kinds offered: Telegram only when this app has its credentials (see Store.telegram) */
 const libraryTypes = computed(() => (store.libraries?.types || []).filter((ty) => ty !== 'telegram' || !!store.telegram))
 
@@ -241,18 +243,13 @@ const libraryTypes = computed(() => (store.libraries?.types || []).filter((ty) =
 /** the id a new Telegram library gets (its session is kept under it while signing in) */
 const newTelegramId = ref(`telegram-${Date.now().toString(36)}`)
 const telegramNow = computed(() => telegramLink(store, lib.id || newTelegramId.value))
-function startTelegramLogin(l: Library) {
-  joining.value = false
-  link.value = null
-  Object.assign(lib, { id: l.id, type: 'telegram', name: l.name, url: l.url, username: l.username, secret: '' })
-  adding.value = true
-}
 async function telegramDone(account: TelegramAccount) {
   try {
     let id = lib.id || newTelegramId.value
     // that account has its library already (made on another device, say): that one, with this session
     const url = `tg:${account.id}`
-    const same = store.libraries!.list.value.find((l) => l.type === 'telegram' && l.url === url && l.id !== id)
+    // (one made before the address had its account, `tg:`, is known by its name)
+    const same = store.libraries!.list.value.find((l) => l.type === 'telegram' && l.id !== id && (l.url === url || (l.url === 'tg:' && l.name === account.name)))
     if (same) {
       await moveTelegramSession(store, id, same.id)
       id = same.id

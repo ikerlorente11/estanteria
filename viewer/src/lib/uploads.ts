@@ -78,6 +78,19 @@ export async function alreadyOnServer(store: Store, items: Item[], fresh = false
   return there
 }
 
+/** The server's item of a file of this device (where it went up to, see LocalShelf.uploadPath), if it is there. */
+export async function serverCopyOf(store: Store, item: Item): Promise<Item | null> {
+  const shelf = store.shelf
+  if (!shelf || !store.state.server) return null
+  const dest = shelf.uploadPath(item.id, store.state.status?.folders || [])
+  if (!dest) return null
+  const cut = dest.lastIndexOf('/')
+  const folder = cut < 0 ? '' : dest.slice(0, cut)
+  const name = dest.slice(cut + 1).toLowerCase()
+  const got = await store.api.items({ folder, direct: true, source: 'archivador', limit: 1000 })
+  return got.find((i) => (i.name || '').toLowerCase() === name) || null
+}
+
 /** Uploads these files of the shelf, each where the rest is on the server (see LocalShelf.uploadPath); those
  * the server has already are left out (it is asked first, after looking at the cloud again). */
 export async function uploadFiles(store: Store, items: Item[], where: { title: string; source: string; folder: string }): Promise<void> {

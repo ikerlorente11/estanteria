@@ -417,6 +417,26 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-tg-format { flex: none; min-width: 46px; padding: 3px 6px; border-radius: 6px; background: var(--es-surface-3); color: var(--es-accent);
   font-size: 11px; font-weight: 700; text-align: center; letter-spacing: .03em; }
 .es-tg-files .es-entry-kept .es-tg-format { background: var(--es-accent); color: var(--es-on-accent); }
+.es-tg-tabs { margin-bottom: 4px; }
+/* its images and videos: square tiles (an album, one), what was said with them over the bottom */
+.es-tg-media { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.es-tg-tile { position: relative; aspect-ratio: 1; padding: 0; border: 0; border-radius: 10px; overflow: hidden; cursor: pointer;
+  background: var(--es-surface-3); color: inherit; font: inherit; }
+.es-tg-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.es-tg-tile .es-cover-none { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 26px; color: var(--es-muted); }
+.es-tg-tile:hover img, .es-tg-tile:focus-visible img { transform: scale(1.03); transition: transform .15s; }
+.es-tg-tile-tag { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px;
+  background: rgba(0,0,0,.62); color: #fff; font-size: 12px; font-weight: 600; }
+.es-tg-tile-text { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 6px; text-align: left; font-size: 12px; color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.72)); }
+/* a video, over the page (TelegramVideo.vue) */
+.es-tg-video { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: rgba(0,0,0,.92); color: #fff; }
+.es-tg-video-head { display: flex; align-items: center; gap: 10px; padding: 10px 16px; }
+.es-tg-video-head .es-btn { color: #fff; border-color: rgba(255,255,255,.3); background: transparent; }
+.es-tg-video-body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 16px 16px; }
+.es-tg-video-player { max-width: 100%; max-height: 100%; border-radius: 8px; background: #000; }
+.es-tg-video-wait { display: grid; gap: 12px; justify-items: center; text-align: center; max-width: 420px; }
+.es-tg-video-bar { width: min(320px, 80vw); accent-color: var(--es-accent); }
 .es-i-edit { --es-i: url('/icons/edit-line.svg'); }
 .es-i-pause { --es-i: url('/icons/pause-line.svg'); }
 .es-i-play { --es-i: url('/icons/play-line.svg'); }

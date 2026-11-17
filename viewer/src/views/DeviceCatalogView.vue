@@ -34,13 +34,24 @@
         </div>
       </div>
 
+      <!-- views of the same place (a Telegram chat: its files, images and videos), with how many each has -->
+      <div v-if="feed.tabs" class="es-chips es-tg-tabs" role="tablist">
+        <button v-for="tab in feed.tabs" :key="tab.href" class="es-chip" :class="{ on: tab.active }" role="tab" :aria-selected="tab.active" @click="open(tab.href)">
+          {{ tab.label }}<span v-if="tab.count !== null" class="es-chip-count">{{ tab.count }}</span>
+        </button>
+      </div>
+
       <!-- Telegram: the chats in a list, each with its picture; only the ones chosen (all of them, while choosing) -->
       <template v-if="isTelegram && feed.navigation.length">
         <div class="es-series-actions">
           <button class="es-btn es-small" :class="{ 'es-primary': choosing }" @click="choosing = !choosing">
             <i class="es-i" :class="choosing ? 'es-i-check' : 'es-i-list'" aria-hidden="true"></i> {{ choosing ? t('Listo') : t('Elegir canales') }}
           </button>
-          <small v-if="choosing" class="es-muted">{{ t('Marca los canales y grupos que quieres ver aquí.') }}</small>
+          <template v-if="choosing">
+            <!-- one button: all ticked, it unticks them all (to then tick the few wanted); else it ticks them all -->
+            <button class="es-btn es-small" @click="showAllChats(!!hiddenCount)">{{ hiddenCount ? t('Marcar todos') : t('Desmarcar todos') }}</button>
+            <small class="es-muted">{{ t('Marca los canales y grupos que quieres ver aquí.') }}</small>
+          </template>
           <small v-else-if="hiddenCount" class="es-muted">{{ plural(hiddenCount, '{n} oculto', '{n} ocultos') }}</small>
         </div>
         <ul class="es-sources es-tg-chats">
@@ -93,6 +104,16 @@
             </button>
           </span>
         </div>
+      </div>
+      <!-- Telegram's images and videos: seen right here, nothing saved (an album, one tile; an image opens them all in the reader) -->
+      <div v-else-if="entries.length && isTelegram && entries[0].media" class="es-tg-media">
+        <button v-for="tile in tiles" :key="tile.first.id" class="es-tg-tile" :title="tile.first.summary || tile.first.title" @click="openTile(tile)">
+          <img v-if="thumbs[tile.first.id]" :src="thumbs[tile.first.id]!" alt="" loading="lazy" />
+          <span v-else class="es-cover-none"><i class="es-i" :class="tile.first.media!.kind === 'video' ? 'es-i-play' : 'es-i-page'" aria-hidden="true"></i></span>
+          <span v-if="tile.first.media!.kind === 'video'" class="es-tg-tile-tag"><i class="es-i es-i-play" aria-hidden="true"></i> {{ durationText(tile.first.media!.duration) }}</span>
+          <span v-else-if="tile.count > 1" class="es-tg-tile-tag"><i class="es-i es-i-pages" aria-hidden="true"></i> {{ tile.count }}</span>
+          <span v-if="tile.first.summary" class="es-tg-tile-text es-ellipsis">{{ tile.first.summary }}</span>
+        </button>
       </div>
       <!-- Telegram: files rarely bring a cover, so a list (its format, name, size, date and what was said with it) -->
       <div v-else-if="entries.length && isTelegram" class="es-chapters es-tg-files">
@@ -157,6 +178,7 @@
         <button v-if="next" class="es-btn es-primary" @click="open(next)">{{ t('Siguiente') }} <i class="es-i es-i-next" aria-hidden="true"></i></button>
       </nav>
     </template>
+    <TelegramVideo v-if="playing" :link="telegram()" :peer="playing.peer" :message="playing.message" :title="playing.title" @close="playing = null" />
   </section>
 </template>
 
@@ -183,7 +205,10 @@ import { suwayomiServer } from '../lib/devicelibraries'
 import { randomTag, suwayomiFeed } from '../lib/suwayomi'
 import { webdavFeed } from '../lib/webdav'
 import { archiveFeed } from '../lib/archive'
-import { isTelegramHref, parseAddress, setTelegramHidden, telegramFeed, telegramFile, telegramHidden, telegramLink } from '../lib/telegram'
+import {
+  durationText, isTelegramHref, parseAddress, parseFileHref, photosChapter, setTelegramHidden, telegramFeed, telegramFile, telegramHidden, telegramLink,
+} from '../lib/telegram'
+import TelegramVideo from './TelegramVideo.vue'
 
 /** A catalog the app reads by itself: its sections, what it offers and its search. A book or a comic is
  * downloaded to this device's shelf to be read (and stays there); a chapter is read page by page. */
@@ -252,6 +277,52 @@ const isHidden = (n: Nav) => hiddenNow.value.includes(chatIdOf(n))
 const shownChats = computed(() => (feed.value?.navigation || []).filter((n) => choosing.value || !isHidden(n)))
 const hiddenCount = computed(() => (feed.value?.navigation || []).filter(isHidden).length)
 function toggleChat(n: Nav) { if (props.def.library) setTelegramHidden(props.def.library, [chatIdOf(n)], !isHidden(n)) }
+/** every chat shown (`show`), or none: to then tick only the few wanted */
+function showAllChats(show: boolean) {
+  if (props.def.library) setTelegramHidden(props.def.library, (feed.value?.navigation || []).map(chatIdOf), !show)
+}
+// ---- Telegram's images and videos: an album is one tile; thumbnails as they come ----
+interface Tile { first: FeedEntry; count: number }
+const tiles = computed<Tile[]>(() => {
+  const out: Tile[] = []
+  for (const e of entries.value) {
+    const last = out[out.length - 1]
+    const album = e.media?.kind === 'photo' ? e.media.album : null
+    if (album && last && last.first.media?.album === album) last.count++
+    else out.push({ first: e, count: 1 })
+  }
+  return out
+})
+/** each image's or video's thumbnail once it came (a blob URL), by entry */
+const thumbs = reactive<Record<string, string | null>>({})
+watch(() => (isTelegram.value ? entries.value : []), (list) => {
+  for (const e of list) {
+    const msg = e.media ? parseFileHref(e.id) : null
+    if (!msg || e.id in thumbs) continue
+    thumbs[e.id] = null
+    telegram().thumb(msg.peer, msg.message).then((url) => { thumbs[e.id] = url }).catch(() => {})
+  }
+})
+/** a video plays over the page; an image opens the images shown in the reader, oldest first, from that one */
+const playing = ref<{ peer: string; message: number; title: string } | null>(null)
+function openTile(tile: Tile) {
+  const msg = parseFileHref(tile.first.id)
+  if (!msg) return
+  if (tile.first.media?.kind === 'video') {
+    playing.value = { peer: msg.peer, message: msg.message, title: tile.first.summary?.split('\n')[0] || feed.value?.title || props.def.name }
+    return
+  }
+  const messages = entries.value.filter((e) => e.media?.kind === 'photo').map((e) => parseFileHref(e.id)!.message).sort((a, b) => a - b)
+  // an album reads from its first image (the one shown is its newest)
+  const album = tile.first.media?.album
+  const first = album ? Math.min(...entries.value.filter((e) => e.media?.album === album).map((e) => parseFileHref(e.id)!.message)) : msg.message
+  const at = messages.indexOf(first)
+  // a long run: the 300 around it (an address has its limits)
+  const from = Math.max(0, at - 150)
+  const shown = messages.slice(from, from + 300)
+  go({ v: 'chapter', catalog: props.def.id, chapter: photosChapter(msg.peer, shown, at - from), title: feed.value?.title || props.def.name })
+}
+
 /** each chat's picture once it came (a blob URL), by chat */
 const photos = reactive<Record<string, string | null>>({})
 watch(() => (isTelegram.value ? shownChats.value : []), (chats) => {

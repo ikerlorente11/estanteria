@@ -31,6 +31,8 @@ export interface FeedEntry {
   number?: string
   /** a short line under the title (a chapter's number and group) */
   detail?: string | null
+  /** an image or a video to see right here (Telegram), not a file to download */
+  media?: { kind: 'photo' | 'video'; album: string | null; duration: number; size: number }
 }
 
 export interface Feed {
@@ -44,6 +46,8 @@ export interface Feed {
   next: string | null
   /** how to search: a URL template with {searchTerms}, if the catalog can */
   search: string | null
+  /** views of the same place to switch between (a Telegram chat: its files, images, videos), with how many each has */
+  tabs?: { label: string; href: string; count: number | null; active: boolean }[]
 }
 
 const ATOM = 'http://www.w3.org/2005/Atom'

@@ -71,8 +71,10 @@ export function withDeviceLibraries(app: LibrariesBackend | undefined, net: NetB
       const url = ['opds', 'webdav'].includes(input.type) ? input.url.trim() : input.url.replace(/\/+$/, '')
       const saved: Saved = { id, type: input.type, name: input.name || nameFromUrl(url), url, username: input.username }
       if (input.type === 'telegram') {
-        // signed in already (TelegramLogin.vue, its session kept on this device by telegram.ts): only its record here
-        saved.url = 'tg:'
+        // signed in already (TelegramLogin.vue, its session kept on this device by telegram.ts): only its record here.
+        // Its address is its account's (`tg:<account>`): libraries are told apart by kind and address when the
+        // settings of two devices are joined (prefs.ts), so two accounts must not look the same
+        saved.url = /^tg:\d+$/.test(url) ? url : 'tg:'
         saved.name = input.name || 'Telegram'
       } else if (input.type === 'suwayomi') {
         const server = { url, auth: input.username || secret ? Api.basic(input.username, secret) : '' }

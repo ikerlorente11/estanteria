@@ -20,6 +20,7 @@ import { useStore } from '../lib/store'
 import ComicReader from './ComicReader.vue'
 import { sharedProgress } from '../lib/handoff'
 import { useSync } from '../lib/favorites'
+import { telegramChapter, telegramLink } from '../lib/telegram'
 
 /** A chapter of a catalog read online, page by page, in the comic reader (nothing is downloaded): its
  * pages come from the catalog's servers through the app's network. */
@@ -31,10 +32,12 @@ const item = shallowRef<ItemDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 let urls: string[] = []
+/** Telegram: its images are asked to it, not fetched by address (telegram.ts) */
+let telegramPage: ((n: number) => Promise<string>) | null = null
 
 /** a page, at whatever width: the catalog's image, fetched once */
 function source(page: number): Promise<string> {
-  return netImage(net, urls[page])
+  return telegramPage ? telegramPage(page) : netImage(net, urls[page])
 }
 
 /** A stable id for the chapter, below 0. */
@@ -48,14 +51,30 @@ onMounted(async () => {
   try {
     const def = store.catalogs?.get(props.catalog)
     if (!def) throw new Error(t('Ese catálogo ya no está entre los tuyos.'))
-    urls = await chapterPages(net, def, props.chapter)
+    let count: number
+    let start: number | null = null
+    if (def.protocol === 'telegram') {
+      const link = def.library ? telegramLink(store, def.library) : null
+      if (!link) throw new Error(t('Esta versión de la app no puede conectar con Telegram.'))
+      const chapter = telegramChapter(link, props.chapter)
+      telegramPage = chapter.page
+      count = chapter.count
+      start = chapter.start
+    } else {
+      urls = await chapterPages(net, def, props.chapter)
+      count = urls.length
+    }
     const now = Math.round(Date.now() / 1000)
     item.value = {
       // its path is its key: what was read of it goes to the other devices (see handoff.ts)
-      id: idOf(`${props.catalog}:${props.chapter}`), source_id: null, path: `chapter:${props.catalog}:${props.chapter}`, folder: '', name: props.title || t('Capítulo'), format: 'cbz', kind: 'comic',
+      // (Telegram's images: a path without progress, see handoff.progressKey; what is seen of them is not noted)
+      id: idOf(`${props.catalog}:${props.chapter}`), source_id: null,
+      path: start !== null ? `telegram:${props.catalog}` : `chapter:${props.catalog}:${props.chapter}`, folder: '', name: props.title || t('Capítulo'), format: 'cbz', kind: 'comic',
       size: 0, modified: now, title: props.title || t('Capítulo'), series: null, number: null, author: null, year: null, summary: null,
-      pages: urls.length, direction: 'ltr', cover: false, state: 'ready', error: null, added: now, updated: now, meta: {},
-      progress: sharedProgress({ path: `chapter:${props.catalog}:${props.chapter}` }),
+      pages: count, direction: 'ltr', cover: false, state: 'ready', error: null, added: now, updated: now, meta: {},
+      // Telegram's images open where they were tapped (what is seen of them is not kept)
+      progress: start !== null ? { page: start, location: null, percent: 0, finished: false, device: null, updated: now }
+        : sharedProgress({ path: `chapter:${props.catalog}:${props.chapter}` }),
       page_sizes: [], bookmarks: [],
     }
   } catch (err: any) {

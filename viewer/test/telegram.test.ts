@@ -4,18 +4,20 @@ import { searchUrl } from '../src/lib/opds.ts'
 import { DEVICE_SECRET_PREFIX } from '../src/lib/prefs.ts'
 import { makeBackup } from '../src/lib/appsettings.ts'
 import {
-  chatAddress, chatsFeed, documentsFeed, fileHref, isTelegramHref, parseAddress, parseFileHref, readInOrder, sessionStore, titleOfName,
-  type RangeReader,
+  chatAddress, chatFeed, chatsFeed, durationText, fileHref, isTelegramHref, parseAddress, parseFileHref, parsePhotosChapter, photosChapter,
+  readInOrder, sessionStore, titleOfName, type RangeReader,
 } from '../src/lib/telegram.ts'
 
 // ---- addresses of the catalog and of a file (also its key as kept) ----
 assert.equal(parseAddress('tg:'), null)
-assert.deepEqual(parseAddress('tg:-1001234'), { peer: '-1001234', before: null, q: '' })
-assert.deepEqual(parseAddress('tg:-1001234?before=567&q=one%20piece'), { peer: '-1001234', before: 567, q: 'one piece' })
+assert.deepEqual(parseAddress('tg:-1001234'), { peer: '-1001234', before: null, q: '', media: null })
+assert.deepEqual(parseAddress('tg:-1001234?before=567&q=one%20piece'), { peer: '-1001234', before: 567, q: 'one piece', media: null })
 assert.equal(chatAddress('-1001234', { before: 567, q: 'one piece' }), 'tg:-1001234?before=567&q=one+piece')
-assert.deepEqual(parseAddress(chatAddress('-1001234', { before: 567, q: 'one piece' })), { peer: '-1001234', before: 567, q: 'one piece' })
+assert.deepEqual(parseAddress(chatAddress('-1001234', { before: 567, q: 'one piece', media: 'photos' })), { peer: '-1001234', before: 567, q: 'one piece', media: 'photos' })
+assert.equal(parseAddress('tg:-1?media=otra')!.media, null)
 // a search as the catalog makes it, from the feed's template
-assert.deepEqual(parseAddress(searchUrl('tg:-1001234?q={searchTerms}', 'el quijote')), { peer: '-1001234', before: null, q: 'el quijote' })
+assert.deepEqual(parseAddress(searchUrl('tg:-1001234?q={searchTerms}', 'el quijote')), { peer: '-1001234', before: null, q: 'el quijote', media: null })
+assert.deepEqual(parseAddress(searchUrl('tg:-1001234?media=videos&q={searchTerms}', 'gol')), { peer: '-1001234', before: null, q: 'gol', media: 'videos' })
 const ref = { account: '42', peer: '-1001234', message: 567 }
 assert.equal(fileHref(ref), 'tg:42/-1001234/567')
 assert.deepEqual(parseFileHref(fileHref(ref)), ref)
@@ -37,12 +39,20 @@ const page = {
     { message: 299, name: 'notas.docx', size: 1000, mime: 'application/msword', date: 1700000000, caption: '' },
     { message: 298, name: 'Libro.epub', size: 2 ** 20, mime: '', date: 0, caption: '' },
   ],
+  media: [],
   total: 250,
   next: 201,
 }
-const docs = documentsFeed('42', { peer: '-1001', title: 'Cómics' }, page, { peer: '-1001', before: null, q: 'saga' })
+const counts = { docs: 250, photos: 40, videos: 3 }
+const docs = chatFeed('42', { peer: '-1001', title: 'Cómics' }, page, { peer: '-1001', before: null, q: 'saga', media: null }, counts)
 assert.equal(docs.title, 'Cómics')
 assert.equal(docs.subtitle, '250 documentos')
+// its tabs, with how many each has (the search goes with them), the one shown marked
+assert.deepEqual(docs.tabs, [
+  { label: 'Archivos', href: 'tg:-1001?media=docs&q=saga', count: 250, active: true },     // chosen: not left to what the chat has
+  { label: 'Imágenes', href: 'tg:-1001?media=photos&q=saga', count: 40, active: false },
+  { label: 'Vídeos', href: 'tg:-1001?media=videos&q=saga', count: 3, active: false },
+])
 assert.deepEqual(docs.entries.map((e) => e.title), ['Saga 01', 'Libro'])          // what the app does not read is left out
 assert.deepEqual(docs.entries[0].offers, [{ href: 'tg:42/-1001/300', type: 'application/x-cbz', format: 'cbz' }])
 assert.equal(docs.entries[0].id, 'tg:42/-1001/300')
@@ -51,9 +61,37 @@ assert.match(docs.entries[0].detail!, /^40\.0 MB · /)
 assert.equal(docs.entries[1].detail, '1.0 MB')
 assert.equal(docs.entries[0].href, null)
 // the next page starts after the last message of this one (readable or not), the search goes on
-assert.deepEqual(parseAddress(docs.next!), { peer: '-1001', before: 201, q: 'saga' })
-assert.equal(documentsFeed('42', { peer: '-1001', title: 'X' }, { ...page, next: null }, { peer: '-1001', before: null, q: '' }).next, null)
+assert.deepEqual(parseAddress(docs.next!), { peer: '-1001', before: 201, q: 'saga', media: null })
+assert.equal(chatFeed('42', { peer: '-1001', title: 'X' }, { ...page, next: null }, { peer: '-1001', before: null, q: '', media: null }, null).next, null)
 assert.equal(docs.search, 'tg:-1001?q={searchTerms}')
+
+// images and videos: seen right here (no file to download), what an album is kept with them
+const media = {
+  docs: [], total: null, next: 150,
+  media: [
+    { message: 160, kind: 'photo' as const, album: '99', date: 1700000000, caption: 'Mafalda\nla tira de hoy', size: 0, duration: 0 },
+    { message: 159, kind: 'photo' as const, album: '99', date: 1700000000, caption: '', size: 0, duration: 0 },
+  ],
+}
+const photos = chatFeed('42', { peer: '-1001', title: 'Tiras' }, media, { peer: '-1001', before: null, q: '', media: 'photos' }, counts)
+assert.equal(photos.subtitle, '40 imágenes')
+assert.equal(photos.entries[0].title, 'Mafalda')
+assert.deepEqual(photos.entries[0].media, { kind: 'photo', album: '99', duration: 0, size: 0 })
+assert.deepEqual(photos.entries[0].offers, [])
+assert.equal(photos.search, 'tg:-1001?media=photos&q={searchTerms}')
+assert.deepEqual(parseAddress(photos.next!), { peer: '-1001', before: 150, q: '', media: 'photos' })
+assert.deepEqual(photos.tabs!.map((tab) => tab.active), [false, true, false])
+const videos = chatFeed('42', { peer: '-1001', title: 'Tiras' },
+  { ...media, media: [{ message: 7, kind: 'video' as const, album: null, date: 0, caption: '', size: 50 * 2 ** 20, duration: 125 }] },
+  { peer: '-1001', before: null, q: '', media: 'videos' }, counts)
+assert.equal(videos.entries[0].detail, '2:05 · 50.0 MB')
+assert.equal(durationText(3725), '1:02:05')
+
+// the images of a chat read as a chapter: their messages and where to start
+assert.equal(photosChapter('-1001', [5, 6, 9], 1), '-1001:5,6,9@1')
+assert.deepEqual(parsePhotosChapter('-1001:5,6,9@1'), { peer: '-1001', messages: [5, 6, 9], start: 1 })
+assert.equal(parsePhotosChapter('-1001:5,6@7')!.start, 1)
+assert.equal(parsePhotosChapter('chapter-de-otro'), null)
 
 // ---- a download: segments fetched a few at once, handed on in order ----
 const file = new Uint8Array(1000).map((_, i) => i % 251)
@@ -165,5 +203,14 @@ setTelegramHidden('lib1', ['-2002'], false)
 assert.deepEqual(telegramHidden('lib1'), ['-1001'])
 assert.deepEqual(telegramHidden('otra'), [])
 assert.deepEqual(JSON.parse(storage.get('estanteria.telegram.hidden')!), { lib1: ['-1001'] })
+
+// ---- signed in to an account that has its library already (made on another device): the session goes to it ----
+const { moveTelegramSession, telegramSignedIn } = await import('../src/lib/telegram.ts')
+await web.set('nueva', 'SESION-NUEVA')
+await moveTelegramSession({}, 'nueva', 'de-siempre')
+assert.equal(await web.get('de-siempre'), 'SESION-NUEVA')
+assert.equal(await web.get('nueva'), null)
+assert.equal(telegramSignedIn['de-siempre'], true)
+assert.equal(telegramSignedIn['nueva'], false)
 
 console.log('telegram ok')

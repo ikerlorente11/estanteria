@@ -189,7 +189,7 @@ import { deviceName, serverLabel, useStore } from '../lib/store'
 import { CATALOG_LIBRARY_TYPES, suwayomiServer } from '../lib/devicelibraries'
 import { guestServer, isGuestLibrary, joinWithInvitation, leaveGuest, pairDevice, parseInvitation, type GuestsStatus } from '../lib/guests'
 import { browserNet } from '../lib/net'
-import { checkTelegramSession, dropTelegramLink, telegramLink, telegramSignedIn, type TelegramAccount } from '../lib/telegram'
+import { checkTelegramSession, dropTelegramLink, moveTelegramSession, telegramLink, telegramSignedIn, type TelegramAccount } from '../lib/telegram'
 import TelegramLogin from './TelegramLogin.vue'
 
 /** The libraries: in an app, the servers it connects by itself (a server of its own, Komga, Kavita…); on
@@ -249,8 +249,15 @@ function startTelegramLogin(l: Library) {
 }
 async function telegramDone(account: TelegramAccount) {
   try {
-    const saved = await store.libraries!.save({ id: lib.id || newTelegramId.value, type: 'telegram', name: account.name, url: 'tg:',
-                                                username: account.username ? `@${account.username}` : '' })
+    let id = lib.id || newTelegramId.value
+    // that account has its library already (made on another device, say): that one, with this session
+    const url = `tg:${account.id}`
+    const same = store.libraries!.list.value.find((l) => l.type === 'telegram' && l.url === url && l.id !== id)
+    if (same) {
+      await moveTelegramSession(store, id, same.id)
+      id = same.id
+    }
+    const saved = await store.libraries!.save({ id, type: 'telegram', name: account.name, url, username: account.username ? `@${account.username}` : '' })
     newTelegramId.value = `telegram-${Date.now().toString(36)}`
     adding.value = false
     store.notify(t('«{name}» conectada: tus canales están en Catálogos.', { name: saved.name }))

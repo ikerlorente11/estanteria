@@ -77,6 +77,7 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
                 path == "/host/info" -> json(Response.Status.OK, info())
                 path == "/host/settings" -> settingsRoute(session)
                 path == "/host/prefs" -> prefsRoute(session)
+                path == "/host/secret" -> secretRoute(session)
                 path == "/host/lock" -> lockRoute(session)
                 path == "/host/file" -> fileRoute(session)
                 path == "/host/events" -> eventStream()
@@ -131,6 +132,11 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
         // since 0.3.0: an upload or a catalog download going on can be cut, and several copies download at once
         .put("cancel", true)
         .put("parallel", 3)
+        // with the Telegram library: the page's secrets (/host/secret), files written by pieces (/host/shelf/stream) and the
+        // catalog entry sent along with an upload
+        .put("secrets", true)
+        .put("streamSave", true)
+        .put("uploadKey", true)
 
     // ---- the files and folders of this device (see Shelf) ----
     private fun shelfRoute(session: IHTTPSession, rest: String): Response {
@@ -157,8 +163,19 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
             parts == listOf("cache") && m == Method.PUT -> { shelf.setCacheLimit(body.getLong("bytes")); empty() }
             parts == listOf("cache") && m == Method.DELETE -> { shelf.clearCache(); empty() }
             parts.size == 2 && parts[0] == "reveal" -> json(Response.Status.NOT_IMPLEMENTED, JSONObject().put("detail", "En Android no hay explorador que abrir."))
+            // a file written a piece at a time (saveStream): POST starts it, PUT adds the body after the rest,
+            // POST …/close names it and answers its URI, DELETE gives it up
+            parts == listOf("stream") && m == Method.POST ->
+                json(Response.Status.OK, JSONObject().put("id", net.openStream(session.parameters["name"]?.firstOrNull(), session.parameters["folder"]?.firstOrNull())))
+            parts.size == 2 && parts[0] == "stream" && m == Method.PUT ->
+                json(Response.Status.OK, JSONObject().put("size", net.writeStream(parts[1], session.inputStream, session.headers["content-length"]?.toLongOrNull() ?: -1L)))
+            parts.size == 3 && parts[0] == "stream" && parts[2] == "close" && m == Method.POST ->
+                json(Response.Status.OK, JSONObject().put("uri", net.closeStream(parts[1])))
+            parts.size == 2 && parts[0] == "stream" && m == Method.DELETE -> { net.abortStream(parts[1]); empty() }
             parts.size == 3 && parts[0] == "upload" && parts[2] == "cancel" && m == Method.POST -> { shelf.cancelUpload(parts[1].toLong()); empty() }
-            parts.size == 2 && parts[0] == "upload" && m == Method.POST -> json(Response.Status.OK, shelf.upload(parts[1].toLong(), body.getString("dest")))
+            // the key (the entry of a catalog it came from) in the body or in `?key=`
+            parts.size == 2 && parts[0] == "upload" && m == Method.POST -> json(Response.Status.OK, shelf.upload(parts[1].toLong(), body.getString("dest"),
+                body.optString("key").ifEmpty { session.parameters["key"]?.firstOrNull().orEmpty() }.takeIf { it.isNotEmpty() }))
             else -> json(Response.Status.NOT_FOUND, JSONObject().put("detail", "no existe /host/shelf/$rest"))
         }
     }
@@ -269,6 +286,28 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
             return json(Response.Status.METHOD_NOT_ALLOWED, JSONObject().put("detail", "no"))
         }
         return json(Response.Status.OK, JSONObject().put("wifiOnly", settings.wifiOnly))
+    }
+
+    // ---- the page's secrets (a Telegram session), kept encrypted in Settings: `?key=` names one ----
+    // GET answers `{ value }` (null when none), PUT `{ value }` keeps it (a null value deletes it), DELETE deletes it
+    private fun secretRoute(session: IHTTPSession): Response {
+        val key = session.parameters["key"]?.firstOrNull().orEmpty()
+        if (key.isEmpty() || key.length > SECRET_KEY_MAX || key.any { it.isISOControl() }) throw IllegalArgumentException("Esa clave no vale.")
+        return when (session.method) {
+            Method.GET -> json(Response.Status.OK, JSONObject().put("value", settings.viewerSecret(key) ?: JSONObject.NULL))
+            Method.PUT -> {
+                // looked at before reading: a body far bigger than any secret is refused unread
+                val length = session.headers["content-length"]?.toLongOrNull() ?: 0L
+                if (length > SECRET_BODY_MAX) return json(status(413), JSONObject().put("detail", "Ese secreto es demasiado grande."))
+                val body = JSONObject(readBody(session))
+                val value = if (body.isNull("value")) null else body.getString("value")
+                if (value != null && value.toByteArray(Charsets.UTF_8).size > SECRET_VALUE_MAX) return json(status(413), JSONObject().put("detail", "Ese secreto es demasiado grande."))
+                settings.saveViewerSecret(key, value)
+                empty()
+            }
+            Method.DELETE -> { settings.saveViewerSecret(key, null); empty() }
+            else -> json(Response.Status.METHOD_NOT_ALLOWED, JSONObject().put("detail", "no"))
+        }
     }
 
     // ---- a file served here, saved where the person wants or shared (see Files) ----
@@ -409,6 +448,10 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
         const val PORT = 48123
         const val SOCKET_READ_TIMEOUT = 30_000   // for reading a request; a response (the event stream) may take as long as it wants
         const val version = "0.1.0"
+        /** the page's secrets: keys and values of a reasonable size (a Telegram session is under 1 KB) */
+        private const val SECRET_KEY_MAX = 256
+        private const val SECRET_VALUE_MAX = 64 * 1024
+        private const val SECRET_BODY_MAX = 6L * SECRET_VALUE_MAX + 1024    // JSON may write a character as \uXXXX
         /** what a fetched answer brings back of the server's headers (besides type and length) */
         private val FORWARDED = listOf("Content-Disposition", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified", "Cache-Control",
             "WWW-Authenticate", "Link", "Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Retry-After", "DAV")

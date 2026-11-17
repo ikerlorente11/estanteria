@@ -50,7 +50,7 @@ export async function davList(net: NetBackend, url: string): Promise<DavEntry[]>
   return out.sort((a, b) => (a.folder === b.folder ? a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) : a.folder ? -1 : 1))
 }
 
-function sizeText(bytes: number): string {
+export function sizeText(bytes: number): string {
   if (!bytes) return ''
   if (bytes < 2 ** 20) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   if (bytes < 2 ** 30) return `${(bytes / 2 ** 20).toFixed(1)} MB`

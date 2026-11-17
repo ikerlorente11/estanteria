@@ -10,7 +10,7 @@ import { getJson, type NetBackend } from './net.ts'
 import { onPrefsReplaced, prefs } from './prefs.ts'
 
 /** How the app talks to a catalog: OPDS (1.2 or 2.0, told apart by what it answers) or an API it knows. */
-export type CatalogProtocol = 'opds' | 'mangadex' | 'archive' | 'suwayomi' | 'webdav'
+export type CatalogProtocol = 'opds' | 'mangadex' | 'archive' | 'suwayomi' | 'webdav' | 'telegram'
 export type CatalogContent = 'books' | 'comics' | 'manga'
 
 export interface CatalogDef {

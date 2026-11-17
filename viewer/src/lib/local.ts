@@ -87,8 +87,10 @@ export interface ShelfBackend {
   clearCache(): Promise<void>
   /** shows the file in the system's file browser */
   reveal(id: number): Promise<void>
-  /** puts the file in the reading folder of the Archivador, at `dest` (inside it); progress in bytes */
-  upload(id: number, dest: string, progress: (sent: number, total: number) => void): Promise<UploadDone>
+  /** puts the file in the reading folder of the Archivador, at `dest` (inside it); progress in bytes. `key`: the
+   * entry of a catalog it came from, sent along (POST /api/uploads) so that every device knows it is kept there
+   * (and a different file with that name does not stop it); an older host leaves it out */
+  upload(id: number, dest: string, progress: (sent: number, total: number) => void, key?: string): Promise<UploadDone>
   /** stops the upload of that file going on (it fails with a cancelled error); a host without it lets it end */
   cancelUpload?(id: number): Promise<void>
 }

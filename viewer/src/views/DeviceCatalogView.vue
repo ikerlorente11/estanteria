@@ -10,7 +10,7 @@
       </div>
       <span class="es-grow"></span>
       <Pick v-if="def.protocol === 'mangadex'" :model-value="lang" :aria-label="t('Idioma')" :options="MANGADEX_LANGUAGES.map((l) => ({ value: l, label: languageName(l) }))" @change="setLang" />
-      <input v-if="canSearch" :value="q" class="es-search" type="search" :placeholder="t('Buscar en {name}', { name: def.name })" :aria-label="t('Buscar')"
+      <input v-if="canSearch" :value="q || telegramQuery" class="es-search" type="search" :placeholder="t('Buscar en {name}', { name: isTelegram ? feed?.title || def.name : def.name })" :aria-label="t('Buscar')"
              @keydown.enter="search(($event.target as HTMLInputElement).value)" />
     </header>
 
@@ -34,7 +34,33 @@
         </div>
       </div>
 
-      <div v-if="feed.navigation.length" class="es-chips es-chips-big">
+      <!-- Telegram: the chats in a list, each with its picture; only the ones chosen (all of them, while choosing) -->
+      <template v-if="isTelegram && feed.navigation.length">
+        <div class="es-series-actions">
+          <button class="es-btn es-small" :class="{ 'es-primary': choosing }" @click="choosing = !choosing">
+            <i class="es-i" :class="choosing ? 'es-i-check' : 'es-i-list'" aria-hidden="true"></i> {{ choosing ? t('Listo') : t('Elegir canales') }}
+          </button>
+          <small v-if="choosing" class="es-muted">{{ t('Marca los canales y grupos que quieres ver aquí.') }}</small>
+          <small v-else-if="hiddenCount" class="es-muted">{{ plural(hiddenCount, '{n} oculto', '{n} ocultos') }}</small>
+        </div>
+        <ul class="es-sources es-tg-chats">
+          <li v-for="n in shownChats" :key="n.href" class="es-source es-tg-chat" :class="{ 'es-source-off': choosing && isHidden(n) }">
+            <input v-if="choosing" type="checkbox" class="es-tg-pick" :checked="!isHidden(n)" :aria-label="n.title" @change="toggleChat(n)" />
+            <a href="#" class="es-tg-chat-open" @click.prevent="choosing ? toggleChat(n) : open(n.href)">
+              <span class="es-source-icon es-tg-avatar">
+                <img v-if="photos[chatIdOf(n)]" :src="photos[chatIdOf(n)]!" alt="" />
+                <template v-else>{{ (n.title || '?').trim().charAt(0).toUpperCase() }}</template>
+              </span>
+              <span class="es-source-text">
+                <strong class="es-ellipsis">{{ n.title }}</strong>
+                <small class="es-muted">{{ n.subtitle }}</small>
+              </span>
+            </a>
+          </li>
+        </ul>
+        <p v-if="!shownChats.length" class="es-muted">{{ t('Los has ocultado todos: pulsa «Elegir canales» para ver alguno.') }}</p>
+      </template>
+      <div v-else-if="feed.navigation.length" class="es-chips es-chips-big">
         <a v-for="n in feed.navigation" :key="n.href" href="#" class="es-chip" :title="n.subtitle || ''" @click.prevent="open(n.href)">{{ n.title }}</a>
       </div>
 
@@ -65,6 +91,29 @@
             <button v-else class="es-btn es-small" :disabled="!canSave" :title="!canSave ? t('Esta versión no puede guardar archivos') : inCloud ? t('Guardar el capítulo (CBZ) en {server}', { server: serverLabel(store) }) : t('Descargar el capítulo (CBZ) para leerlo sin conexión')" @click="downloadChapter(e)">
               <i class="es-i es-i-download" aria-hidden="true"></i>
             </button>
+          </span>
+        </div>
+      </div>
+      <!-- Telegram: files rarely bring a cover, so a list (its format, name, size, date and what was said with it) -->
+      <div v-else-if="entries.length && isTelegram" class="es-chapters es-tg-files">
+        <div v-for="e in entries" :key="e.id" class="es-chapter" :class="{ 'es-entry-kept': hasItem(e) }">
+          <span class="es-tg-format">{{ offerOf(e)?.format?.toUpperCase() }}</span>
+          <a href="#" class="es-chapter-open" :title="e.title" @click.prevent="act(e)">
+            <strong class="es-ellipsis">{{ e.title }}</strong>
+            <small class="es-muted es-ellipsis">{{ e.detail }}<template v-if="jobOf(e)"> · {{ jobLabel(jobOf(e)) || t('Empezando…') }}</template></small>
+            <small v-if="e.summary" class="es-muted es-ellipsis">{{ e.summary }}</small>
+          </a>
+          <span class="es-chapter-actions">
+            <button v-if="hasItem(e)" class="es-btn es-small" :title="inCloud ? t('Abrir lo guardado en {server}', { server: serverLabel(store) }) : t('Abrir lo descargado (para leerlo sin conexión o subirlo a tu servidor)')" @click="openDownloaded(e)">
+              <i class="es-i es-i-check" aria-hidden="true"></i>
+            </button>
+            <button v-else-if="jobOf(e)" class="es-btn es-small" :title="t('Cancelar esta descarga')" @click="cancelCatalogDownloads([keyOf(e)])">
+              <span class="es-spin"></span><i class="es-i es-i-close" aria-hidden="true"></i>
+            </button>
+            <button v-else class="es-btn es-small" :disabled="!canSave" :title="inCloud ? t('Guardarlo en {server}', { server: serverLabel(store) }) : t('Descargarlo a tu estantería para leerlo sin conexión')" @click="download(e)">
+              <i class="es-i es-i-download" aria-hidden="true"></i>
+            </button>
+            <button class="es-btn es-small" :disabled="!!jobOf(e) || !canSave" @click="act(e)"><i class="es-i es-i-book-open" aria-hidden="true"></i> {{ t('Leer') }}</button>
           </span>
         </div>
       </div>
@@ -99,7 +148,7 @@
 
       <p v-if="!entries.length && !feed.navigation.length" class="es-muted">{{ q ? t('Nada con «{q}».', { q }) : t('Nada por aquí.') }}</p>
       <!-- the chapters of a manga grow in place; a list goes page by page (each page its own, back and forth) -->
-      <button v-if="next && isChapters" class="es-btn es-more" :disabled="loadingMore" @click="more">
+      <button v-if="next && (isChapters || isTelegram)" class="es-btn es-more" :disabled="loadingMore" @click="more">
         <span v-if="loadingMore" class="es-spin"></span> {{ t('Ver más') }}
       </button>
       <nav v-else-if="next || pageNumber > 1" class="es-pager" :aria-label="t('Páginas')">
@@ -134,6 +183,7 @@ import { suwayomiServer } from '../lib/devicelibraries'
 import { randomTag, suwayomiFeed } from '../lib/suwayomi'
 import { webdavFeed } from '../lib/webdav'
 import { archiveFeed } from '../lib/archive'
+import { isTelegramHref, parseAddress, setTelegramHidden, telegramFeed, telegramFile, telegramHidden, telegramLink } from '../lib/telegram'
 
 /** A catalog the app reads by itself: its sections, what it offers and its search. A book or a comic is
  * downloaded to this device's shelf to be read (and stays there); a chapter is read page by page. */
@@ -181,7 +231,37 @@ const gotOf = (e: FeedEntry) => keeper.value?.gotOf(keyOf(e))
 const hasItem = (e: FeedEntry) => gotOf(e) !== undefined
 /** the downloaded file's page: read it offline, upload it to a server of one's own */
 function openDownloaded(e: FeedEntry) { const id = gotOf(e); if (id !== undefined) go({ v: 'item', id }) }
-const canSearch = computed(() => props.def.protocol === 'webdav' ? false : props.def.protocol !== 'opds' || !!(feed.value?.search || rootSearch))
+const isTelegram = computed(() => props.def.protocol === 'telegram')
+/** Telegram searches inside a chat (the list of chats has no search): what is searched now, from the address */
+const telegramQuery = computed(() => (isTelegram.value && props.path ? parseAddress(props.path)?.q || '' : ''))
+const canSearch = computed(() => props.def.protocol === 'webdav' ? false
+  : isTelegram.value ? !!feed.value?.search
+  : props.def.protocol !== 'opds' || !!(feed.value?.search || rootSearch))
+/** the Telegram account of this catalog (its session on this device) */
+function telegram() {
+  const link = props.def.library ? telegramLink(store, props.def.library) : null
+  if (!link) throw new Error(t('Esta versión de la app no puede conectar con Telegram.'))
+  return link
+}
+// ---- Telegram's chats: the ones chosen, with their pictures ----
+type Nav = Feed['navigation'][number]
+const choosing = ref(false)
+const chatIdOf = (n: Nav) => parseAddress(n.href)?.peer || ''
+const hiddenNow = computed(() => (props.def.library ? telegramHidden(props.def.library) : []))
+const isHidden = (n: Nav) => hiddenNow.value.includes(chatIdOf(n))
+const shownChats = computed(() => (feed.value?.navigation || []).filter((n) => choosing.value || !isHidden(n)))
+const hiddenCount = computed(() => (feed.value?.navigation || []).filter(isHidden).length)
+function toggleChat(n: Nav) { if (props.def.library) setTelegramHidden(props.def.library, [chatIdOf(n)], !isHidden(n)) }
+/** each chat's picture once it came (a blob URL), by chat */
+const photos = reactive<Record<string, string | null>>({})
+watch(() => (isTelegram.value ? shownChats.value : []), (chats) => {
+  for (const n of chats) {
+    const peer = chatIdOf(n)
+    if (!n.icon || peer in photos) continue
+    photos[peer] = null
+    telegram().chatPhoto(peer).then((url) => { photos[peer] = url }).catch(() => {})
+  }
+})
 
 /** what a page is kept as (the language of a catalog in many is part of it) */
 const keyOf$ = (address: string | undefined) => `${props.def.id}|${props.def.protocol === 'mangadex' ? lang.value : ''}|${address || ''}`
@@ -206,6 +286,7 @@ async function fetchFeed(address: string | undefined): Promise<Feed> {
   }
   if (props.def.protocol === 'archive') return archiveFeed(net, address || 'archive:home')
   if (props.def.protocol === 'webdav') return webdavFeed(net, address || props.def.url, props.def.url)
+  if (props.def.protocol === 'telegram') return telegramFeed(telegram(), address)
   return readFeed(net, address || props.def.url)
 }
 
@@ -230,8 +311,9 @@ async function load() {
       feed.value = f
       entries.value = f.entries
       next.value = f.next
-      // the next page asked now, so that «Siguiente» is at once
-      if (f.next && !f.entries[0]?.chapter) {
+      // the next page asked now, so that «Siguiente» is at once (not Telegram's: it grows in place with «Ver más»,
+      // and asking it twice would only spend its limits)
+      if (f.next && !f.entries[0]?.chapter && props.def.protocol !== 'telegram') {
         const ahead = prefetchFeed(keyOf$(f.next), () => fetchFeed(f.next!))
         // at random each page is a slow page of the source: two ahead, so «Siguiente» rarely waits
         if (/^suwayomi:random/.test(f.next)) void ahead.then((g) => { if (g?.next) prefetchFeed(keyOf$(g.next), () => fetchFeed(g.next!)) })
@@ -265,6 +347,11 @@ function open(address: string) {
 }
 function search(q: string) {
   q = q.trim()
+  // Telegram: in the chat shown (its address carries the search)
+  if (isTelegram.value && feed.value?.search) {
+    const chat = parseAddress(feed.value.url)?.peer
+    return open(q ? searchUrl(feed.value.search, q) : chat ? `tg:${chat}` : 'tg:')
+  }
   go(q ? { v: 'catalog', kind: props.def.id, q } : { v: 'catalog', kind: props.def.id })
 }
 
@@ -295,8 +382,11 @@ async function fetchToShelf(e: FeedEntry): Promise<Item | null> {
   try {
     // in the folder of its series; one on its own, in that of its title («The Flash 012» → The Flash)
     const meta = { series: (e as any).series || seriesOfTitle(e.title), kind: kindOf(e, offer.format!), title: e.title }
-    const id = await runCatalogDownload(key, e.title, meta, 'bytes',
-      (progress, signal) => keep.file(key, offer.href, fileName(e.title, offer.format!), meta, progress, signal))
+    const name = fileName(e.title, offer.format!)
+    const id = await runCatalogDownload(key, e.title, meta, 'bytes', (progress, signal) => isTelegramHref(offer.href)
+      // only this device reaches Telegram: it fetches the file a piece at a time and hands it on
+      ? telegramFile(telegram(), offer.href).then((file) => keep.stream(key, file, name, meta, progress, signal))
+      : keep.file(key, offer.href, name, meta, progress, signal))
     await store.refresh()
     return keep.item(id)
   } catch (err: any) {

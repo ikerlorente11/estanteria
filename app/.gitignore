@@ -15,3 +15,5 @@ credentials/
 devhost/settings.json
 # the viewer packed for EAS Update (npm run web:build makes it)
 assets/viewer.zip
+# local build settings (web/.env.local: the Telegram API credentials), never in the repo
+.env*.local

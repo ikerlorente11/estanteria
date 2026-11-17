@@ -3,6 +3,7 @@
 import { reactive, watch } from 'vue'
 import type { Format } from './api.ts'
 import { setLanguage, t, type LanguageChoice } from './i18n.ts'
+import { DEVICE_SECRET_PREFIX, SECRET_PREFIX } from './prefs.ts'
 
 export interface AppSettings {
   /** the page the app opens at */
@@ -51,6 +52,8 @@ applyLook()
 
 // ---- the backup: everything this device keeps for the app (never passwords: those are the app's own) ----
 const PREFIX = 'estanteria.'
+/** a library's password and the secrets of this device alone stay here: never in a file */
+const secret = (key: string) => key.startsWith(SECRET_PREFIX) || key.startsWith(DEVICE_SECRET_PREFIX)
 
 export interface Backup {
   app: 'la-estanteria'
@@ -64,8 +67,7 @@ export function makeBackup(): Backup {
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)!
-      // a library's password stays on this device: never in a file
-      if (key.startsWith(PREFIX) && !key.startsWith(PREFIX + 'secret.')) data[key] = localStorage.getItem(key)!
+      if (key.startsWith(PREFIX) && !secret(key)) data[key] = localStorage.getItem(key)!
     }
   } catch (_) { /* nothing kept */ }
   return { app: 'la-estanteria', version: 1, made: new Date().toISOString(), data }
@@ -78,7 +80,7 @@ export function restoreBackup(text: string): number {
   if (backup?.app !== 'la-estanteria' || typeof backup.data !== 'object') throw new Error(t('Ese archivo no es una copia de seguridad de La Estantería.'))
   let n = 0
   for (const [key, value] of Object.entries(backup.data)) {
-    if (!key.startsWith(PREFIX) || key.startsWith(PREFIX + 'secret.') || typeof value !== 'string') continue
+    if (!key.startsWith(PREFIX) || secret(key) || typeof value !== 'string') continue
     localStorage.setItem(key, value)
     n++
   }
@@ -91,5 +93,6 @@ export const LICENSES: { name: string; license: string; url: string }[] = [
   { name: 'foliate-js (libros)', license: 'MIT', url: 'https://github.com/johnfactotum/foliate-js' },
   { name: 'pdf.js (PDF)', license: 'Apache-2.0', url: 'https://mozilla.github.io/pdf.js/' },
   { name: 'djvu-rs (DjVu)', license: 'MIT', url: 'https://github.com/matyushkin/djvu-rs' },
+  { name: 'teleproto (Telegram)', license: 'MIT', url: 'https://github.com/sanyok12345/teleproto' },
   { name: 'Remix Icon (iconos)', license: 'Apache-2.0', url: 'https://remixicon.com' },
 ]

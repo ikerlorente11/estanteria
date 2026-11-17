@@ -26,6 +26,12 @@ export interface NativeFeatures {
     /** asks for it; true when the person passed */
     unlock(reason: string): Promise<boolean>
   }
+  /** the device's secure store (Android: the Keystore; Windows: the Credential Manager): small secrets that stay
+   * on this device, never synced nor backed up (a Telegram session). `set(key, null)` deletes it. */
+  secrets?: {
+    get(key: string): Promise<string | null>
+    set(key: string, value: string | null): Promise<void>
+  }
 }
 
 /** A page turn asked from outside the reader (the volume keys): +1 the next page, -1 the previous one. */

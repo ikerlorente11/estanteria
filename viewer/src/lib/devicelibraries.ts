@@ -14,9 +14,9 @@ import { registerCatalogResolver, type CatalogDef } from './catalogs.ts'
 import { onPrefsReplaced, prefs, SECRET_PREFIX } from './prefs.ts'
 
 /** the kinds the page connects by itself */
-export const DEVICE_LIBRARY_TYPES: LibraryType[] = ['suwayomi', 'komga', 'kavita', 'opds', 'webdav']
+export const DEVICE_LIBRARY_TYPES: LibraryType[] = ['suwayomi', 'komga', 'kavita', 'opds', 'webdav', 'telegram']
 /** the kinds read as a catalog (browsed, downloaded and read on this device) */
-export const CATALOG_LIBRARY_TYPES: LibraryType[] = ['komga', 'kavita', 'opds', 'webdav']
+export const CATALOG_LIBRARY_TYPES: LibraryType[] = ['komga', 'kavita', 'opds', 'webdav', 'telegram']
 
 /** kept with the person's settings (prefs.ts: this device, or the server for its web); each password apart,
  * under `SECRET_PREFIX` + its id, which a backup leaves out (see appsettings.ts) */
@@ -70,7 +70,11 @@ export function withDeviceLibraries(app: LibrariesBackend | undefined, net: NetB
       // an OPDS or WebDAV address is kept as given (some answer only with their final slash)
       const url = ['opds', 'webdav'].includes(input.type) ? input.url.trim() : input.url.replace(/\/+$/, '')
       const saved: Saved = { id, type: input.type, name: input.name || nameFromUrl(url), url, username: input.username }
-      if (input.type === 'suwayomi') {
+      if (input.type === 'telegram') {
+        // signed in already (TelegramLogin.vue, its session kept on this device by telegram.ts): only its record here
+        saved.url = 'tg:'
+        saved.name = input.name || 'Telegram'
+      } else if (input.type === 'suwayomi') {
         const server = { url, auth: input.username || secret ? Api.basic(input.username, secret) : '' }
         await suwayomiCheck(net, server)            // it answers and lets us in, or the reason why not
         setImageAuth(url, server.auth)
@@ -127,6 +131,11 @@ export function catalogLibraries(): Saved[] {
 export function libraryCatalog(id: string): CatalogDef | undefined {
   const lib = state.list.find((l) => l.id === id && CATALOG_LIBRARY_TYPES.includes(l.type))
   if (!lib) return undefined
+  // Telegram: no address nor credential (its session is on this device, telegram.ts)
+  if (lib.type === 'telegram') {
+    return { id: `lib:${id}`, name: lib.name, protocol: 'telegram', url: 'tg:', library: id, languages: ['multi'],
+             content: ['books', 'comics', 'manga'], description: 'Telegram' }
+  }
   const secret = secretOf(id)
   const url = rootOf(lib, secret)
   setOriginHeaders(url, headersOf(lib, secret))

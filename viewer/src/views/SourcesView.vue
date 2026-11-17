@@ -33,18 +33,23 @@
     <!-- an app: a library it connects by itself -->
     <form v-if="adding && store.libraries" class="es-form" @submit.prevent="saveLibrary">
       <label>{{ t('Tipo') }}
-        <Pick v-model="lib.type" field :disabled="!!lib.id" :options="store.libraries.types.map((ty) => ({ value: ty, label: t(LIBRARY_TYPES[ty].label) }))" />
+        <Pick v-model="lib.type" field :disabled="!!lib.id" :options="libraryTypes.map((ty) => ({ value: ty, label: t(LIBRARY_TYPES[ty].label) }))" />
       </label>
-      <p class="es-muted es-small">{{ t(libInfo.hint) }}</p>
-      <label>{{ t('Nombre') }} <input v-model="lib.name" type="text" maxlength="120" :placeholder="lib.url ? nameFromUrl(lib.url) : t('Cómo quieres llamarla')" /></label>
-      <label>{{ t('Dirección') }} <input v-model="lib.url" type="url" required :placeholder="t(libInfo.example)" /></label>
-      <label v-if="libInfo.username">{{ t('Usuario') }} <input v-model="lib.username" type="text" autocomplete="off" autocapitalize="none" /></label>
-      <label>{{ t(libInfo.secretLabel) }} <input v-model="lib.secret" type="password" autocomplete="new-password" :placeholder="lib.id ? t('(sin cambios)') : ''" /></label>
-      <div class="es-form-actions">
-        <button class="es-btn es-primary" type="submit" :disabled="saving"><span v-if="saving" class="es-spin"></span> {{ lib.id ? t('Guardar') : t('Conectar y añadir') }}</button>
-        <button class="es-btn" type="button" @click="adding = false">Cancelar</button>
-      </div>
+      <template v-if="lib.type !== 'telegram'">
+        <p class="es-muted es-small">{{ t(libInfo.hint) }}</p>
+        <label>{{ t('Nombre') }} <input v-model="lib.name" type="text" maxlength="120" :placeholder="lib.url ? nameFromUrl(lib.url) : t('Cómo quieres llamarla')" /></label>
+        <label>{{ t('Dirección') }} <input v-model="lib.url" type="url" required :placeholder="t(libInfo.example)" /></label>
+        <label v-if="libInfo.username">{{ t('Usuario') }} <input v-model="lib.username" type="text" autocomplete="off" autocapitalize="none" /></label>
+        <label>{{ t(libInfo.secretLabel) }} <input v-model="lib.secret" type="password" autocomplete="new-password" :placeholder="lib.id ? t('(sin cambios)') : ''" /></label>
+        <div class="es-form-actions">
+          <button class="es-btn es-primary" type="submit" :disabled="saving"><span v-if="saving" class="es-spin"></span> {{ lib.id ? t('Guardar') : t('Conectar y añadir') }}</button>
+          <button class="es-btn" type="button" @click="adding = false">Cancelar</button>
+        </div>
+      </template>
     </form>
+    <!-- Telegram: one signs in with Telegram itself (a form of its own, outside the one above) -->
+    <TelegramLogin v-if="adding && store.libraries && lib.type === 'telegram' && telegramNow" :key="telegramNow.id" :link="telegramNow"
+                   :again="lib.id ? lib.name : ''" @done="telegramDone" @cancel="adding = false" />
 
     <!-- the web of a server: a library the server connects -->
     <form v-if="adding && !store.libraries && state.server" class="es-form" @submit.prevent="save">
@@ -68,17 +73,21 @@
         <span class="es-source-icon"><i class="es-i" :class="l.type === 'server' ? 'es-i-cloud' : 'es-i-server'" aria-hidden="true"></i></span>
         <span class="es-source-text">
           <strong>{{ l.name }} <small class="es-muted">{{ isGuestLibrary(l) ? t('Invitación') : t(LIBRARY_TYPES[l.type].label) }}</small></strong>
-          <small class="es-muted es-ellipsis">{{ isGuestLibrary(l) ? guestServer(l) : l.url }}<template v-if="l.username"> · {{ l.username }}</template></small>
+          <small v-if="l.type === 'telegram'" class="es-muted es-ellipsis">{{ l.username || t('Tu cuenta de Telegram') }}</small>
+          <small v-else class="es-muted es-ellipsis">{{ isGuestLibrary(l) ? guestServer(l) : l.url }}<template v-if="l.username"> · {{ l.username }}</template></small>
           <small v-if="l.error" class="es-source-bad">{{ l.error }}</small>
+          <small v-else-if="l.type === 'telegram' && !store.telegram" class="es-muted">{{ t('Esta versión de la app no puede conectar con Telegram.') }}</small>
+          <small v-else-if="l.type === 'telegram' && telegramSignedIn[l.id] === false" class="es-muted">{{ t('Sin sesión en este dispositivo: entra para ver tus canales.') }}</small>
           <small v-else-if="l.type === 'server' && state.server && state.status" class="es-muted">{{ plural(state.status.archivador.total, '{n} elemento', '{n} elementos') }}<template v-if="state.status.archivador.pending"> · {{ t('{n} abriéndose', { n: state.status.archivador.pending }) }}</template></small>
         </span>
         <span class="es-source-actions">
           <a v-if="l.type === 'server' && state.server" href="#" class="es-btn es-small" @click.prevent="go({ v: 'library', source: 'archivador' })">{{ t('Ver') }}</a>
-          <a v-if="CATALOG_LIBRARY_TYPES.includes(l.type)" href="#" class="es-btn es-small" @click.prevent="go({ v: 'catalog', kind: `lib:${l.id}` })">{{ t('Ver') }}</a>
+          <button v-if="l.type === 'telegram' && store.telegram && telegramSignedIn[l.id] === false" class="es-btn es-small es-primary" @click="startTelegramLogin(l)">{{ t('Entrar') }}</button>
+          <a v-else-if="CATALOG_LIBRARY_TYPES.includes(l.type)" href="#" class="es-btn es-small" @click.prevent="go({ v: 'catalog', kind: `lib:${l.id}` })">{{ t('Ver') }}</a>
           <a v-if="l.type === 'suwayomi'" href="#" class="es-btn es-small" @click.prevent="go({ v: 'extensions', library: l.id })">{{ t('Extensiones') }}</a>
           <button v-if="isGuestLibrary(l)" class="es-btn es-small" :disabled="saving" :title="t('Usar esta invitación también en otro dispositivo tuyo')" @click="pair(l)"><i class="es-i es-i-computer" aria-hidden="true"></i> {{ t('Otro dispositivo') }}</button>
           <template v-if="!l.fixed">
-            <button v-if="!isGuestLibrary(l)" class="es-btn es-small" :title="t('Cambiar')" @click="startEditLibrary(l)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
+            <button v-if="!isGuestLibrary(l) && l.type !== 'telegram'" class="es-btn es-small" :title="t('Cambiar')" @click="startEditLibrary(l)"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
             <button class="es-btn es-small" :title="t('Quitar')" :disabled="saving" @click="removeLibrary(l)"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
           </template>
         </span>
@@ -180,6 +189,8 @@ import { deviceName, serverLabel, useStore } from '../lib/store'
 import { CATALOG_LIBRARY_TYPES, suwayomiServer } from '../lib/devicelibraries'
 import { guestServer, isGuestLibrary, joinWithInvitation, leaveGuest, pairDevice, parseInvitation, type GuestsStatus } from '../lib/guests'
 import { browserNet } from '../lib/net'
+import { checkTelegramSession, dropTelegramLink, telegramLink, telegramSignedIn, type TelegramAccount } from '../lib/telegram'
+import TelegramLogin from './TelegramLogin.vue'
 
 /** The libraries: in an app, the servers it connects by itself (a server of its own, Komga, Kavita…); on
  * the web of a server, the outside libraries that server connects (add one, see how each is doing, scan,
@@ -223,6 +234,32 @@ function ago(epoch: number): string {
 // ---- an app's own libraries ----
 const lib = reactive({ id: '' as string, type: 'server' as LibraryType, name: '', url: '', username: '', secret: '' })
 const libInfo = computed(() => LIBRARY_TYPES[lib.type])
+/** the kinds offered: Telegram only when this app has its credentials (see Store.telegram) */
+const libraryTypes = computed(() => (store.libraries?.types || []).filter((ty) => ty !== 'telegram' || !!store.telegram))
+
+// ---- Telegram: signing in makes the library (its session stays on this device) ----
+/** the id a new Telegram library gets (its session is kept under it while signing in) */
+const newTelegramId = ref(`telegram-${Date.now().toString(36)}`)
+const telegramNow = computed(() => telegramLink(store, lib.id || newTelegramId.value))
+function startTelegramLogin(l: Library) {
+  joining.value = false
+  link.value = null
+  Object.assign(lib, { id: l.id, type: 'telegram', name: l.name, url: l.url, username: l.username, secret: '' })
+  adding.value = true
+}
+async function telegramDone(account: TelegramAccount) {
+  try {
+    const saved = await store.libraries!.save({ id: lib.id || newTelegramId.value, type: 'telegram', name: account.name, url: 'tg:',
+                                                username: account.username ? `@${account.username}` : '' })
+    newTelegramId.value = `telegram-${Date.now().toString(36)}`
+    adding.value = false
+    store.notify(t('«{name}» conectada: tus canales están en Catálogos.', { name: saved.name }))
+    go({ v: 'catalog', kind: `lib:${saved.id}` })
+  } catch (err: any) { store.notify(err?.message || String(err), true) }
+}
+function checkTelegramSessions() {
+  for (const l of store.libraries?.list.value || []) if (l.type === 'telegram') void checkTelegramSession(store, l.id)
+}
 function startEditLibrary(l: Library) {
   Object.assign(lib, { id: l.id, type: l.type, name: l.name, url: l.url, username: l.username, secret: '' })
   adding.value = true
@@ -242,12 +279,15 @@ async function removeLibrary(l: Library) {
   const guest = isGuestLibrary(l)
   const question = guest
     ? t('¿Salir de «{name}»? Este dispositivo deja de tener acceso a ese catálogo (lo descargado se queda aquí). Para volver hará falta otra invitación.', { name: l.name })
-    : t('¿Quitar «{name}»? Se olvida su contraseña y sus elementos dejan de estar en tu estantería (lo descargado y lo leído se quedan en este dispositivo).', { name: l.name })
+    : l.type === 'telegram'
+      ? t('¿Quitar «{name}»? Se cierra la sesión de Telegram de este dispositivo y deja de salir en tus otros dispositivos (lo descargado se queda donde esté).', { name: l.name })
+      : t('¿Quitar «{name}»? Se olvida su contraseña y sus elementos dejan de estar en tu estantería (lo descargado y lo leído se quedan en este dispositivo).', { name: l.name })
   if (!window.confirm(question)) return
   saving.value = true
   try {
     const server = guest ? suwayomiServer(l.id) : null
     if (server) await leaveGuest(net, l, server.auth)
+    if (l.type === 'telegram') await dropTelegramLink(store, l.id)
     await store.libraries!.remove(l.id)
     store.notify(t('«{name}» quitada.', { name: l.name }))
   } catch (err: any) { store.notify(err?.message || String(err), true) }
@@ -422,7 +462,8 @@ async function remove(s: Source) {
     await store.refresh()
   } catch (err: any) { store.notify(err?.message || String(err), true) }
 }
-onMounted(() => { load(); if (props.add) startAdd() })
+onMounted(() => { load(); checkTelegramSessions(); if (props.add) startAdd() })
+watch(() => store.libraries?.list.value.filter((l) => l.type === 'telegram').map((l) => l.id).join(','), checkTelegramSessions)
 watch(() => props.add, (now) => { if (now) startAdd() })
 watch(() => state.connected, load)
 watch(() => state.status?.sources?.map((s) => `${s.id}:${s.scanned}:${s.items}`).join(','), load)

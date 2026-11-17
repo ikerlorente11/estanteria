@@ -556,10 +556,11 @@ class Shelf(private val context: Context, private val settings: Settings, privat
     /** Stops the upload of that file going on: the piece going is cut and the service forgets what it got. */
     fun cancelUpload(id: Long) { stopUploads.add(id) }
 
-    fun upload(id: Long, dest: String): JSONObject {
+    /** `key`: the entry of a catalog the file came from, sent along so every device knows it is kept there. */
+    fun upload(id: Long, dest: String, key: String? = null): JSONObject {
         stopUploads.remove(id)                // a stop asked of an earlier upload of it is not this one's
         try {
-            return uploadFile(id, dest)
+            return uploadFile(id, dest, key)
         } catch (e: UploadCancelled) {
             throw IllegalStateException("cancelada")
         } finally {
@@ -567,7 +568,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         }
     }
 
-    private fun uploadFile(id: Long, dest: String): JSONObject {
+    private fun uploadFile(id: Long, dest: String, key: String?): JSONObject {
         val k = item(id)
         val authorization = settings.authorization() ?: throw IllegalStateException("Conecta con tu Archivador primero.")
         val base = settings.url
@@ -609,7 +610,8 @@ class Shelf(private val context: Context, private val settings: Settings, privat
             }
             return try { JSONObject(text) } catch (_: Exception) { JSONObject() }
         }
-        val started = call("POST", "$base/api/uploads", "application/json", JSONObject().put("path", dest).put("size", total).toString().toByteArray())
+        val start = JSONObject().put("path", dest).put("size", total).also { if (!key.isNullOrEmpty()) it.put("key", key) }
+        val started = call("POST", "$base/api/uploads", "application/json", start.toString().toByteArray())
         val upload = started.optString("id", "").ifEmpty { throw IllegalStateException("el servicio no empezó la subida") }
         val chunk = started.optInt("chunk", UPLOAD_CHUNK).coerceAtMost(UPLOAD_CHUNK)
         var sent = 0L

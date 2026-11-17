@@ -6,7 +6,7 @@ import type { Ref } from 'vue'
 
 /** `server`: a server with the full reading API (its library, progress, notes and highlights kept for
  * every device); the others are the usual library servers. */
-export type LibraryType = 'server' | 'suwayomi' | 'opds' | 'komga' | 'kavita' | 'webdav'
+export type LibraryType = 'server' | 'suwayomi' | 'opds' | 'komga' | 'kavita' | 'webdav' | 'telegram'
 
 export interface LibraryTypeInfo {
   label: string
@@ -47,6 +47,12 @@ export const LIBRARY_TYPES: Record<LibraryType, LibraryTypeInfo> = {
     label: 'Carpeta WebDAV',
     hint: 'Una carpeta compartida por WebDAV (Nextcloud, OpenCloud, un NAS…): sus cómics y libros, con sus subcarpetas, se navegan en Catálogos. El progreso se guarda en este dispositivo.',
     example: 'https://nube.ejemplo.com/remote.php/dav/files/usuario/Lectura', username: true, secretLabel: 'Contraseña',
+  },
+  // no address nor password: one signs in with Telegram itself (TelegramLogin.vue), on each device
+  telegram: {
+    label: 'Telegram',
+    hint: 'Tu cuenta de Telegram: tus canales y grupos se navegan en Catálogos, con los cómics y libros que se han mandado a cada uno. Entras con un QR o con tu teléfono, una vez en cada dispositivo; la sesión se queda en él. Lo que descargues se guarda como lo demás.',
+    example: '', username: false, secretLabel: '',
   },
 }
 

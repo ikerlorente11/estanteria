@@ -52,3 +52,29 @@ Para la app de verdad, la página va en los assets nativos del módulo (dentro d
 compilar, y un cambio del visor necesita build nueva (EAS Update solo lleva el JS de React Native, aquí casi nada).
 
 Publicar: `eas build -p android --profile production` y `eas submit` (pista interna de Play), como liftlog.
+
+## Credenciales de Telegram
+
+La biblioteca Telegram necesita las credenciales de la app en la API de Telegram (`api_id` y `api_hash`, de
+my.telegram.org). El repo es público: **no van en él**. La página las toma al compilarse (Vite) de
+`VITE_TELEGRAM_API_ID` y `VITE_TELEGRAM_API_HASH` (`store.telegram` en `web/src/App.vue`); si faltan, la app funciona
+igual pero sin biblioteca Telegram.
+
+- **EAS** (`eas build` y `npm run release`): variables de entorno del proyecto en el entorno `production`
+  (`eas env:create --environment production --name VITE_TELEGRAM_API_ID --value … --visibility sensitive`, y lo mismo
+  con `VITE_TELEGRAM_API_HASH`; o en expo.dev, Project → Environment variables). El perfil `production` (y `apk`, que lo
+  extiende) compila en ese entorno, y `eas-build-post-install` hace `web:build` con ellas ya en el entorno.
+- **Local** (`npm run web:build`, `npm run update`, `npm --prefix web run dev`): un `web/.env.local` (ignorado por git):
+
+  ```
+  VITE_TELEGRAM_API_ID=…
+  VITE_TELEGRAM_API_HASH=…
+  ```
+
+  `npm run update` construye la página con `web:build` antes de `eas update`, en local: el `--environment production`
+  de `eas update` no llega a Vite, así que hace falta el `.env.local` (o `eas env:exec production "npm run web:build"`,
+  si las variables no son de visibilidad «secret»).
+
+Van dentro del JavaScript de la página (como en cualquier cliente de Telegram, no son un secreto frente a quien abra el
+APK): lo que se evita es publicarlas en el repo. La sesión de cada persona sí es secreta: el host la guarda cifrada con el
+keystore (`/host/secret`, en las EncryptedSharedPreferences de `Settings.kt`).

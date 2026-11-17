@@ -38,7 +38,7 @@ export interface Feed {
   title: string
   subtitle: string | null
   /** where to go: the sections of a navigation feed */
-  navigation: { title: string; href: string; subtitle: string | null }[]
+  navigation: { title: string; href: string; subtitle: string | null; icon?: string | null }[]
   /** what can be read here */
   entries: FeedEntry[]
   next: string | null

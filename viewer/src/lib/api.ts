@@ -495,6 +495,35 @@ export class Api {
   /** the item of each entry kept, by its key in the catalog */
   keptFromCatalogs() { return this.call<Record<string, number>>('/api/keep/got') }
 
+  // ---- a file this page fetched by itself (a file of Telegram), up into the reading folder a piece at a time ----
+  /** `path`: inside the reading folder; with `key` it is remembered as kept under it (and goes as « (2)» beside
+   * a different file with that name) */
+  startUpload(req: { path: string; size: number; key?: string }) {
+    return this.call<{ id: string; path: string; chunk: number; offset: number }>('/api/uploads', { method: 'POST', body: JSON.stringify(req) })
+  }
+  /** the next piece, at `offset`; how much the server has now */
+  async uploadPiece(id: string, offset: number, piece: Uint8Array): Promise<{ offset: number }> {
+    if (this.standalone) throw noServer()
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/api/uploads/${encodeURIComponent(id)}?offset=${offset}`, {
+        method: 'PUT', headers: this.headers({ 'Content-Type': 'application/octet-stream' }), body: piece as BodyInit })
+    } catch (err) {
+      throw unreachable(err)
+    }
+    if (!res.ok) {
+      const detail = await res.json().then((b) => b.detail).catch(() => res.statusText)
+      const err: any = new Error(typeof detail === 'string' ? detail : res.statusText)
+      err.status = res.status
+      throw err
+    }
+    return res.json()
+  }
+  finishUpload(id: string) {
+    return this.call<{ path: string; item: Item | null }>(`/api/uploads/${encodeURIComponent(id)}/finish`, { method: 'POST' })
+  }
+  cancelUpload(id: string) { return this.call<{ ok: boolean }>(`/api/uploads/${encodeURIComponent(id)}`, { method: 'DELETE' }) }
+
   /** Copies an item of an outside library or a catalogue into the reading folder of the cloud. */
   saveItem(id: number) { return this.call<{ path: string }>(`/api/items/${id}/save`, { method: 'POST' }) }
   /** Rebuilds a PDF with text as an EPUB, or lays a book out as a PDF, next to it (the new item comes back already listed). */

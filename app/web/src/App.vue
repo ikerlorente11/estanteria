@@ -73,7 +73,7 @@ import { RELEASE } from './release'
 import { computed, onMounted, provide, reactive, ref, shallowReactive, shallowRef, watch } from 'vue'
 import { Api, CatalogRegistry, ExtensionsView, withDeviceLibraries, LockScreen, appSettings, useAppLock, CatalogView, CatalogsView, ChapterReader, FavoritesView, Cover, DownloadsView, HomeView, LocalShelf, Offline, ImageCache, ItemView, LibraryView, ReaderView, SeriesView, SettingsView, SourcesView, STORE,
          createState, nameFromUrl, plural, queryFromView, t, useScrollMemory, viewFromQuery, type DownloadState, type Theme, type Item, type Library, type LibrariesBackend, type Store, type View } from 'estanteria-viewer'
-import { HOST_BASE, TOKEN, forgetServer, hostBackend, hostNative, hostNet, hostShelf, hostUrl, info, loadConnection, saveConnection, tellApp, type Connection, type HostInfo } from './lib/host'
+import { HOST_BASE, TOKEN, forgetServer, hostBackend, hostNative, hostNet, hostSaveStream, hostShelf, hostUrl, info, loadConnection, saveConnection, tellApp, type Connection, type HostInfo } from './lib/host'
 
 /**
  * The Android shell of La Estantería: the same library and readers as the web and the desktop, served
@@ -173,6 +173,14 @@ let shelf: LocalShelf | null = null
 const catalogs = new CatalogRegistry()
 const net = hostNet()
 
+/** The app's credentials in Telegram's API, put in at build time (VITE_TELEGRAM_API_ID / VITE_TELEGRAM_API_HASH: an
+ * EAS environment variable, or web/.env.local here; never in the repo, which is public). Without them, no Telegram. */
+const telegram: Store['telegram'] = (() => {
+  const apiId = Number(import.meta.env.VITE_TELEGRAM_API_ID)
+  const apiHash = String(import.meta.env.VITE_TELEGRAM_API_HASH || '').trim()
+  return Number.isInteger(apiId) && apiId > 0 && apiHash ? { apiId, apiHash } : undefined
+})()
+
 /** Whose what is kept is: `user@host` of the server connected. */
 function accountOf(): string {
   let host = connection.url
@@ -191,7 +199,7 @@ function makeStore(server: boolean): Store {
     saveFile: (path, name, quiet) => tellApp({ type: 'download', url: new URL(hostUrl(path), window.location.href).toString(), name, path, quiet: !!quiet }),
     removeDownload: (path) => tellApp({ type: 'remove-download', path }),
     downloads, canFullscreen: false, libraries: allLibraries, serverName: server ? serverName.value : undefined,
-    appearance: { theme, setTheme }, version: version.value && version.value !== '?' ? version.value : undefined, catalogs, net, platform: 'android', native: native || undefined }
+    appearance: { theme, setTheme }, version: version.value && version.value !== '?' ? version.value : undefined, catalogs, net, platform: 'android', native: native || undefined, telegram }
   if (hostInfo.offline) {
     const keeper = offline.value || new Offline(hostBackend(hostInfo))
     // what waits to be sent is this account's (`local` without a server): never sent to another one
@@ -332,6 +340,8 @@ onMounted(async () => {
   try {
     hostInfo = await info()
     native = hostNative(hostInfo)
+    // a file written a piece at a time: only a host that says it can (the page may come by OTA over an older APK)
+    if (hostInfo.streamSave) net.saveStream = hostSaveStream
     native.wifiOnly?.(appSettings.wifiOnly)
     await lock.lockIfAsked()
     // the release this page is (an update over the air moves it on; the native version stays)

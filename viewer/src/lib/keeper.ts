@@ -4,6 +4,8 @@
  *    connected, it goes up to the server's reading folder too (where the rest is), so every device has it;
  *  - the web of a server (no device): the service fetches it into the person's reading folder itself (keep.py),
  *    and what is there is known by the server, not by this browser.
+ * A file the page fetches by itself (`stream`: a file of Telegram, which only this device can reach) goes the
+ * same way, except that on the web it is this browser that sends it up, a piece at a time (/api/uploads).
  * Either way the answer is the id of an item that opens with the readers of always.
  */
 import type { Api, Item } from './api.ts'
@@ -11,6 +13,7 @@ import { reactive } from 'vue'
 import { cancelled, catalogGot, catalogGotFrom, type CatalogMeta } from './catalogdownloads.ts'
 import { t } from './i18n.ts'
 import { catalogFolder, isLocal, seriesOfTitle } from './local.ts'
+import { inPieces, writeStream, type StreamSource } from './net.ts'
 import { authOf } from './netimages.ts'
 import type { Store } from './store.ts'
 import { storeZip } from './zipstore.ts'
@@ -37,6 +40,9 @@ export interface Keeper {
   /** the file at `url`, kept as `name`; `key`: the entry's in its catalog */
   file(key: string, url: string, name: string, meta: CatalogMeta, progress: KeepProgress, signal: AbortSignal): Promise<number>
   chapter(key: string, chapter: ChapterToKeep, meta: CatalogMeta, progress: KeepProgress, signal: AbortSignal): Promise<number>
+  /** a file the page fetches by itself, a piece at a time (a file of Telegram), kept as `name`; `key`: the entry's
+   * in its catalog, which the server remembers too, so that every device knows it is kept */
+  stream(key: string, file: StreamSource, name: string, meta: CatalogMeta, progress: KeepProgress, signal: AbortSignal): Promise<number>
   /** asks again what was kept (the server's keeper: what it fetched by itself meanwhile) */
   load?(): Promise<void>
 }
@@ -52,13 +58,14 @@ function deviceKeeper(store: Store): Keeper {
   // up to the server one after another, behind the downloads (the folders of a new series are made once)
   let ups: Promise<void> = Promise.resolve()
   let told = false
-  function toServer(item: Item, meta: CatalogMeta) {
+  /** `key`: only for what the page fetched by itself (see Keeper.stream); the rest goes up as always, without it */
+  function toServer(item: Item, meta: CatalogMeta, key?: string) {
     if (!store.state.server) return
     ups = ups.then(async () => {
       if (!store.state.server) return
       const dest = `${catalogFolder(meta, store.state.status?.folders || [])}/${item.name}`
       try {
-        await shelf.backend.upload(item.id, dest, () => {})
+        await shelf.backend.upload(item.id, dest, () => {}, key)
       } catch (err: any) {
         if (err?.status === 409 || /ya hay/i.test(String(err?.message || err))) return      // it is there already
         if (!told) store.notify(t('No se pudo subir «{title}» a {server}: {error}', { title: meta.title, server: store.serverName || t('tu servidor'), error: err?.message || String(err) }), true)
@@ -108,6 +115,28 @@ function deviceKeeper(store: Store): Keeper {
       toServer(item, meta)
       return item.id
     },
+    async stream(key, file, name, meta, progress, signal) {
+      const uri = await writeStream(net, name, seriesFolder(meta), file, progress, signal)
+      const [item] = await shelf.addFiles([uri])
+      toServer(item, meta, key)
+      return item.id
+    },
+  }
+}
+
+/** A piece sent up again when the line failed or the server stumbled (not when it refused it). */
+async function sendPiece(api: Api, id: string, offset: number, piece: Uint8Array, signal: AbortSignal): Promise<number> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return (await api.uploadPiece(id, offset, piece)).offset
+    } catch (err: any) {
+      if (signal.aborted) throw cancelled()
+      // it got there although the answer did not (the server says where it expects the next one)
+      const expected = err?.status === 409 ? Number(String(err.message).match(/(\d+)/)?.[1]) : NaN
+      if (expected === offset + piece.length) return expected
+      if ((err?.status && err.status < 500) || attempt >= 3) throw err
+      await new Promise((r) => setTimeout(r, 1500 * attempt))
+    }
   }
 }
 
@@ -145,6 +174,29 @@ export function serverKeeper(api: Api, state: Store['state']): Keeper & { load()
     chapter(key, chapter, meta, progress, signal) {
       return follow(api.keepChapter({ key, pages: chapter.pages.map((url) => ({ url, headers: authOf(url) })), comic_info: chapter.comicInfo,
                                       folder: catalogFolder(meta, folders()), name: chapter.name, title: meta.title }), progress, signal)
+    },
+    // the service cannot reach it (only this browser can): it goes up from here, in the service's pieces
+    async stream(key, file, name, meta, progress, signal) {
+      const up = await api.startUpload({ path: `${catalogFolder(meta, folders())}/${name}`, size: file.size, key })
+      let fetched = 0
+      let offset = 0
+      try {
+        progress(0, file.size)
+        const counted = (async function* () {
+          for await (const bytes of file.read(signal)) {
+            progress((fetched += bytes.length), file.size)
+            yield bytes
+          }
+        })()
+        for await (const piece of inPieces(counted, up.chunk)) offset = await sendPiece(api, up.id, offset, piece, signal)
+        if (signal.aborted) throw cancelled()
+        const done = await api.finishUpload(up.id)
+        if (!done.item) throw new Error(t('Se guardó en {path}, pero el servidor todavía no lo enseña', { path: done.path }))
+        return done.item.id
+      } catch (err) {
+        api.cancelUpload(up.id).catch(() => {})
+        throw signal.aborted ? cancelled() : err
+      }
     },
   }
 }

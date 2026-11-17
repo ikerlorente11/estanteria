@@ -165,6 +165,108 @@ class Net(private val context: Context, private val settings: Settings, private 
         return Uri.fromFile(file).toString()
     }
 
+    // ---- a file the page writes a piece at a time, as it comes (a Telegram file of hundreds of MB): saveStream ----
+    /** One being written: the pieces go to `part`, a hidden `.part` in the folder it will end in (so a file half
+     * written never looks like a comic); `close` gives it its name. */
+    private class Stream(val name: String, val folder: String?, val part: File) {
+        var size = 0L
+        @Volatile var touched = System.currentTimeMillis()
+    }
+    private val streams = java.util.concurrent.ConcurrentHashMap<String, Stream>()
+
+    /** Starts a file to be written by pieces; answers its id. Forgotten ones (an hour without a piece) and the
+     * `.part` files no stream owns (the app closed halfway) are deleted first. */
+    fun openStream(name: String?, folder: String?): String = synchronized(streams) {
+        // under the lock: the sweep never sees a `.part` made before its stream is known
+        sweepStreams()
+        val dir = dirOf(folder)
+        val id = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        val part = File(dir, ".$id$PART")
+        if (!part.createNewFile()) throw IllegalStateException("No se pudo empezar a guardar el archivo.")
+        streams[id] = Stream(fileName(name, null, null), folder, part)
+        id
+    }
+
+    /** The next piece of stream `id`: the `length` bytes of `input` (the request's body, never whole in memory),
+     * after the others. A piece cut halfway is taken back, so the file stays as it was. Answers the size so far. */
+    fun writeStream(id: String, input: InputStream, length: Long): Long {
+        val stream = streams[id] ?: throw IllegalArgumentException(GONE)
+        synchronized(stream) {
+            if (streams[id] !== stream) throw IllegalArgumentException(GONE)
+            stream.touched = System.currentTimeMillis()
+            if (length <= 0) return stream.size
+            try {
+                FileOutputStream(stream.part, true).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var left = length
+                    while (left > 0) {
+                        val n = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
+                        if (n < 0) break
+                        output.write(buffer, 0, n)
+                        left -= n
+                    }
+                    if (left > 0) throw IOException("llegaron ${length - left} de $length bytes")
+                }
+            } catch (e: Exception) {
+                try { java.io.RandomAccessFile(stream.part, "rw").use { it.setLength(stream.size) } } catch (_: Exception) {}
+                throw IllegalStateException("No se pudo guardar «${stream.name}»: ${e.message ?: e.javaClass.simpleName}")
+            }
+            stream.size += length
+            stream.touched = System.currentTimeMillis()
+            return stream.size
+        }
+    }
+
+    /** Stream `id` is whole: it gets the first free name (`x.cbz`, `x (2).cbz`…) and its file:// URI is answered,
+     * what Shelf.addFile takes. Done or failed, the stream is over. */
+    fun closeStream(id: String): String {
+        val stream = streams[id] ?: throw IllegalArgumentException(GONE)
+        synchronized(stream) {
+            if (streams.remove(id) !== stream) throw IllegalArgumentException(GONE)
+            if (stream.size <= 0) {
+                drop(stream)
+                throw IllegalArgumentException("No llegó ningún archivo que guardar.")
+            }
+            val file = try { reserve(stream.name, stream.folder) } catch (e: Exception) { drop(stream); throw e }
+            // the empty file reserve made is replaced (a rename in the same folder: nothing copied)
+            if (!stream.part.renameTo(file)) {
+                file.delete()
+                drop(stream)
+                throw IllegalStateException("No se pudo guardar «${file.name}».")
+            }
+            return Uri.fromFile(file).toString()
+        }
+    }
+
+    /** Stream `id` is given up: what it wrote is deleted. One already over is fine. */
+    fun abortStream(id: String) {
+        val stream = streams.remove(id) ?: return
+        synchronized(stream) { drop(stream) }
+    }
+
+    private fun drop(stream: Stream) {
+        stream.part.delete()
+        // the series' folder, when it was made for this one only
+        stream.part.parentFile?.takeIf { it.canonicalFile != folder(context).canonicalFile && it.list()?.isEmpty() == true }?.delete()
+    }
+
+    private fun sweepStreams() {
+        val old = System.currentTimeMillis() - STREAM_IDLE
+        for ((id, stream) in streams) if (stream.touched < old) abortStream(id)
+        val owned = streams.values.map { it.part.name }.toSet()
+        val root = folder(context)
+        val dirs = listOf(root) + (root.listFiles { f -> f.isDirectory }?.toList() ?: emptyList())
+        for (dir in dirs) {
+            dir.listFiles { f -> f.isFile && f.name.endsWith(PART) && f.name !in owned }?.forEach { it.delete() }
+        }
+    }
+
+    /** The folder a file goes in: the catalog folder, or the folder of its series in it (one level, cleaned). */
+    private fun dirOf(series: String?): File {
+        val sub = clean(series.orEmpty()).trim('.', ' ')
+        return (if (sub.isEmpty()) folder(context) else File(folder(context), sub)).also { it.mkdirs() }
+    }
+
     private fun progress(url: String, done: Long, total: Long) = JSONObject().put("url", url).put("done", done).put("total", total)
 
     /** The name to save with: the one given, cleaned; with an extension the shelf knows when it had none, taken
@@ -182,8 +284,7 @@ class Net(private val context: Context, private val settings: Settings, private 
     /** Makes the file, empty, with the first free name (`x.epub`, `x (2).epub`…), so two downloads never share it;
      * in the folder of its series (`series`, one level, cleaned) when there is one. */
     private fun reserve(name: String, series: String? = null): File {
-        val sub = clean(series.orEmpty()).trim('.', ' ')
-        val dir = (if (sub.isEmpty()) folder(context) else File(folder(context), sub)).also { it.mkdirs() }
+        val dir = dirOf(series)
         val ext = extensionOf(name).let { if (it.isEmpty()) "" else ".$it" }
         val stem = name.removeSuffix(ext).ifEmpty { "descarga" }
         synchronized(LOCK) {
@@ -203,6 +304,11 @@ class Net(private val context: Context, private val settings: Settings, private 
         private val DROPPED = setOf("host", "connection", "keep-alive", "upgrade", "te", "trailer", "transfer-encoding",
             "content-length", "accept-encoding", "x-host-token", "x-fetch-headers", "cookie2")
         private val NEEDS_BODY = setOf("POST", "PUT", "PATCH", "PROPPATCH", "REPORT")
+        /** the end of a file being written by pieces (see openStream) */
+        private const val PART = ".part"
+        /** a stream without a piece for this long was forgotten by the page: it is deleted */
+        private const val STREAM_IDLE = 60 * 60 * 1000L
+        private const val GONE = "Ese archivo ya no se está guardando (se canceló o tardó demasiado)."
 
         /** where the files downloaded from catalogs go (the app's own; Shelf serves them as file:// URIs) */
         fun folder(context: Context) = File(context.filesDir, "catalogo")

@@ -10,8 +10,11 @@ export interface PrefsStore {
 }
 
 /** the keys that are the person's (`estanteria.secret.<library>`: a library's password) */
-export const PREF_KEYS = ['estanteria.libraries', 'estanteria.catalogs', 'estanteria.catalogs.langs', 'estanteria.suwayomi.hidden']
+export const PREF_KEYS = ['estanteria.libraries', 'estanteria.catalogs', 'estanteria.catalogs.langs', 'estanteria.suwayomi.hidden', 'estanteria.telegram.hidden']
 export const SECRET_PREFIX = 'estanteria.secret.'
+/** secrets of this device alone (where the app has no secure store: the web, a Telegram session): never a pref
+ * (not synced), never in a backup */
+export const DEVICE_SECRET_PREFIX = 'estanteria.devicesecret.'
 
 const local: PrefsStore = {
   get: (key) => { try { return localStorage.getItem(key) } catch (_) { return null } },

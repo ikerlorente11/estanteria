@@ -48,6 +48,16 @@ class Settings(context: Context) {
     fun saveToken(token: String) { secret.edit().putString("token:$username", token).apply() }
     fun forgetToken() { secret.edit().remove("token:$username").apply() }
 
+    /** The page's own secrets (a Telegram session): encrypted like the app password, under a prefix of their own
+     * so they never meet `token:<user>`. Null when none is kept. */
+    fun viewerSecret(key: String): String? = secret.getString("viewer:$key", null)
+    /** null deletes it */
+    fun saveViewerSecret(key: String, value: String?) {
+        // commit, not apply: on a request thread, and a session lost to a killed app means signing in again
+        if (value == null) secret.edit().remove("viewer:$key").commit()
+        else secret.edit().putString("viewer:$key", value).commit()
+    }
+
     /** The Authorization header the service wants (HTTP basic with the app password). */
     fun authorization(): String? {
         val token = token()

@@ -2,7 +2,7 @@
  * serves this page from. Everything goes over HTTP on 127.0.0.1 with the token the app put in the
  * URL (`?t=`), which is kept for the session. The server of its own (if one is connected) is reached through the
  * host too (`/api/...`): it adds the credential, so this page never holds the app password. */
-import type { FileToHand, LocalFile, LocalRoot, NativeFeatures, NetBackend, OfflineBackend, OfflineEntry, OfflineProgress, Prepared, ShelfBackend, ShelfConfig, UploadDone } from 'estanteria-viewer'
+import type { FileSink, FileToHand, LocalFile, LocalRoot, NativeFeatures, NetBackend, OfflineBackend, OfflineEntry, OfflineProgress, Prepared, ShelfBackend, ShelfConfig, UploadDone } from 'estanteria-viewer'
 import { t, turnPage } from 'estanteria-viewer'
 
 const TOKEN_KEY = 'estanteria.host.token'
@@ -32,6 +32,12 @@ export interface HostInfo {
   cancel?: boolean
   /** since 0.3.0: how many copies for offline it downloads at once */
   parallel?: number
+  /** with the Telegram library: the device's secure store for the page (/host/secret) */
+  secrets?: boolean
+  /** with the Telegram library: a file written into the shelf a piece at a time (/host/shelf/stream) */
+  streamSave?: boolean
+  /** with the Telegram library: an upload sends the catalog entry it came from (older hosts drop it) */
+  uploadKey?: boolean
 }
 
 export interface Connection {
@@ -89,7 +95,7 @@ export function onHostEvent(listener: Listener): () => void {
 }
 
 // ---- the files and folders of this device, listed and served by the host ----
-export function hostShelf(can: Pick<HostInfo, 'cancel'> = {}): ShelfBackend {
+export function hostShelf(can: Pick<HostInfo, 'cancel' | 'uploadKey'> = {}): ShelfBackend {
   return {
     config: () => host<ShelfConfig>('/host/shelf'),
     scan: () => host<LocalFile[]>('/host/shelf/scan'),
@@ -108,10 +114,11 @@ export function hostShelf(can: Pick<HostInfo, 'cancel'> = {}): ShelfBackend {
     setCacheLimit: (bytes) => host<void>('/host/shelf/cache', { method: 'PUT', body: JSON.stringify({ bytes }) }),
     clearCache: () => host<void>('/host/shelf/cache', { method: 'DELETE' }),
     reveal: (id) => host<void>(`/host/shelf/reveal/${id}`, { method: 'POST' }),
-    upload: async (id, dest, progress) => {
+    upload: async (id, dest, progress, key) => {
       const stop = onHostEvent((e) => { if (e.type === 'upload' && e.id === id) progress(e.sent, e.total) })
       try {
-        return await host<UploadDone>(`/host/shelf/upload/${id}`, { method: 'POST', body: JSON.stringify({ dest }) })
+        const body = can.uploadKey && key ? { dest, key } : { dest }
+        return await host<UploadDone>(`/host/shelf/upload/${id}`, { method: 'POST', body: JSON.stringify(body) })
       } finally { stop() }
     },
     cancelUpload: can.cancel ? async (id) => { await host<void>(`/host/shelf/upload/${id}/cancel`, { method: 'POST', body: '{}' }) } : undefined,
@@ -135,6 +142,20 @@ export function hostBackend(can: Pick<HostInfo, 'parallel'> = {}): OfflineBacken
 /** A header value carries only Latin-1: the JSON of the headers goes with everything else escaped (\uXXXX). */
 function headerJson(headers: Record<string, string> | undefined): string {
   return JSON.stringify(headers || {}).replace(/[\u007f-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
+}
+
+/** A file written into the shelf's folder a piece at a time (`NetBackend.saveStream`, a host with `streamSave`): the
+ * host writes the pieces to a hidden `.part` and gives it its name (« (2)» rather than overwrite) when it is closed. */
+export async function hostSaveStream(name: string, folder?: string): Promise<FileSink> {
+  const { id } = await host<{ id: string }>(`/host/shelf/stream?name=${encodeURIComponent(name)}&folder=${encodeURIComponent(folder || '')}`, { method: 'POST', body: '{}' })
+  const at = `/host/shelf/stream/${encodeURIComponent(id)}`
+  return {
+    write: async (piece) => {
+      await host<{ size: number }>(at, { method: 'PUT', headers: { 'Content-Type': 'application/octet-stream' }, body: piece as BodyInit })
+    },
+    close: async () => (await host<{ uri: string }>(`${at}/close`, { method: 'POST', body: '{}' })).uri,
+    abort: async () => { await host<void>(at, { method: 'DELETE' }) },
+  }
 }
 
 /** The NetBackend of the app (`store.net`). `fetch` goes through `/host/fetch`, the headers wanted in
@@ -192,8 +213,9 @@ export function hostNet(): NetBackend {
  * - `wifiOnly(on)`: kept by the host (`PUT /host/prefs`); while on, its downloads and the app's refuse mobile data.
  * - `lock`: the device's fingerprint, face or PIN, asked by the host (`/host/lock`: GET whether there is one, POST
  *   shows the system's prompt and answers when the person has passed or given up).
+ * - `secrets`: small secrets of this device (a Telegram session), kept by the host encrypted (`/host/secret?key=`).
  */
-export function hostNative(can: Pick<HostInfo, 'volumeKeys' | 'wifiOnly' | 'lock' | 'saveAs' | 'share'> = {}): NativeFeatures {
+export function hostNative(can: Pick<HostInfo, 'volumeKeys' | 'wifiOnly' | 'lock' | 'saveAs' | 'share' | 'secrets'> = {}): NativeFeatures {
   const native: NativeFeatures = {}
   if (can.volumeKeys && (window as any).ReactNativeWebView) {
     ;(window as any).__estanteriaKey = (dir: number) => turnPage(dir < 0 ? -1 : 1)
@@ -212,6 +234,16 @@ export function hostNative(can: Pick<HostInfo, 'volumeKeys' | 'wifiOnly' | 'lock
   }
   if (can.saveAs) native.saveAs = (file) => hand('save', file).then((r) => !!r?.ok)
   if (can.share) native.share = async (file) => { await hand('share', file) }
+  // the device's secure store (the host keeps them encrypted with the keystore): a Telegram session
+  if (can.secrets) {
+    native.secrets = {
+      get: (key) => host<{ value: string | null }>(`/host/secret?key=${encodeURIComponent(key)}`).then((r) => r?.value ?? null),
+      set: async (key, value) => {
+        if (value === null) await host<void>(`/host/secret?key=${encodeURIComponent(key)}`, { method: 'DELETE' })
+        else await host<void>(`/host/secret?key=${encodeURIComponent(key)}`, { method: 'PUT', body: JSON.stringify({ value }) })
+      },
+    }
+  }
   if (can.lock) {
     native.lock = {
       available: () => host<{ available: boolean }>('/host/lock').then((r) => !!r?.available).catch(() => false),

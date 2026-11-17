@@ -64,6 +64,14 @@ export interface Store {
   /** Where what comes from catalogs is kept, when it is not this device's shelf (the web: the server's reading
    * folder); an app with a shelf and a network has its own (see keeperOf). */
   keeper?: Keeper
+  /** The app's credentials in Telegram's API (one pair for the app, not per person; my.telegram.org), which each
+   * host sets from its own configuration, never from this public code: without them there is no Telegram library. */
+  telegram?: TelegramApp
+}
+
+export interface TelegramApp {
+  apiId: number
+  apiHash: string
 }
 
 /** How this device signs what is read on it («móvil», «escritorio», «web»), so another one can say where. */

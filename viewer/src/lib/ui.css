@@ -627,6 +627,15 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-multipick-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
 .es-multipick-item:hover { background: var(--es-surface-2); }
 
+/* collections (CollectionButton, CollectionsView, CollectionView): the drop-down of collections, a new one's name */
+.es-col-menu { min-width: 260px; max-height: min(420px, 70vh); overflow-y: auto; }
+.es-col-menu > p { padding: 6px 10px; margin: 0; }
+.es-col-new { display: flex; gap: 6px; align-items: center; }
+.es-col-menu .es-col-new { padding: 8px 4px 4px; margin-top: 4px; border-top: 1px solid var(--es-line); }
+.es-col-new input { flex: 1; min-width: 0; padding: 7px 11px; border-radius: 9px; border: 1px solid var(--es-line); background: var(--es-surface); color: inherit; font: inherit; font-size: 14px; }
+.es-col-new input:focus { outline: 2px solid var(--es-accent); outline-offset: 1px; }
+.es-col-new-page { max-width: 460px; margin: 4px 0 16px; }
+
 /* «Acerca de»: the news of the version */
 .es-news-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; }
 .es-news-old { margin-top: 10px; }

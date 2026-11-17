@@ -11,7 +11,7 @@
 import { reactive } from 'vue'
 import type { Api } from './api.ts'
 
-export type SyncKind = 'favorite' | 'progress' | 'mark'
+export type SyncKind = 'favorite' | 'progress' | 'mark' | 'collection'
 
 export interface SyncRecord<T = any> {
   kind: SyncKind

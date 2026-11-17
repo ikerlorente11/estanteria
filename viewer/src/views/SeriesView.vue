@@ -14,6 +14,7 @@
             <i class="es-i es-i-book-open" aria-hidden="true"></i> {{ next.progress && next.progress.page ? t('Seguir por el nº {number}', { number: next.number ?? '' }) : finished ? t('Leer el nº {number}', { number: next.number ?? '' }) : t('Empezar a leer') }}
           </button>
           <FavoriteButton :fav="seriesFavorite(name)" />
+          <CollectionButton :member="seriesFavorite(name)" />
           <OfflineButton v-if="store.offline && items.length" :items="items" :what="t('la serie')" />
         </div>
       </div>
@@ -34,6 +35,7 @@ import Cover from './Cover.vue'
 import ItemCard from './ItemCard.vue'
 import OfflineButton from './OfflineButton.vue'
 import FavoriteButton from './FavoriteButton.vue'
+import CollectionButton from './CollectionButton.vue'
 import { seriesFavorite } from '../lib/favorites'
 
 const props = defineProps<{ name: string }>()

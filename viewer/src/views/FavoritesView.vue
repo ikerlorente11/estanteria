@@ -76,7 +76,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import type { Item } from '../lib/api'
-import { favoritesOf, useSync, type Favorite, type FavoriteType } from '../lib/favorites'
+import { favoritesOf, findMarkedItem, useSync, type Favorite, type FavoriteType } from '../lib/favorites'
 import { plural, t } from '../lib/i18n'
 import { netImageNow } from '../lib/netimages'
 import { useStore } from '../lib/store'
@@ -104,21 +104,11 @@ const seriesOf = (name: string) => state.series.find((s) => s.series.toLowerCase
 // ---- the files, as they are now (their progress, their cover); found again by their path if they moved ids ----
 const items = reactive<Record<string, Item | null>>({})
 const missing = reactive<Record<string, string>>({})
-async function find(key: string, fav: Favorite): Promise<Item | null> {
-  try {
-    const it = await store.api.item(fav.id!)
-    if (key.startsWith('local:') || it.path === fav.path) return it
-  } catch (_) { /* not with that id any more */ }
-  if (!fav.path || key.startsWith('local:')) return null
-  const name = fav.path.split('/').pop() || ''
-  const found = await store.api.items({ q: name.replace(/\.[^.]+$/, ''), limit: 50 }).catch(() => [] as Item[])
-  return found.find((i) => i.path === fav.path) || null
-}
 watch(() => [favs.value.item.map((f) => f.key).join('\n'), state.connected], async () => {
   if (!state.connected) return
   for (const f of favs.value.item) {
     if (items[f.key] || missing[f.key]) continue
-    const it = await find(f.key, f.value)
+    const it = await findMarkedItem(store.api, f.key, f.value)
     if (it) items[f.key] = it
     else missing[f.key] = state.server || f.key.startsWith('local:') ? t('Ya no está en tu estantería') : t('Está en tu servidor: conéctalo para verlo')
   }

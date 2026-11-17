@@ -49,6 +49,19 @@ export function catalogFavorite(catalog: string, address: string, title: string,
   return { key: `catalog:${catalog}:${address}`, value: { type: 'catalog', title, catalog, address, image: image || null, added: Date.now() / 1000 } }
 }
 
+/** A file marked (a favourite, or in a collection) as it is now: by its id, or found again by its path if its id
+ * changed; null when it is not in the shelf any more. */
+export async function findMarkedItem(api: Api, key: string, fav: Favorite): Promise<Item | null> {
+  try {
+    const it = await api.item(fav.id!)
+    if (key.startsWith('local:') || it.path === fav.path) return it
+  } catch (_) { /* not with that id any more */ }
+  if (!fav.path || key.startsWith('local:')) return null
+  const name = fav.path.split('/').pop() || ''
+  const found = await api.items({ q: name.replace(/\.[^.]+$/, ''), limit: 50 }).catch(() => [] as Item[])
+  return found.find((i) => i.path === fav.path) || null
+}
+
 export function isFavorite(key: string): boolean { return !!syncGet('favorite', key) }
 export function setFavorite(key: string, value: Favorite | null, onlyHere = false) { syncPut('favorite', key, value, onlyHere) }
 

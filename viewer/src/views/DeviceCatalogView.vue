@@ -25,6 +25,7 @@
           <!-- a series of the catalog: kept among the favourites, to find it again at once -->
           <div v-if="isChapters && path" class="es-hero-actions">
             <FavoriteButton :fav="catalogFavorite(def.id, path, feed.title || def.name, (feed as any).cover)" />
+            <CollectionButton :member="catalogFavorite(def.id, path, feed.title || def.name, (feed as any).cover)" />
             <FollowButton :def="def" :address="path" :title="feed.title || def.name" :cover="(feed as any).cover" :missing="missing" :lang="lang" />
           </div>
           <!-- a list of books or comics of an OPDS catalog (a series of a Komga, say): the server can keep it up to date -->
@@ -200,6 +201,7 @@ import { chapterPages } from '../lib/chapters'
 import { keeperOf } from '../lib/keeper'
 import { catalogFavorite } from '../lib/favorites'
 import FavoriteButton from './FavoriteButton.vue'
+import CollectionButton from './CollectionButton.vue'
 import FollowButton from './FollowButton.vue'
 import { suwayomiServer } from '../lib/devicelibraries'
 import { randomTag, suwayomiFeed } from '../lib/suwayomi'

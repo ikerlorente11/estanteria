@@ -16,6 +16,14 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.5.4',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Lo guardado en el dispositivo que no llegó a tu servidor (sin conexión, el servidor caído o uno que aún no guardaba vídeos) se sube solo en cuanto vuelve a contestar.',
+          en: 'What was kept on the device and did not get to your server (offline, the server down, or one that did not keep videos yet) goes up by itself as soon as it answers again.' },
+      ],
+    },
+    {
       version: '0.5.3',
       date: '2026-11-17',
       notes: [
@@ -161,6 +169,14 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.6.4',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Lo guardado en el dispositivo que no llegó a tu servidor (sin conexión, el servidor caído o uno que aún no guardaba vídeos) se sube solo en cuanto vuelve a contestar.',
+          en: 'What was kept on the device and did not get to your server (offline, the server down, or one that did not keep videos yet) goes up by itself as soon as it answers again.' },
+      ],
+    },
     {
       version: '0.6.3',
       date: '2026-11-17',

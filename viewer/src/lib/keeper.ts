@@ -10,7 +10,7 @@
  */
 import type { Api, Item } from './api.ts'
 import { reactive } from 'vue'
-import { cancelled, catalogGot, catalogGotFrom, type CatalogMeta } from './catalogdownloads.ts'
+import { cancelled, catalogGot, catalogGotFrom, catalogMeta, type CatalogMeta } from './catalogdownloads.ts'
 import { t } from './i18n.ts'
 import { catalogFolder, isLocal, seriesOfTitle } from './local.ts'
 import { inPieces, writeStream, type StreamSource } from './net.ts'
@@ -48,6 +48,9 @@ export interface Keeper {
   /** an app: the server's item of what was just kept here, once it went up (null: no server, or it did not go up).
    * What is put in a collection right after keeping it is put there with it, so every device has it. */
   uploaded?(id: number): Promise<Item | null>
+  /** an app: sends up again what was kept here and did not get to the server (offline, the server down, or one that
+   * did not take that kind yet), quietly; `store` is the one in use now (its api, the server's) */
+  resume?(store: Store): Promise<void>
 }
 
 const seriesFolder = (meta: CatalogMeta) => meta.series || seriesOfTitle(meta.title)
@@ -55,6 +58,22 @@ const seriesFolder = (meta: CatalogMeta) => meta.series || seriesOfTitle(meta.ti
  * has them once it is asked again, and a second thing of the same series must not make another folder spelled
  * otherwise («El jueves» beside «El Jueves») */
 const madeFolders = new Set<string>()
+
+/** What was kept here and has not got to the server yet, by its id here: the key it goes up with (what the page
+ * fetched by itself, see Keeper.stream), or null. Kept in this device until the server has it. */
+const PENDING_KEY = 'estanteria.uploads.pending'
+/** the videos kept before there was this list (when the server did not take videos yet) were put in it once */
+const SEEDED_KEY = 'estanteria.uploads.seeded'
+const pending: Record<string, string | null> = (() => { try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '{}') } catch (_) { return {} } })()
+function savePending() { try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)) } catch (_) { /* this session only */ } }
+function seedPending() {
+  try { if (localStorage.getItem(SEEDED_KEY)) return } catch (_) { return }
+  for (const [key, id] of Object.entries(catalogGot)) {
+    if (catalogMeta[id]?.kind === 'video' && isLocal(id) && !(String(id) in pending)) pending[id] = key
+  }
+  savePending()
+  try { localStorage.setItem(SEEDED_KEY, '1') } catch (_) { /* again next time */ }
+}
 
 // ---- an app: this device's shelf (and the server, when one is connected) ----
 const devices = new WeakMap<object, Keeper>()
@@ -67,28 +86,40 @@ function deviceKeeper(store: Store): Keeper {
   let told = false
   /** what went up of what was kept here, by its id here (see Keeper.uploaded) */
   const upped = new Map<number, Promise<Item | null>>()
-  /** `key`: only for what the page fetched by itself (see Keeper.stream); the rest goes up as always, without it */
-  function toServer(item: Item, meta: CatalogMeta, key?: string) {
+  /** what is on its way up in this run (resume does not send it twice) */
+  const going = new Set<number>()
+  let resuming = false
+  /** `key`: only for what the page fetched by itself (see Keeper.stream); the rest goes up as always, without it.
+   * Until the server has it, it is pending (see resume); `quiet`: sent again by resume, without telling. */
+  function toServer(item: Item, meta: CatalogMeta, key?: string, quiet = false) {
     if (!store.state.server) return
     let done: (it: Item | null) => void = () => {}
     upped.set(item.id, new Promise((r) => { done = r }))
+    pending[item.id] = key ?? null
+    savePending()
+    going.add(item.id)
+    const gotThere = () => { delete pending[item.id]; savePending() }
     ups = ups.then(async () => {
-      if (!store.state.server) return done(null)
+      if (!store.state.server) { going.delete(item.id); return done(null) }
       const folder = catalogFolder(meta, [...(store.state.status?.folders || []), ...madeFolders])
       const dest = `${folder}/${item.name}`
       try {
         done((await shelf.backend.upload(item.id, dest, () => {}, key)).item)
         madeFolders.add(folder)
+        gotThere()
       } catch (err: any) {
         done(null)
-        if (err?.status === 409 || /ya hay/i.test(String(err?.message || err))) return      // it is there already
-        // a server that does not take videos yet (an older one): it stays here, which is no failure
+        if (err?.status === 409 || /ya hay/i.test(String(err?.message || err))) return gotThere()      // it is there already
+        if (quiet) return
+        // a server that does not take videos yet (an older one): it stays here, and goes up once it does
         if (meta.kind === 'video' && /no lee ese tipo/i.test(String(err?.message || err))) {
           store.notify(t('{server} aún no guarda vídeos: «{title}» se queda en este dispositivo.', { server: store.serverName || t('tu servidor'), title: meta.title }))
           return
         }
         if (!told) store.notify(t('No se pudo subir «{title}» a {server}: {error}', { title: meta.title, server: store.serverName || t('tu servidor'), error: err?.message || String(err) }), true)
         told = true
+      } finally {
+        going.delete(item.id)
       }
     })
   }
@@ -98,6 +129,29 @@ function deviceKeeper(store: Store): Keeper {
     where: 'device',
     has: (id) => id !== undefined && shelf.has(id),
     uploaded: (id) => upped.get(id) || Promise.resolve(null),
+    async resume(now) {
+      if (resuming || !now.state.server || !now.state.connected || now.api.standalone) return
+      resuming = true
+      try {
+        seedPending()
+        const ids = Object.keys(pending).map(Number).filter((id) => !going.has(id))
+        if (!ids.length) return
+        // what goes up with its key gets a free name on the server (never «it is there already»): asked first
+        const got = ids.some((id) => pending[id]) ? await now.api.keptFromCatalogs() : {}
+        for (const id of ids) {
+          const key = pending[id]
+          const item = shelf.has(id) ? (shelf.item(id) as Item | null) : null
+          const meta = catalogMeta[id]
+          if (!item || !meta || (key && got[key] !== undefined)) { delete pending[id]; continue }
+          toServer(item, meta, key || undefined, true)
+        }
+        savePending()
+      } catch (_) {
+        /* the server does not answer: next time */
+      } finally {
+        resuming = false
+      }
+    },
     gotOf(key) {
       const here = catalogGot[key]
       if (here !== undefined && shelf.has(here)) return here
@@ -221,6 +275,12 @@ export function serverKeeper(api: Api, state: Store['state']): Keeper & { load()
       }
     },
   }
+}
+
+/** An app, connected to its server: what was kept here and did not get there goes up now (see Keeper.resume). */
+export function resumeUploads(store: Store): void {
+  if (!store.state.server || store.platform === 'web') return
+  keeperOf(store)?.resume?.(store).catch(() => {})
 }
 
 /** Where this app keeps what comes from catalogs, or null when it cannot keep anything. */

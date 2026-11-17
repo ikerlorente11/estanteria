@@ -16,6 +16,14 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.5.2',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Borrar una serie entera desde su página: quitar de este dispositivo sus copias o borrarla de todos lados (de tu servidor, de tus favoritos y colecciones).',
+          en: 'Delete a whole series from its page: remove its copies from this device or delete it everywhere (from your server, your favorites and collections).' },
+      ],
+    },
+    {
       version: '0.5.1',
       date: '2026-11-17',
       notes: [
@@ -143,6 +151,14 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.6.2',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Borrar una serie entera desde su página: quitar de este dispositivo sus copias o borrarla de todos lados (de tu servidor, de tus favoritos y colecciones).',
+          en: 'Delete a whole series from its page: remove its copies from this device or delete it everywhere (from your server, your favorites and collections).' },
+      ],
+    },
     {
       version: '0.6.1',
       date: '2026-11-17',

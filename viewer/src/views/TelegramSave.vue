@@ -34,7 +34,7 @@ import type { Item } from '../lib/api'
 import { cancelCatalogDownloads, isCancelled, runCatalogDownload, type CatalogKind, type CatalogMeta } from '../lib/catalogdownloads'
 import { bestFormat, fileName } from '../lib/catalogs'
 import { collections, createCollection, setInCollection } from '../lib/collections'
-import { itemFavorite } from '../lib/favorites'
+import { itemFavorite, useSync } from '../lib/favorites'
 import { plural, t } from '../lib/i18n'
 import { keeperOf, serverKeeper, type Keeper } from '../lib/keeper'
 import { seriesOfTitle } from '../lib/local'
@@ -52,6 +52,8 @@ import { blobSource, parseFileHref, photosComicInfo, telegramError, telegramPhot
 const props = defineProps<{ link: TelegramLink; mode: 'photos' | 'videos' | 'files'; entries: FeedEntry[]; chat: string; suggested?: string; date?: number }>()
 const emit = defineEmits<{ (e: 'done'): void; (e: 'cancel'): void }>()
 const store = useStore()
+// the collections are the account's (sync.ts): its book has to be there, also when one came straight to a chat
+useSync(store)
 
 const named = computed(() => props.mode === 'photos')
 const name = ref(props.suggested || '')

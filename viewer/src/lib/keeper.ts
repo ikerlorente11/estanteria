@@ -51,6 +51,10 @@ export interface Keeper {
 }
 
 const seriesFolder = (meta: CatalogMeta) => meta.series || seriesOfTitle(meta.title)
+/** the folders of the server something went up to while the app runs: the server's list (state.status.folders) only
+ * has them once it is asked again, and a second thing of the same series must not make another folder spelled
+ * otherwise («El jueves» beside «El Jueves») */
+const madeFolders = new Set<string>()
 
 // ---- an app: this device's shelf (and the server, when one is connected) ----
 const devices = new WeakMap<object, Keeper>()
@@ -70,9 +74,11 @@ function deviceKeeper(store: Store): Keeper {
     upped.set(item.id, new Promise((r) => { done = r }))
     ups = ups.then(async () => {
       if (!store.state.server) return done(null)
-      const dest = `${catalogFolder(meta, store.state.status?.folders || [])}/${item.name}`
+      const folder = catalogFolder(meta, [...(store.state.status?.folders || []), ...madeFolders])
+      const dest = `${folder}/${item.name}`
       try {
         done((await shelf.backend.upload(item.id, dest, () => {}, key)).item)
+        madeFolders.add(folder)
       } catch (err: any) {
         done(null)
         if (err?.status === 409 || /ya hay/i.test(String(err?.message || err))) return      // it is there already
@@ -175,7 +181,7 @@ export function serverKeeper(api: Api, state: Store['state']): Keeper & { load()
       signal.removeEventListener('abort', stop)
     }
   }
-  const folders = () => state.status?.folders || []
+  const folders = () => [...(state.status?.folders || []), ...madeFolders]
   return {
     where: 'server',
     has: (id) => id !== undefined,
@@ -191,7 +197,9 @@ export function serverKeeper(api: Api, state: Store['state']): Keeper & { load()
     },
     // the service cannot reach it (only this browser can): it goes up from here, in the service's pieces
     async stream(key, file, name, meta, progress, signal) {
-      const up = await api.startUpload({ path: `${catalogFolder(meta, folders())}/${name}`, size: file.size, key })
+      const folder = catalogFolder(meta, folders())
+      const up = await api.startUpload({ path: `${folder}/${name}`, size: file.size, key })
+      madeFolders.add(folder)
       let fetched = 0
       let offset = 0
       try {

@@ -12,8 +12,8 @@
       </div>
       <span class="es-grow"></span>
       <template v-if="info && !renaming">
-        <button class="es-btn es-small" :title="t('Cambiar el nombre')" @click="startRename"><i class="es-i es-i-edit" aria-hidden="true"></i></button>
-        <button class="es-btn es-small" :title="t('Borrar la colección')" @click="remove"><i class="es-i es-i-delete" aria-hidden="true"></i></button>
+        <button class="es-btn es-small" @click="startRename"><i class="es-i es-i-edit" aria-hidden="true"></i> {{ t('Cambiar el nombre') }}</button>
+        <button class="es-btn es-small" @click="remove"><i class="es-i es-i-delete" aria-hidden="true"></i> {{ t('Borrar la colección') }}</button>
       </template>
     </header>
 

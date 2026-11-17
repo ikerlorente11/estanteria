@@ -16,6 +16,20 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.5.0',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Telegram: tu cuenta como una biblioteca más (Bibliotecas › Añadir › Telegram, con un QR o con tu teléfono, una vez en cada dispositivo). En Catálogos salen tus canales y grupos con su foto; «Elegir canales» deja solo los que te interesan.',
+          en: 'Telegram: your account as one more library (Libraries › Add › Telegram, with a QR code or your phone, once on each device). Catalogs shows your channels and groups with their picture; “Choose channels” keeps only the ones you care about.' },
+        { es: 'Cada canal con sus Archivos, Imágenes y Vídeos: las imágenes se leen como un cómic y los vídeos se ven al momento, sin guardar nada. Con «Seleccionar» guardas lo que quieras: archivos y vídeos tal cual, imágenes juntas como un cómic.',
+          en: 'Each channel with its Files, Images and Videos: images are read like a comic and videos play right away, without keeping anything. With “Select” you keep what you want: files and videos as they are, images together as a comic.' },
+        { es: 'Colecciones: agrupa lo que quieras de tu biblioteca (series, archivos, series de catálogos, lo guardado de Telegram) en colecciones tuyas, una misma cosa en varias. Con tu servidor, en todos tus dispositivos.',
+          en: 'Collections: group whatever you want from your library (series, files, catalog series, what you kept from Telegram) in collections of your own, the same thing in several. With your server, on all your devices.' },
+        { es: 'Vídeos en la estantería: se ven en la app (filtro «Vídeos»), también los de este dispositivo y sin conexión.',
+          en: 'Videos on the shelf: they play in the app (“Videos” filter), also the ones on this device and offline.' },
+      ],
+    },
+    {
       version: '0.4.5',
       date: '2026-11-16',
       notes: [
@@ -119,6 +133,20 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
     },
   ],
   desktop: [
+    {
+      version: '0.6.0',
+      date: '2026-11-17',
+      notes: [
+        { es: 'Telegram: tu cuenta como una biblioteca más (Bibliotecas › Añadir › Telegram, con un QR o con tu teléfono, una vez en cada dispositivo). En Catálogos salen tus canales y grupos con su foto; «Elegir canales» deja solo los que te interesan.',
+          en: 'Telegram: your account as one more library (Libraries › Add › Telegram, with a QR code or your phone, once on each device). Catalogs shows your channels and groups with their picture; “Choose channels” keeps only the ones you care about.' },
+        { es: 'Cada canal con sus Archivos, Imágenes y Vídeos: las imágenes se leen como un cómic y los vídeos se ven al momento, sin guardar nada. Con «Seleccionar» guardas lo que quieras: archivos y vídeos tal cual, imágenes juntas como un cómic.',
+          en: 'Each channel with its Files, Images and Videos: images are read like a comic and videos play right away, without keeping anything. With “Select” you keep what you want: files and videos as they are, images together as a comic.' },
+        { es: 'Colecciones: agrupa lo que quieras de tu biblioteca (series, archivos, series de catálogos, lo guardado de Telegram) en colecciones tuyas, una misma cosa en varias. Con tu servidor, en todos tus dispositivos.',
+          en: 'Collections: group whatever you want from your library (series, files, catalog series, what you kept from Telegram) in collections of your own, the same thing in several. With your server, on all your devices.' },
+        { es: 'Vídeos en la estantería: se ven en la app (filtro «Vídeos»), también los de este dispositivo y sin conexión.',
+          en: 'Videos on the shelf: they play in the app (“Videos” filter), also the ones on this device and offline.' },
+      ],
+    },
     {
       version: '0.5.3',
       date: '2026-11-16',

@@ -116,6 +116,7 @@ export function kindLabel(item: Item): string {
   // a book by its own extension (an AZW3 is read as a MOBI, but it is an AZW3)
   if (item.kind === 'book') return (/\.(azw3?|prc)$/i.exec(item.name)?.[1] || item.format).toUpperCase()
   if (item.kind === 'pdf') return item.format === 'djvu' ? 'DjVu' : 'PDF'
+  if (item.kind === 'video') return t('Vídeo')
   return item.format === 'folder' ? t('Carpeta') : item.format.toUpperCase()
 }
 

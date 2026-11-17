@@ -157,7 +157,7 @@ import { forgetCatalogItems } from '../lib/catalogdownloads'
 interface Subfolder { name: string; path: string; folders: number; coverItem: number | null; coverHas: boolean }
 
 const PAGE = 60
-const KINDS = [{ id: '', label: 'Todo' }, { id: 'comic', label: 'Cómics' }, { id: 'pdf', label: 'PDF' }, { id: 'book', label: 'Libros' }]
+const KINDS = [{ id: '', label: 'Todo' }, { id: 'comic', label: 'Cómics' }, { id: 'pdf', label: 'PDF' }, { id: 'book', label: 'Libros' }, { id: 'video', label: 'Vídeos' }]
 const props = defineProps<{ q: string; kind?: string; sort?: string; folder?: string; source?: string }>()
 const store = useStore()
 /** the device's folders on the shelf, shown above the list */

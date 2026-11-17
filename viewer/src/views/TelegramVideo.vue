@@ -3,6 +3,7 @@
     <header class="es-tg-video-head">
       <strong class="es-ellipsis">{{ title }}</strong>
       <span class="es-grow"></span>
+      <button class="es-btn es-small" :title="t('Guardarlo en tu biblioteca (y en colecciones)')" @click="emit('save')"><i class="es-i es-i-download" aria-hidden="true"></i> {{ t('Guardar') }}</button>
       <button ref="closer" class="es-btn es-small" :title="t('Cerrar')" @click="emit('close')"><i class="es-i es-i-close" aria-hidden="true"></i></button>
     </header>
     <div class="es-tg-video-body">
@@ -34,7 +35,7 @@ import { sizeText } from '../lib/webdav'
 
 /** A video of a Telegram chat, seen right here: loaded into memory (nothing is saved) and played once whole. */
 const props = defineProps<{ link: TelegramLink; peer: string; message: number; title: string }>()
-const emit = defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'save'): void }>()
 
 /** bigger than this, it asks first (the whole video stays in memory while it is seen) */
 const BIG = 500 * 2 ** 20

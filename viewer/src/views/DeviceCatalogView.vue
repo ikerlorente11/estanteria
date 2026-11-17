@@ -92,6 +92,9 @@
         <TelegramSave v-if="saving && selected.length" :link="telegram()" :peer="selectedPeer" :messages="selectedInOrder" :chat="feed.title || def.name"
                       :suggested="suggestedName" :date="selectedDate" @done="stopSelecting" @cancel="saving = false" />
       </template>
+      <!-- a video of Telegram to keep (from its player) -->
+      <TelegramSave v-if="savingVideo" video :link="telegram()" :peer="savingVideo.peer" :messages="[savingVideo.message]" :chat="feed.title || def.name"
+                    :suggested="savingVideo.title" @done="savingVideo = null" @cancel="savingVideo = null" />
       <!-- a whole series: every chapter not downloaded yet, into the queue (a few at a time) -->
       <div v-if="entries.length && entries[0].chapter && canSave" class="es-series-actions">
         <button class="es-btn es-small" :disabled="gathering || !missing" @click="downloadAll">
@@ -197,7 +200,8 @@
         <button v-if="next" class="es-btn es-primary" @click="open(next)">{{ t('Siguiente') }} <i class="es-i es-i-next" aria-hidden="true"></i></button>
       </nav>
     </template>
-    <TelegramVideo v-if="playing" :link="telegram()" :peer="playing.peer" :message="playing.message" :title="playing.title" @close="playing = null" />
+    <TelegramVideo v-if="playing" :link="telegram()" :peer="playing.peer" :message="playing.message" :title="playing.title" @close="playing = null"
+                   @save="savingVideo = playing; playing = null" />
   </section>
 </template>
 
@@ -366,6 +370,8 @@ const suggestedName = computed(() => {
 
 /** a video plays over the page; an image opens the images shown in the reader, oldest first, from that one */
 const playing = ref<{ peer: string; message: number; title: string } | null>(null)
+/** the video to keep (TelegramSave), chosen from its player */
+const savingVideo = ref<{ peer: string; message: number; title: string } | null>(null)
 function openTile(tile: Tile) {
   const msg = parseFileHref(tile.first.id)
   if (!msg) return

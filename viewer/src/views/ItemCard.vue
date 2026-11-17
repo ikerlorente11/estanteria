@@ -1,7 +1,7 @@
 <template>
   <article v-if="!(done && appSettings.hideFinished)" class="es-card" :class="{ 'es-card-done': done }">
-    <a href="#" class="es-card-cover" :title="t('Leer «{title}»', { title: item.title })" @click.prevent="emit('read')">
-      <Cover :id="item.id" :has="item.cover" :icon="item.kind === 'book' ? 'es-i-book' : 'es-i-pages'" :title="item.kind === 'book' ? item.title : ''">
+    <a href="#" class="es-card-cover" :title="item.kind === 'video' ? t('Ver «{title}»', { title: item.title }) : t('Leer «{title}»', { title: item.title })" @click.prevent="emit('read')">
+      <Cover :id="item.id" :has="item.cover" :icon="item.kind === 'book' ? 'es-i-book' : item.kind === 'video' ? 'es-i-play' : 'es-i-pages'" :title="item.kind === 'book' ? item.title : ''">
         <span v-if="item.state === 'listed'" class="es-card-wait" :title="t('Aún abriéndose')"><span class="es-spin"></span></span>
         <span v-else-if="item.state === 'error'" class="es-card-bad" :title="item.error || t('No se pudo abrir')"><i class="es-i es-i-info" aria-hidden="true"></i></span>
         <span v-if="percent > 0 && !done" class="es-card-bar"><span :style="{ width: `${Math.round(percent * 100)}%` }"></span></span>

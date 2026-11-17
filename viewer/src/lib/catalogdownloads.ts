@@ -10,7 +10,7 @@ import { t } from './i18n.ts'
 const GOT_KEY = 'estanteria.catalogs.got'
 const META_KEY = 'estanteria.catalogs.meta'
 
-export type CatalogKind = 'manga' | 'comic' | 'book'
+export type CatalogKind = 'manga' | 'comic' | 'book' | 'video'
 export interface CatalogMeta { series: string | null; kind: CatalogKind; title: string }
 
 export interface CatalogJob {

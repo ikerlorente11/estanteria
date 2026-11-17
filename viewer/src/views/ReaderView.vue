@@ -5,6 +5,7 @@
       <p>{{ error }}</p>
       <button class="es-btn" @click="store.back()">{{ t('Volver') }}</button>
     </div>
+    <VideoPlayer v-else-if="item && item.kind === 'video'" :item="item" />
     <PdfReader v-else-if="item && item.kind === 'pdf' && asDoc" :item="item" :start-page="sharedStart ?? startPage" @changed="changed" />
     <ComicReader v-else-if="item && item.kind !== 'book'" :item="item" :start-page="sharedStart ?? startPage" :source="djvu ? (p, w) => djvu!.image(p, w) : undefined" @changed="changed" />
     <BookReader v-else-if="item && BOOK_FORMATS.includes(item.format)" :item="item" @changed="changed" />
@@ -27,6 +28,7 @@ import { newestProgress, sharedProgress } from '../lib/handoff'
 import { useSync } from '../lib/favorites'
 import ComicReader from './ComicReader.vue'
 import BookReader from './BookReader.vue'
+import VideoPlayer from './VideoPlayer.vue'
 
 // pdf.js only loads when a PDF is read as a document
 const PdfReader = defineAsyncComponent(() => import('./PdfReader.vue'))

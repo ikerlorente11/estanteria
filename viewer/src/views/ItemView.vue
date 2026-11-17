@@ -22,7 +22,7 @@
           <div class="es-hero-actions">
             <button class="es-btn es-primary" :disabled="item.state !== 'ready'" @click="store.read(item)">
               <i class="es-i es-i-book-open" aria-hidden="true"></i>
-              {{ item.progress && !item.progress.finished && item.progress.percent > 0 ? t('Seguir leyendo') : item.progress?.finished ? t('Leer otra vez') : t('Leer') }}
+              {{ item.kind === 'video' ? t('Ver') : item.progress && !item.progress.finished && item.progress.percent > 0 ? t('Seguir leyendo') : item.progress?.finished ? t('Leer otra vez') : t('Leer') }}
             </button>
             <button v-if="item.progress && !item.progress.finished && item.progress.percent > 0" class="es-btn" @click="go({ v: 'read', id: item.id, page: 0 })">{{ t('Desde el principio') }}</button>
             <button v-if="item.format === 'pdf' && item.meta?.text !== false" class="es-btn" :title="pdfAs === 'doc' ? t('Sus páginas como imágenes, en el lector de cómics (doble página, manga, tira)') : t('Como documento: texto que se puede seleccionar y zoom sin perder nitidez')"

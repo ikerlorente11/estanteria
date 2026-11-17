@@ -3,10 +3,11 @@
 
 import { t } from './i18n.ts'
 
-export type Kind = 'comic' | 'pdf' | 'book'
+export type Kind = 'comic' | 'pdf' | 'book' | 'video'
 /** comics: cbz, cbr, cb7, cbt and folders of images; documents by pages: pdf and djvu (djvu only from the service);
- * books: epub, mobi (also azw, azw3, prc), fb2, fbz and txt */
+ * books: epub, mobi (also azw, azw3, prc), fb2, fbz and txt; videos (kept from Telegram, say): mp4, webm, mkv, mov */
 export type Format = 'cbz' | 'cbr' | 'cb7' | 'cbt' | 'folder' | 'pdf' | 'djvu' | 'epub' | 'mobi' | 'fb2' | 'fbz' | 'txt'
+  | 'mp4' | 'webm' | 'mkv' | 'mov'
 export type Direction = 'ltr' | 'rtl'
 
 export interface Progress {
@@ -518,6 +519,42 @@ export class Api {
       throw err
     }
     return res.json()
+  }
+  /** A cover for an item that has none of its own (a video: the thumbnail Telegram has of it). */
+  async setCover(id: number, image: Blob): Promise<void> {
+    if (this.standalone) throw noServer()
+    const res = await fetch(`${this.baseUrl}/api/items/${id}/cover`, { method: 'PUT', headers: this.headers({ 'Content-Type': image.type || 'image/jpeg' }), body: image })
+    if (!res.ok) {
+      const detail = await res.json().then((b) => b.detail).catch(() => res.statusText)
+      const err: any = new Error(typeof detail === 'string' ? detail : res.statusText)
+      err.status = res.status
+      throw err
+    }
+  }
+  /** An item's file, whole (a video to see), telling how much came: the copy kept on this device if there is one. */
+  async fileBlob(id: number, path: string, progress: (done: number, total: number) => void, signal: AbortSignal): Promise<Blob> {
+    const local = this.offline?.local(path)
+    if (local) return this.blob(path, signal)
+    if (this.standalone) throw noServer()
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/api/items/${id}/file`, { headers: this.headers(), signal })
+    } catch (err) {
+      if ((err as any)?.name === 'AbortError') throw err
+      throw unreachable(err)
+    }
+    if (!res.ok || !res.body) throw new Error(t('{host} respondió {status}', { host: new URL(this.baseUrl || location.href).host, status: res.status }))
+    const total = Number(res.headers.get('Content-Length')) || 0
+    const reader = res.body.getReader()
+    const parts: Uint8Array[] = []
+    let done = 0
+    for (;;) {
+      const { value, done: end } = await reader.read()
+      if (end) break
+      parts.push(value)
+      progress((done += value.length), total)
+    }
+    return new Blob(parts as BlobPart[], { type: res.headers.get('Content-Type') || 'video/mp4' })
   }
   finishUpload(id: string) {
     return this.call<{ path: string; item: Item | null }>(`/api/uploads/${encodeURIComponent(id)}/finish`, { method: 'POST' })

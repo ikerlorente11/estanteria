@@ -98,10 +98,11 @@ export interface ShelfBackend {
 export const LOCAL_FORMATS: LocalFormat[] = ['cbz', 'cbr', 'cb7', 'cbt', 'pdf', 'djvu', 'epub', 'mobi', 'fb2', 'fbz', 'txt']
 const LOCAL_BOOKS: LocalFormat[] = ['epub', 'mobi', 'fb2', 'fbz', 'txt']
 /** The folders of the reading folder by what is in them (the service files there what it copies, too). */
-export const SHELF_FOLDERS = { manga: 'Manga', comic: 'Comics', book: 'Libros', pdf: 'Documentos' } as const
+export const SHELF_FOLDERS = { manga: 'Manga', comic: 'Comics', book: 'Libros', pdf: 'Documentos', video: 'Vídeos' } as const
 type Place = keyof typeof SHELF_FOLDERS
 const SHELF_ALIASES: Record<Place, string[]> = {
   manga: ['manga', 'mangas'], comic: ['comics', 'comic'], book: ['libros', 'libro', 'books'], pdf: ['documentos', 'documents', 'pdf'],
+  video: ['videos', 'video'],
 }
 /** What a folder's name says it holds (Cómics, comics, Manga…), if it says. */
 function placeOf(name: string): Place | undefined {
@@ -128,7 +129,7 @@ export function guess(file: Pick<LocalFile, 'folder' | 'name'>): { title: string
  * `Libros` (spelled as the server has it, when it has one), then its series (its title without the number, if
  * it has none), the series spelled as the server already has it too. `existing`: the server's folders. */
 export function catalogFolder(meta: CatalogMeta, existing: string[] = []): string {
-  const place: Place = meta.kind === 'manga' ? 'manga' : meta.kind === 'book' ? 'book' : 'comic'
+  const place: Place = meta.kind === 'manga' ? 'manga' : meta.kind === 'book' ? 'book' : meta.kind === 'video' ? 'video' : 'comic'
   const tops = [...new Set(existing.map((p) => p.split('/')[0]).filter(Boolean))]
   const top = tops.find((t) => placeOf(t) === place) || SHELF_FOLDERS[place]
   const clean = (s: string) => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -386,7 +387,7 @@ export class LocalShelf {
     const segs = f.folder ? f.folder.split('/').filter(Boolean) : []
     const named = [f.root === LOOSE_ROOT ? '' : this.rootName(f.root), ...segs].map(placeOf).find(Boolean)
     const kind = kindOf(f.format)
-    const place: Place = meta ? (meta.kind === 'manga' ? 'manga' : meta.kind === 'book' ? 'book' : 'comic')
+    const place: Place = meta ? (meta.kind === 'manga' ? 'manga' : meta.kind === 'book' ? 'book' : meta.kind === 'video' ? 'video' : 'comic')
       : named || (kind === 'book' ? 'book' : kind === 'pdf' ? 'pdf' : 'comic')
     // the folder that says what it is is the top one there: not repeated below it
     while (segs.length && placeOf(segs[0]) === place) segs.shift()

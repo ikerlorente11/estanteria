@@ -77,24 +77,25 @@
       </div>
 
       <!-- Telegram's images: some chosen, kept as a comic and put in collections -->
-      <template v-if="isTelegramPhotos && canSave">
+      <template v-if="chatMode && entries.length && canSave">
         <div class="es-series-actions">
           <button v-if="!selecting" class="es-btn es-small" @click="selecting = true"><i class="es-i es-i-check" aria-hidden="true"></i> {{ t('Seleccionar') }}</button>
           <template v-else>
             <button class="es-btn es-small es-primary" :disabled="!selected.length || saving" @click="saving = true">
               <i class="es-i es-i-download" aria-hidden="true"></i> {{ t('Guardar ({n})', { n: selected.length }) }}
             </button>
-            <button class="es-btn es-small" @click="selectAll">{{ allSelected ? t('Ninguna') : t('Todas') }}</button>
+            <button class="es-btn es-small" @click="selectAll">{{ chatMode === 'photos' ? (allSelected ? t('Ninguna') : t('Todas')) : (allSelected ? t('Ninguno') : t('Todos')) }}</button>
             <button class="es-btn es-small" @click="stopSelecting">{{ t('Cancelar') }}</button>
-            <small class="es-muted">{{ t('Toca las imágenes que quieres guardar (un álbum va entero).') }}</small>
+            <small class="es-muted">{{ chatMode === 'photos' ? t('Toca las imágenes que quieres guardar (un álbum va entero).')
+              : chatMode === 'videos' ? t('Toca los vídeos que quieres guardar.') : t('Marca los archivos que quieres guardar.') }}</small>
           </template>
         </div>
-        <TelegramSave v-if="saving && selected.length" :link="telegram()" :peer="selectedPeer" :messages="selectedInOrder" :chat="feed.title || def.name"
+        <TelegramSave v-if="saving && selected.length" :key="chatMode" :link="telegram()" :mode="chatMode" :entries="selectedEntries" :chat="feed.title || def.name"
                       :suggested="suggestedName" :date="selectedDate" @done="stopSelecting" @cancel="saving = false" />
       </template>
       <!-- a video of Telegram to keep (from its player) -->
-      <TelegramSave v-if="savingVideo" video :link="telegram()" :peer="savingVideo.peer" :messages="[savingVideo.message]" :chat="feed.title || def.name"
-                    :suggested="savingVideo.title" @done="savingVideo = null" @cancel="savingVideo = null" />
+      <TelegramSave v-if="savingVideo" mode="videos" :link="telegram()" :entries="[savingVideo]" :chat="feed.title || def.name"
+                    @done="savingVideo = null" @cancel="savingVideo = null" />
       <!-- a whole series: every chapter not downloaded yet, into the queue (a few at a time) -->
       <div v-if="entries.length && entries[0].chapter && canSave" class="es-series-actions">
         <button class="es-btn es-small" :disabled="gathering || !missing" @click="downloadAll">
@@ -139,9 +140,10 @@
       </div>
       <!-- Telegram: files rarely bring a cover, so a list (its format, name, size, date and what was said with it) -->
       <div v-else-if="entries.length && isTelegram" class="es-chapters es-tg-files">
-        <div v-for="e in entries" :key="e.id" class="es-chapter" :class="{ 'es-entry-kept': hasItem(e) }">
+        <div v-for="e in entries" :key="e.id" class="es-chapter" :class="{ 'es-entry-kept': hasItem(e), 'es-tg-row-picked': selecting && isEntryPicked(e) }">
+          <input v-if="selecting" type="checkbox" class="es-tg-pick es-tg-row-pick" :checked="isEntryPicked(e)" :aria-label="e.title" @change="pickEntry(e)" />
           <span class="es-tg-format">{{ offerOf(e)?.format?.toUpperCase() }}</span>
-          <a href="#" class="es-chapter-open" :title="e.title" @click.prevent="act(e)">
+          <a href="#" class="es-chapter-open" :title="e.title" @click.prevent="selecting ? pickEntry(e) : act(e)">
             <strong class="es-ellipsis">{{ e.title }}</strong>
             <small class="es-muted es-ellipsis">{{ e.detail }}<template v-if="jobOf(e)"> · {{ jobLabel(jobOf(e)) || t('Empezando…') }}</template></small>
             <small v-if="e.summary" class="es-muted es-ellipsis">{{ e.summary }}</small>
@@ -201,7 +203,7 @@
       </nav>
     </template>
     <TelegramVideo v-if="playing" :link="telegram()" :peer="playing.peer" :message="playing.message" :title="playing.title" @close="playing = null"
-                   @save="savingVideo = playing; playing = null" />
+                   @save="savingVideo = entries.find((e) => playing && parseFileHref(e.id)?.message === playing.message) || null; playing = null" />
   </section>
 </template>
 
@@ -328,8 +330,13 @@ watch(() => (isTelegram.value ? entries.value : []), (list) => {
     telegram().thumb(msg.peer, msg.message).then((url) => { thumbs[e.id] = url }).catch(() => {})
   }
 })
-// ---- images chosen to keep (TelegramSave): an album goes whole ----
-const isTelegramPhotos = computed(() => isTelegram.value && entries.value[0]?.media?.kind === 'photo')
+// ---- what is chosen of a chat to keep (TelegramSave): images (an album goes whole), videos or files ----
+/** what the chat shows now, when it is a chat of Telegram */
+const chatMode = computed<'photos' | 'videos' | 'files' | null>(() => {
+  if (!isTelegram.value || !feed.value?.tabs) return null
+  const kind = entries.value[0]?.media?.kind
+  return kind === 'photo' ? 'photos' : kind === 'video' ? 'videos' : 'files'
+})
 const selecting = ref(false)
 const saving = ref(false)
 const selected = ref<number[]>([])
@@ -341,9 +348,16 @@ function pick(tile: Tile) {
   const these = messagesOf(tile)
   selected.value = isPicked(tile) ? selected.value.filter((m) => !these.includes(m)) : [...new Set([...selected.value, ...these])]
 }
-const allSelected = computed(() => tiles.value.length > 0 && tiles.value.every(isPicked))
+const isEntryPicked = (e: FeedEntry) => selected.value.includes(parseFileHref(e.id)!.message)
+function pickEntry(e: FeedEntry) {
+  const m = parseFileHref(e.id)!.message
+  selected.value = selected.value.includes(m) ? selected.value.filter((x) => x !== m) : [...selected.value, m]
+}
+/** what can be chosen: the files the app reads (a file it does not read has no offer), every image or video */
+const choosable = computed(() => entries.value.filter((e) => e.media || offerOf(e)))
+const allSelected = computed(() => choosable.value.length > 0 && choosable.value.every(isEntryPicked))
 function selectAll() {
-  selected.value = allSelected.value ? [] : entries.value.filter((e) => e.media?.kind === 'photo').map((e) => parseFileHref(e.id)!.message)
+  selected.value = allSelected.value ? [] : choosable.value.map((e) => parseFileHref(e.id)!.message)
 }
 function stopSelecting() {
   selecting.value = false
@@ -353,8 +367,6 @@ function stopSelecting() {
 // a different chat or tab: nothing chosen
 watch(() => props.path, stopSelecting)
 /** the images chosen, oldest first (the order they were sent, the order they are read) */
-const selectedInOrder = computed(() => [...selected.value].sort((a, b) => a - b))
-const selectedPeer = computed(() => (entries.value[0] ? parseFileHref(entries.value[0].id)!.peer : ''))
 const selectedEntries = computed(() => entries.value.filter((e) => selected.value.includes(parseFileHref(e.id)!.message)))
 const selectedDate = computed(() => {
   const dates = selectedEntries.value.map((e) => e.media?.date || 0).filter((d) => d > 0)
@@ -371,7 +383,7 @@ const suggestedName = computed(() => {
 /** a video plays over the page; an image opens the images shown in the reader, oldest first, from that one */
 const playing = ref<{ peer: string; message: number; title: string } | null>(null)
 /** the video to keep (TelegramSave), chosen from its player */
-const savingVideo = ref<{ peer: string; message: number; title: string } | null>(null)
+const savingVideo = ref<FeedEntry | null>(null)
 function openTile(tile: Tile) {
   const msg = parseFileHref(tile.first.id)
   if (!msg) return

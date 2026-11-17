@@ -436,6 +436,9 @@ p:has(> .es-spin:first-child):not(.es-reader-loading) { display: flex; align-ite
 .es-tg-picked .es-tg-tile-pick { background: var(--es-accent); border-color: var(--es-accent); }
 .es-tg-selecting .es-tg-tile:not(.es-tg-picked) img { opacity: .8; }
 .es-tg-save { margin: 8px 0 14px; }
+/* choosing files: a tick at the start of each row, the chosen ones marked */
+.es-tg-row-pick { margin: 0 2px 0 0; }
+.es-tg-row-picked { background: rgba(217,130,43,.12); }
 .es-tg-save-cols { border: 0; padding: 0; margin: 0; display: grid; gap: 2px; max-height: 240px; overflow-y: auto; }
 .es-tg-save-cols legend { font-size: 13px; font-weight: 600; margin-bottom: 4px; padding: 0; }
 .es-tg-save-cols .es-col-new { margin-top: 6px; }

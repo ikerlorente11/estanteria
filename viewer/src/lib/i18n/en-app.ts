@@ -395,6 +395,13 @@ export const EN_APP: Record<string, string> = {
   'Quitado de este dispositivo.': 'Removed from this device.',
   '¿Borrar «{title}» de todos lados? Se borra de {server} (queda un tiempo en su papelera), de este dispositivo y de tus colecciones y favoritos.': 'Delete “{title}” everywhere? It is deleted from {server} (it stays a while in its trash), from this device and from your collections and favorites.',
   '«{title}» borrado.': '“{title}” deleted.',
+  'Borrar serie': 'Delete series',
+  '{n} copia de aquí': '{n} copy on here',
+  '{n} copias de aquí': '{n} copies on here',
+  '¿Quitar de este dispositivo {n} copia de «{what}»? Lo que esté en {server} se queda allí.': 'Remove {n} copy of “{what}” from this device? What is in {server} stays there.',
+  '¿Quitar de este dispositivo {n} copias de «{what}»? Lo que esté en {server} se queda allí.': 'Remove {n} copies of “{what}” from this device? What is in {server} stays there.',
+  '¿Borrar «{what}» de todos lados ({n} números)? Se borran de {server} (quedan un tiempo en su papelera), de este dispositivo y de tus colecciones y favoritos.': 'Delete “{what}” everywhere ({n} issues)? They are deleted from {server} (they stay a while in its trash), from this device and from your collections and favorites.',
+  '{n} no se pudieron borrar de {server}.': '{n} could not be deleted from {server}.',
 
   // ---- Telegram (libraries.ts, telegram.ts, TelegramLogin.vue, SourcesView, DeviceCatalogView, keeper.ts) ----
   'Telegram': 'Telegram',

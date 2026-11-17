@@ -16,6 +16,7 @@
           <FavoriteButton :fav="seriesFavorite(name)" />
           <CollectionButton :member="seriesFavorite(name)" />
           <OfflineButton v-if="store.offline && items.length" :items="items" :what="t('la serie')" />
+          <DeleteButton v-if="items.length" :items="items" :what="name" :label="t('Borrar serie')" :marked="seriesFavorite(name)" @removed="go({ v: 'library' }, true)" />
         </div>
       </div>
     </div>
@@ -36,6 +37,7 @@ import ItemCard from './ItemCard.vue'
 import OfflineButton from './OfflineButton.vue'
 import FavoriteButton from './FavoriteButton.vue'
 import CollectionButton from './CollectionButton.vue'
+import DeleteButton from './DeleteButton.vue'
 import { seriesFavorite } from '../lib/favorites'
 
 const props = defineProps<{ name: string }>()

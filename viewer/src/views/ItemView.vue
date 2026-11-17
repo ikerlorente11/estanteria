@@ -41,7 +41,7 @@
             <FavoriteButton :fav="itemFavorite(item)" />
             <CollectionButton :member="itemFavorite(item)" />
             <FileButton :item="item" :local="local" :uploaded="uploadedAlready" @upload="local ? startUpload() : toCloud()" @reveal="reveal" />
-            <DeleteButton :item="item" @removed="backToList" />
+            <DeleteButton :items="[item]" :what="item.title" @removed="backToList" />
           </div>
           <form v-if="uploading !== null" class="es-upload" @submit.prevent="upload">
             <label>{{ t('En {server}, dentro de «{folder}»', { server: serverLabel(store), folder: store.readingRoot }) }}

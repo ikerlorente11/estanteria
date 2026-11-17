@@ -49,6 +49,13 @@ export class ImageCache {
     }
   }
 
+  /** Lets go of one (it changed: a cover just put), so the next ask fetches it again. */
+  forget(path: string): void {
+    const url = this.ready.get(path)
+    if (url) URL.revokeObjectURL(url)
+    this.ready.delete(path)
+  }
+
   clear(): void {
     for (const url of this.ready.values()) URL.revokeObjectURL(url)
     this.ready.clear()

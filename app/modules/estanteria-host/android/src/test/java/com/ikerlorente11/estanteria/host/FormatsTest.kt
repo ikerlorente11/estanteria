@@ -132,6 +132,21 @@ ${b64.encodeToString(jpegB + ByteArray(40) { it.toByte() })}
         assertEquals("mobi", Shelf.formatOf("libro.azw3"))
         assertEquals("txt", Shelf.formatOf("libro.txt"))
         assertEquals("djvu", Shelf.formatOf("libro.djv"))
+        assertEquals("mp4", Shelf.formatOf("Vídeo.MP4"))
+        assertEquals("mp4", Shelf.formatOf("clip.m4v"))
+        assertEquals("webm", Shelf.formatOf("clip.webm"))
+        assertEquals("mkv", Shelf.formatOf("capítulo 1.mkv"))
+        assertEquals("mov", Shelf.formatOf("IMG_0001.MOV"))
         assertNull(Shelf.formatOf("libro.doc"))
+        assertNull(Shelf.formatOf("clip.avi"))
+    }
+
+    @Test
+    fun videosAreServedWithTheirType() {
+        assertEquals("video/mp4", Shelf.mimeOfFormat("mp4"))
+        assertEquals("video/webm", Shelf.mimeOfFormat("webm"))
+        assertEquals("video/x-matroska", Shelf.mimeOfFormat("mkv"))
+        assertEquals("video/quicktime", Shelf.mimeOfFormat("mov"))
+        assertEquals(Shelf.VIDEOS, listOf("a.mp4", "a.m4v", "a.webm", "a.mkv", "a.mov").mapNotNull { Shelf.formatOf(it) }.toSet())
     }
 }

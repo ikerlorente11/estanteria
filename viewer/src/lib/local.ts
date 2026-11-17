@@ -36,6 +36,7 @@ export interface LocalRoot {
 }
 
 export type LocalFormat = 'cbz' | 'cbr' | 'cb7' | 'cbt' | 'pdf' | 'djvu' | 'epub' | 'mobi' | 'fb2' | 'fbz' | 'txt'
+  | 'mp4' | 'webm' | 'mkv' | 'mov'
 
 /** A file of the shelf, as the host lists it (nothing opened). */
 export interface LocalFile {
@@ -91,11 +92,15 @@ export interface ShelfBackend {
    * entry of a catalog it came from, sent along (POST /api/uploads) so that every device knows it is kept there
    * (and a different file with that name does not stop it); an older host leaves it out */
   upload(id: number, dest: string, progress: (sent: number, total: number) => void, key?: string): Promise<UploadDone>
+  /** a cover for a file that has none of its own to find (a video: Telegram's thumbnail of it), kept by the host; a
+   * host without it shows none */
+  setCover?(id: number, image: Blob): Promise<void>
   /** stops the upload of that file going on (it fails with a cancelled error); a host without it lets it end */
   cancelUpload?(id: number): Promise<void>
 }
 
-export const LOCAL_FORMATS: LocalFormat[] = ['cbz', 'cbr', 'cb7', 'cbt', 'pdf', 'djvu', 'epub', 'mobi', 'fb2', 'fbz', 'txt']
+export const LOCAL_FORMATS: LocalFormat[] = ['cbz', 'cbr', 'cb7', 'cbt', 'pdf', 'djvu', 'epub', 'mobi', 'fb2', 'fbz', 'txt', 'mp4', 'webm', 'mkv', 'mov']
+const LOCAL_VIDEOS: LocalFormat[] = ['mp4', 'webm', 'mkv', 'mov']
 const LOCAL_BOOKS: LocalFormat[] = ['epub', 'mobi', 'fb2', 'fbz', 'txt']
 /** The folders of the reading folder by what is in them (the service files there what it copies, too). */
 export const SHELF_FOLDERS = { manga: 'Manga', comic: 'Comics', book: 'Libros', pdf: 'Documentos', video: 'Vídeos' } as const
@@ -162,7 +167,7 @@ function shelfFolder(f: LocalFile): string {
 }
 
 function kindOf(format: LocalFormat): Item['kind'] {
-  return LOCAL_BOOKS.includes(format) ? 'book' : format === 'pdf' || format === 'djvu' ? 'pdf' : 'comic'
+  return LOCAL_BOOKS.includes(format) ? 'book' : LOCAL_VIDEOS.includes(format) ? 'video' : format === 'pdf' || format === 'djvu' ? 'pdf' : 'comic'
 }
 
 export class LocalShelf {
@@ -294,8 +299,8 @@ export class LocalShelf {
   async detail(id: number): Promise<ItemDetail> {
     const base = this.item(id)
     if (!base) throw Object.assign(new Error(t('Ese archivo ya no está en este dispositivo (¿se movió o se borró?).')), { status: 404 })
-    // books and DjVu are read from the whole file (the reader counts their pages): nothing to prepare
-    if (base.kind === 'book' || base.format === 'djvu') return { ...base, page_sizes: [], bookmarks: [] }
+    // books and DjVu are read from the whole file (the reader counts their pages), a video is played from it: nothing to prepare
+    if (base.kind === 'book' || base.kind === 'video' || base.format === 'djvu') return { ...base, page_sizes: [], bookmarks: [] }
     let prepared = this.prepared.get(id)
     if (!prepared) {
       let going = this.waiting.get(id)

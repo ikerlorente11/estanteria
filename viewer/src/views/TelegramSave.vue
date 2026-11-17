@@ -36,8 +36,8 @@ import { bestFormat, fileName } from '../lib/catalogs'
 import { collections, createCollection, setInCollection } from '../lib/collections'
 import { itemFavorite, useSync } from '../lib/favorites'
 import { plural, t } from '../lib/i18n'
-import { keeperOf, serverKeeper, type Keeper } from '../lib/keeper'
-import { seriesOfTitle } from '../lib/local'
+import { keeperOf, type Keeper } from '../lib/keeper'
+import { isLocal, seriesOfTitle } from '../lib/local'
 import type { FeedEntry } from '../lib/opds'
 import { serverLabel, useStore } from '../lib/store'
 import { blobSource, parseFileHref, photosComicInfo, telegramError, telegramPhotosCbz, type TelegramLink } from '../lib/telegram'
@@ -45,8 +45,7 @@ import { blobSource, parseFileHref, photosComicInfo, telegramError, telegramPhot
 /**
  * What was chosen of a Telegram chat, kept where what comes from catalogs is kept and put in the collections chosen:
  *  - `photos`: the images as one comic (a CBZ, oldest first) with the name given;
- *  - `videos`: each video with its own name, in the Archivador (a device's shelf does not take videos yet), with
- *    Telegram's thumbnail as its cover;
+ *  - `videos`: each video with its own name, with Telegram's thumbnail as its cover;
  *  - `files`: each document as when it is downloaded (the same key: shown as kept; one kept already is not fetched again).
  */
 const props = defineProps<{ link: TelegramLink; mode: 'photos' | 'videos' | 'files'; entries: FeedEntry[]; chat: string; suggested?: string; date?: number }>()
@@ -65,12 +64,9 @@ const status = ref('')
 const error = ref('')
 let stopper: AbortController | null = null
 
-const keeper = computed<Keeper | null>(() => {
-  if (props.mode !== 'videos') return keeperOf(store)
-  // videos: to the Archivador (the web's keeper is that already; an app's would put them on the device)
-  if (!store.state.server) return null
-  return store.keeper?.where === 'server' ? store.keeper : serverKeeper(store.api, store.state)
-})
+// where all of it is kept, as what is downloaded: this device (and the Archivador after, when connected), or on the
+// web the Archivador. Keeping it never waits on the Archivador: if it does not take it, it stays here.
+const keeper = computed<Keeper | null>(() => keeperOf(store))
 const where = computed(() => keeper.value?.where === 'server' || store.state.server ? t('en {server}', { server: serverLabel(store) }) : t('en este dispositivo'))
 const firstCollection = () => all.value.find((c) => c.id === chosen.value[0])?.name
 
@@ -83,6 +79,22 @@ function add() {
   const id = createCollection(clean)
   if (!chosen.value.includes(id)) chosen.value = [...chosen.value, id]
   newName.value = ''
+}
+
+/** A video's cover: the thumbnail Telegram has of it, for the copy here and for the Archivador's (once it went up). A
+ * cover that cannot be put is no reason to fail: the video is kept. */
+async function coverOf(keep: Keeper, id: number, peer: string, message: number): Promise<void> {
+  const thumb = await props.link.thumb(peer, message).catch(() => null)
+  if (!thumb) return
+  const image = await (await fetch(thumb)).blob()
+  if (isLocal(id)) {
+    await store.shelf?.backend.setCover?.(id, image).catch(() => {})
+    store.covers.forget(store.api.coverPath(id))
+    const up = keep.uploaded && store.state.server ? await keep.uploaded(id) : null
+    if (up) await store.api.setCover(up.id, image).catch(() => {})
+  } else {
+    await store.api.setCover(id, image).catch(() => {})
+  }
 }
 
 /** In the collections chosen; an app with the Archivador waits for the server's copy, so that every device has it. */
@@ -100,8 +112,7 @@ const messageOf = (e: FeedEntry) => parseFileHref(e.id)!.message
 async function save() {
   const keep = keeper.value
   if (!keep) {
-    error.value = props.mode === 'videos' ? t('Para guardar vídeos hace falta estar conectado a tu servidor (en el dispositivo aún no se guardan).')
-      : t('Esta versión no puede guardar archivos en el dispositivo.')
+    error.value = t('Esta versión no puede guardar archivos en el dispositivo.')
     return
   }
   busy.value = true
@@ -161,9 +172,7 @@ async function saveEach(keep: Keeper, signal: AbortSignal) {
             : file.mime.includes('webm') ? 'webm' : file.mime.includes('matroska') ? 'mkv' : file.mime.includes('quicktime') ? 'mov' : 'mp4'
           return keep.stream(key, file, `${title}.${ext}`, meta, progress, sig)
         })
-        // its cover: the thumbnail Telegram has of it
-        const thumb = await props.link.thumb(peer, message).catch(() => null)
-        if (thumb) await store.api.setCover(id, await (await fetch(thumb)).blob()).catch(() => {})
+        await coverOf(keep, id, peer, message)
       } else {
         const offer = bestFormat(e.offers)
         if (!offer?.format) continue

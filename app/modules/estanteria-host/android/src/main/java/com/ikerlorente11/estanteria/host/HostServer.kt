@@ -137,6 +137,8 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
         .put("secrets", true)
         .put("streamSave", true)
         .put("uploadKey", true)
+        // videos on the shelf (mp4, webm, mkv, mov: `/shelf/f/` answers ranges) and the covers the page gives (/host/shelf/cover)
+        .put("videos", true)
 
     // ---- the files and folders of this device (see Shelf) ----
     private fun shelfRoute(session: IHTTPSession, rest: String): Response {
@@ -160,6 +162,15 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
             parts == listOf("files") && m == Method.POST -> json(Response.Status.OK, shelf.addFile(body.getString("path")))
             parts.size == 2 && parts[0] == "files" && m == Method.DELETE -> { shelf.removeFile(parts[1].toLong()); empty() }
             parts.size == 2 && parts[0] == "prepare" && m == Method.POST -> json(Response.Status.OK, shelf.prepare(parts[1].toLong()))
+            // the cover the page gives a file (a video's), the image as the raw body
+            parts.size == 2 && parts[0] == "cover" && m == Method.POST -> {
+                // looked at before reading: an image far bigger than any cover is refused unread
+                val length = session.headers["content-length"]?.toLongOrNull() ?: 0L
+                if (length > COVER_MAX) return json(status(413), JSONObject().put("detail", "Esa portada es demasiado grande."))
+                if (length <= 0) throw IllegalArgumentException("Falta la imagen.")
+                shelf.setCover(parts[1].toLong(), readBodyBytes(session))
+                empty()
+            }
             parts == listOf("cache") && m == Method.PUT -> { shelf.setCacheLimit(body.getLong("bytes")); empty() }
             parts == listOf("cache") && m == Method.DELETE -> { shelf.clearCache(); empty() }
             parts.size == 2 && parts[0] == "reveal" -> json(Response.Status.NOT_IMPLEMENTED, JSONObject().put("detail", "En Android no hay explorador que abrir."))
@@ -185,7 +196,12 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
         val parts = rest.split('/').filter { it.isNotEmpty() }
         val id = parts.getOrNull(1)?.toLongOrNull() ?: throw IllegalArgumentException("qué archivo")
         return when (parts[0]) {
-            "c" -> shelf.cover(id).let { (stream, mime) -> binary(stream, mime, -1, cache = true) }
+            "c" -> {
+                // the one the page gave: asked again each time (it may be given another), the loopback costs nothing
+                shelf.keptCover(id)?.let { f -> binary(java.io.FileInputStream(f), "image/jpeg", f.length(), cache = false).also { it.addHeader("Cache-Control", "no-cache") } }
+                    ?: shelf.cover(id)?.let { (stream, mime) -> binary(stream, mime, -1, cache = true) }
+                    ?: json(Response.Status.NOT_FOUND, JSONObject().put("detail", "sin portada"))
+            }
             "p" -> {
                 val n = parts.getOrNull(2)?.toIntOrNull() ?: throw IllegalArgumentException("qué página")
                 shelf.page(id, n, session.parameters["w"]?.firstOrNull()?.toIntOrNull()).let { (stream, mime) -> binary(stream, mime, -1, cache = true) }
@@ -227,19 +243,23 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
         return response
     }
 
-    /** A whole file, or the one range asked for (pdf.js and epub.js ask for pieces). */
+    /** A whole file, or the one range asked for (pdf.js and epub.js ask for pieces, and a <video> for where it plays
+     * or seeks to: see ByteRange). Streamed from the file, never whole in memory; the skip is a seek on a descriptor. */
     private fun ranged(session: IHTTPSession, stream: InputStream, mime: String, size: Long): Response {
-        val range = session.headers["range"]
-        if (size < 0 || range == null || !range.startsWith("bytes=")) {
-            return binary(stream, mime, size, cache = false).also { it.addHeader("Accept-Ranges", "bytes") }
+        val range = ByteRange.parse(session.headers["range"], size)
+        if (range == null) {
+            return binary(stream, mime, size, cache = false).also { if (size >= 0) it.addHeader("Accept-Ranges", "bytes") }
         }
-        val spec = range.removePrefix("bytes=").split('-')
-        val start = spec.getOrNull(0)?.toLongOrNull() ?: 0L
-        val end = spec.getOrNull(1)?.toLongOrNull()?.coerceAtMost(size - 1) ?: (size - 1)
-        if (start > end || start >= size) {
+        if (range.isEmpty()) {
             stream.close()
-            return newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, "text/plain", "").also { it.addHeader("Content-Range", "bytes */$size") }
+            return newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, "text/plain", "").also {
+                it.setGzipEncoding(false)
+                it.addHeader("Content-Range", "bytes */$size")
+                it.addHeader("Accept-Ranges", "bytes")
+            }
         }
+        val start = range.first
+        val end = range.last
         var skipped = 0L
         while (skipped < start) { val n = stream.skip(start - skipped); if (n <= 0) break; skipped += n }
         val length = end - start + 1
@@ -452,6 +472,8 @@ class HostServer(private val context: Context, port: Int, picker: Picker, activi
         private const val SECRET_KEY_MAX = 256
         private const val SECRET_VALUE_MAX = 64 * 1024
         private const val SECRET_BODY_MAX = 6L * SECRET_VALUE_MAX + 1024    // JSON may write a character as \uXXXX
+        /** a cover the page gives (/host/shelf/cover): a thumbnail, far under this */
+        private const val COVER_MAX = 4L shl 20
         /** what a fetched answer brings back of the server's headers (besides type and length) */
         private val FORWARDED = listOf("Content-Disposition", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified", "Cache-Control",
             "WWW-Authenticate", "Link", "Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Retry-After", "DAV")

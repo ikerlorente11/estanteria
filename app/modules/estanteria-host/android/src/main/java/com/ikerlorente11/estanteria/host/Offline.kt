@@ -380,6 +380,10 @@ class Offline(private val context: Context, private val settings: Settings, priv
             "image/vnd.djvu", "image/x-djvu" -> "djvu"
             "application/vnd.comicbook+zip", "application/zip" -> "cbz"
             "application/x-cbt", "application/x-tar" -> "cbt"
+            "video/mp4", "video/x-m4v" -> "mp4"
+            "video/webm" -> "webm"
+            "video/x-matroska" -> "mkv"
+            "video/quicktime" -> "mov"
             else -> "bin"
         }
 

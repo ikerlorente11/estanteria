@@ -32,14 +32,17 @@ import java.util.concurrent.ConcurrentHashMap
  * Nothing is copied when they are listed; the page reads them through the host:
  *
  * - `/shelf/c/<id>`: a small cover (the first page, or the one a book declares; 400 px wide, kept in
- *   `local-cache/covers/`). A TXT or a DjVu has none: the viewer shows its placeholder;
+ *   `local-cache/covers/`), or the one the page gave it ([setCover]: a video's, kept apart, in
+ *   `estanteria/covers/` among the app's files). A TXT, a DjVu or a video without one has none: the viewer
+ *   shows its placeholder;
  * - `/shelf/p/<id>/<n>?w=`: a page. A cbz is read straight from the archive and a cbt by the offsets of
  *   its entries; a cbr or cb7 is unpacked once into `local-cache/<id>/x/p/`, and a PDF page is rendered at
  *   the width asked and kept there too. AVIF and JPEG XL pages are served as JPEG (`local-cache/<id>/j/`).
  *   That cache has a size limit: what was opened longest ago goes first;
  * - `/shelf/f/<id>`: the file itself (the books, which the viewer lays out itself: EPUB, MOBI/AZW3, FB2,
- *   FBZ and TXT; a DjVu, which the viewer renders itself, so it has no pages nor cover here; or a PDF for
- *   the document reader).
+ *   FBZ and TXT; a DjVu, which the viewer renders itself, so it has no pages nor cover here; a PDF for
+ *   the document reader; or a video, MP4, WebM, MKV or MOV, which the web view's <video> plays asking for
+ *   pieces of it: see HostServer's `ranged`).
  *
  * An item's id is `LOCAL_BASE` + a hash of its URI, so the same file is the same item (with its progress
  * and notes) every time, and never meets an id of the service (those count from 1).
@@ -145,6 +148,7 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         files.removeAll { idOf(it) == id }
         save()
         File(cacheDir(), id.toString()).deleteRecursively()
+        File(keptCovers(), "$id.jpg").delete()
     }
 
     /** A file of the shelf: a content:// URI (the system picker, «Abrir con») or a file:// one, which is only
@@ -253,6 +257,8 @@ class Shelf(private val context: Context, private val settings: Settings, privat
     /** What the viewer needs before reading: how many pages and their sizes (a cbr or cb7 gets unpacked now). */
     fun prepare(id: Long): JSONObject {
         val k = item(id)
+        // a video is played whole by the web view: no pages (the viewer does not ask, but an older one might)
+        if (k.format in VIDEOS) return JSONObject().put("pages", 0).put("page_sizes", JSONArray())
         val dir = itemCache(id)
         val format = containerOf(k.uri, k.format)
         val kept = File(dir, "prepared.json")
@@ -342,14 +348,16 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         }
     }
 
-    /** A small cover: the first page, 400 px wide, kept. */
-    fun cover(id: Long): Pair<InputStream, String> {
+    /** A small cover: the first page, 400 px wide, kept. Null for a video (it has none to find here: the one the page
+     * gave it, if any, is [keptCover]). */
+    fun cover(id: Long): Pair<InputStream, String>? {
         val covers = File(cacheDir(), "covers").also { it.mkdirs() }
         val file = File(covers, "$id.jpg")
         if (file.isFile) return FileInputStream(file) to "image/jpeg"
         val avif = File(covers, "$id.avif")
         if (avif.isFile) return FileInputStream(avif) to "image/avif"
         val k = item(id)
+        if (k.format in VIDEOS) return null
         val raw: ByteArray = when (val format = containerOf(k.uri, k.format)) {
             "cbz" -> {
                 val names = zipPages(k.uri)
@@ -377,16 +385,37 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         return small.inputStream() to "image/jpeg"
     }
 
+    // ---- the covers the page gives (a video's: Telegram's thumbnail of it), kept with the app's files ----
+    private fun keptCovers() = File(File(context.filesDir, "estanteria"), "covers").also { it.mkdirs() }
+
+    /** The cover the page gave this file ([setCover]), if any. */
+    fun keptCover(id: Long): File? = File(keptCovers(), "$id.jpg").takeIf { it.isFile }
+
+    /** Keeps `raw` (an image) as the cover of a file of the shelf, made JPEG and 400 px wide like the others. Not in
+     * the cache: emptying it (or the system doing so) does not lose it, there being nothing to make it again from. */
+    fun setCover(id: Long, raw: ByteArray) {
+        item(id)
+        val jpeg = try { small(raw) } catch (_: Exception) { throw IllegalArgumentException("Esa imagen no se puede leer.") }
+        val dir = keptCovers()
+        val part = File(dir, "$id.part")
+        part.writeBytes(jpeg)
+        part.renameTo(File(dir, "$id.jpg"))
+        // the one made from the file before, if any, gives way
+        File(cacheDir(), "covers").let { File(it, "$id.jpg").delete(); File(it, "$id.avif").delete() }
+    }
+
     /** The file itself, to hand to another app: a catalog download (a File of the app's) or the document's Uri. */
     fun original(id: Long): Any? {
         val k = known[id] ?: return null
         return if (k.uri.scheme == "file") catalogFile(k.uri) else k.uri
     }
 
-    /** The file itself and its size (for the readers that want the whole thing: the books, PDF as a document). */
+    /** The file itself and its size (for the readers that want the whole thing: the books, PDF as a document, a
+     * video), -1 if it cannot be known: DocumentFile says 0 when the provider does not tell, so the descriptor is asked. */
     fun file(id: Long): Triple<InputStream, String, Long> {
         val k = item(id)
-        val size = single(k.uri)?.length() ?: -1L
+        val size = single(k.uri)?.length()?.takeIf { it > 0 }
+            ?: try { descriptor(k.uri).use { it.statSize } } catch (_: Exception) { -1L }
         return Triple(open(k.uri), mimeOfFormat(k.format), size)
     }
 
@@ -688,7 +717,9 @@ class Shelf(private val context: Context, private val settings: Settings, privat
         const val DEFAULT_CACHE = 1L shl 30
         const val UPLOAD_CHUNK = 32 shl 20
         private val IMAGES = setOf("jpg", "jpeg", "png", "webp", "gif", "avif", "jxl", "bmp")
-        const val UNSUPPORTED = "La Estantería abre cómics (cbz, cbr, cb7, cbt), PDF, DjVu y libros (epub, mobi, azw3, fb2, fbz, txt)"
+        /** the formats that are videos: played whole by the web view, no pages nor cover of their own */
+        val VIDEOS = setOf("mp4", "webm", "mkv", "mov")
+        const val UNSUPPORTED = "La Estantería abre cómics (cbz, cbr, cb7, cbt), PDF, DjVu, libros (epub, mobi, azw3, fb2, fbz, txt) y vídeos (mp4, webm, mkv, mov)"
 
         fun idOf(uri: String): Long {
             var h = 0xcbf29ce484222325uL
@@ -711,6 +742,10 @@ class Shelf(private val context: Context, private val settings: Settings, privat
                 "fbz" -> "fbz"
                 "txt" -> "txt"
                 "djvu", "djv" -> "djvu"
+                "mp4", "m4v" -> "mp4"
+                "webm" -> "webm"
+                "mkv" -> "mkv"
+                "mov" -> "mov"
                 else -> null
             }
         }
@@ -728,6 +763,10 @@ class Shelf(private val context: Context, private val settings: Settings, privat
             "fbz" -> "application/x-zip-compressed-fb2"
             "txt" -> "text/plain"
             "djvu" -> "image/vnd.djvu"
+            "mp4" -> "video/mp4"
+            "webm" -> "video/webm"
+            "mkv" -> "video/x-matroska"
+            "mov" -> "video/quicktime"
             else -> "application/octet-stream"
         }
 

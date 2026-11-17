@@ -38,6 +38,9 @@ export interface HostInfo {
   streamSave?: boolean
   /** with the Telegram library: an upload sends the catalog entry it came from (older hosts drop it) */
   uploadKey?: boolean
+  /** videos on the shelf (mp4, webm, mkv, mov; `/shelf/f/` answers ranges) and the covers the page gives them
+   * (`POST /host/shelf/cover/<id>`, the image as the body) */
+  videos?: boolean
 }
 
 export interface Connection {
@@ -95,7 +98,7 @@ export function onHostEvent(listener: Listener): () => void {
 }
 
 // ---- the files and folders of this device, listed and served by the host ----
-export function hostShelf(can: Pick<HostInfo, 'cancel' | 'uploadKey'> = {}): ShelfBackend {
+export function hostShelf(can: Pick<HostInfo, 'cancel' | 'uploadKey' | 'videos'> = {}): ShelfBackend {
   return {
     config: () => host<ShelfConfig>('/host/shelf'),
     scan: () => host<LocalFile[]>('/host/shelf/scan'),
@@ -122,6 +125,10 @@ export function hostShelf(can: Pick<HostInfo, 'cancel' | 'uploadKey'> = {}): She
       } finally { stop() }
     },
     cancelUpload: can.cancel ? async (id) => { await host<void>(`/host/shelf/upload/${id}/cancel`, { method: 'POST', body: '{}' }) } : undefined,
+    // the host makes it a 400 px JPEG and keeps it with the app's files (up to 4 MB as given)
+    setCover: can.videos ? async (id, image) => {
+      await host<void>(`/host/shelf/cover/${id}`, { method: 'POST', headers: { 'Content-Type': image.type || 'image/jpeg' }, body: image })
+    } : undefined,
   }
 }
 

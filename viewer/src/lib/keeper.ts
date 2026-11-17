@@ -76,6 +76,11 @@ function deviceKeeper(store: Store): Keeper {
       } catch (err: any) {
         done(null)
         if (err?.status === 409 || /ya hay/i.test(String(err?.message || err))) return      // it is there already
+        // a server that does not take videos yet (an older one): it stays here, which is no failure
+        if (meta.kind === 'video' && /no lee ese tipo/i.test(String(err?.message || err))) {
+          store.notify(t('{server} aún no guarda vídeos: «{title}» se queda en este dispositivo.', { server: store.serverName || t('tu servidor'), title: meta.title }))
+          return
+        }
         if (!told) store.notify(t('No se pudo subir «{title}» a {server}: {error}', { title: meta.title, server: store.serverName || t('tu servidor'), error: err?.message || String(err) }), true)
         told = true
       }

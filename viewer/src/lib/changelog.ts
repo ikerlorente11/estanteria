@@ -16,6 +16,14 @@ export type ChangelogPlatform = 'android' | 'desktop'
 export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   android: [
     {
+      version: '0.5.5',
+      date: '2026-11-25',
+      notes: [
+        { es: 'Tu servidor propio se conecta con tu contraseña de siempre: la app se crea una contraseña de aplicación para este móvil y no guarda la tuya. Si la que tenías caduca, vuelve a conectarlo en Bibliotecas con tu contraseña.',
+          en: 'Your own server connects with your usual password: the app makes itself an app password for this phone and does not keep yours. If the one you had expires, connect it again in Libraries with your password.' },
+      ],
+    },
+    {
       version: '0.5.4',
       date: '2026-11-17',
       notes: [

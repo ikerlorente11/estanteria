@@ -270,7 +270,7 @@ async function connect(): Promise<boolean> {
     await new Api(HOST_BASE, () => `Host ${TOKEN}`).ensureConnected()
   } catch (err: any) {
     if (!err?.offline) {
-      serverError.value = err?.status === 401 ? t('No reconoce ese usuario o esa contraseña de aplicación.') : t('No se pudo conectar: {error}', { error: err?.message || String(err) })
+      serverError.value = err?.status === 401 ? t('El servidor ya no acepta la contraseña guardada: vuelve a conectarlo en Bibliotecas con tu contraseña.') : t('No se pudo conectar: {error}', { error: err?.message || String(err) })
       await use(false)
       listLibraries()
       return false
@@ -298,20 +298,24 @@ const libraries: LibrariesBackend = {
     // for being offline and the app would wait for a server that does not exist
     const url = input.url.trim().replace(/\/+$/, '')
     const username = input.username.trim()
-    const secret = input.secret?.trim() || ''
+    let secret = input.secret?.trim() || ''
     if (!input.id || url !== connection.url || username !== connection.username || secret) {
       let answer: Response
       try {
+        // the account's own password, typed once: the server has the cloud make this app an app password of its own,
+        // which is all it keeps
+        if (secret) secret = await Api.appPassword((u, init) => net.fetch(u, init), url, username, secret, 'La Estantería · Android')
         answer = await net.fetch(`${url}/api/cloud`, { headers: secret ? { Authorization: Api.basic(username, secret) } : {} })
-      } catch (_) {
-        throw new Error(t('No se pudo conectar: {error}', { error: t('Sin conexión con el servidor') }))
+      } catch (err: any) {
+        if (err?.status === 401) throw new Error(t('No reconoce ese usuario o esa contraseña.'))
+        throw new Error(t('No se pudo conectar: {error}', { error: err?.status ? err.message : t('Sin conexión con el servidor') }))
       }
       // with a password, a 401 is a wrong one; without one (the one kept is used), a 401 only says it is there
-      if (secret && answer.status === 401) throw new Error(t('No reconoce ese usuario o esa contraseña de aplicación.'))
+      if (secret && answer.status === 401) throw new Error(t('No reconoce ese usuario o esa contraseña.'))
       if (answer.status >= 500 || answer.status === 404) throw new Error(t('No se pudo conectar: {error}', { error: `HTTP ${answer.status}` }))
     }
     Object.assign(connection, await saveConnection({ url, username, name: input.name, token: secret || undefined }))
-    if (!connection.hasToken) throw new Error(t('Hace falta la contraseña de aplicación.'))
+    if (!connection.hasToken) throw new Error(t('Hace falta tu contraseña.'))
     if (!(await connect())) throw new Error(serverError.value || t('No se pudo conectar.'))
     return libraryList.value[0]
   },

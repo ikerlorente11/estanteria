@@ -385,6 +385,26 @@ export class Api {
     return 'Basic ' + btoa(unescape(encodeURIComponent(`${username}:${password}`)))
   }
 
+  /**
+   * What an app keeps to reach a server of its own: the user signs in with the account's own password, once, and the
+   * server has the cloud make the app an app password (POST /api/cloud/app-password, `label`: what it is called in the
+   * cloud's settings, where it can be revoked). The account's password is never kept. An older server without that
+   * endpoint keeps what was typed, as before. A wrong user or password fails with `status` 401.
+   */
+  static async appPassword(fetcher: (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<Response>,
+                           url: string, username: string, password: string, label: string): Promise<string> {
+    const res = await fetcher(`${url.replace(/\/+$/, '')}/api/cloud/app-password`, {
+      method: 'POST', headers: { Authorization: Api.basic(username, password), 'Content-Type': 'application/json' }, body: JSON.stringify({ label })
+    })
+    if (res.status === 404 || res.status === 405) return password
+    if (!res.ok) {
+      const err: any = new Error(await res.json().then((b) => b.detail).catch(() => `HTTP ${res.status}`))
+      err.status = res.status
+      throw err
+    }
+    return String((await res.json()).token || password)
+  }
+
   library() { return this.call<LibraryStatus>('/api/library') }
   scan() { return this.call<LibraryStatus & { files: number; new: number; changed: number; removed: number }>('/api/library/scan', { method: 'POST' }) }
 

@@ -20,8 +20,8 @@ export interface LibraryTypeInfo {
 export const LIBRARY_TYPES: Record<LibraryType, LibraryTypeInfo> = {
   server: {
     label: 'Servidor propio',
-    hint: 'Un servidor con la API de lectura completa: su biblioteca y el progreso, las notas y los subrayados sincronizados entre tus dispositivos. Tu usuario y una contraseña de aplicación.',
-    example: 'https://lectura.ejemplo.com', username: true, secretLabel: 'Contraseña de aplicación',
+    hint: 'Un servidor con la API de lectura completa: su biblioteca y el progreso, las notas y los subrayados sincronizados entre tus dispositivos. Tu usuario y tu contraseña de siempre: la app se crea una contraseña de aplicación propia y no guarda la tuya.',
+    example: 'https://lectura.ejemplo.com', username: true, secretLabel: 'Contraseña',
   },
   suwayomi: {
     label: 'Suwayomi',

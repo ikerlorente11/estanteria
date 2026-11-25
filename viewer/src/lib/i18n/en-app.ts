@@ -17,6 +17,9 @@ export const EN_APP: Record<string, string> = {
   'el servidor': 'the server',
   'No se pudo cargar tu estantería: {error}': 'Could not load your shelf: {error}',
   'No reconoce ese usuario o esa contraseña de aplicación.': 'It does not recognise that user or app password.',
+  'No reconoce ese usuario o esa contraseña.': 'It does not recognise that user or password.',
+  'Hace falta tu contraseña.': 'Your password is needed.',
+  'El servidor ya no acepta la contraseña guardada: vuelve a conectarlo en Bibliotecas con tu contraseña.': 'The server no longer accepts the password kept here: connect it again in Libraries with your password.',
   'No se pudo conectar: {error}': 'Could not connect: {error}',
   'No se pudo conectar.': 'Could not connect.',
   'Este tipo de biblioteca aún no se puede conectar desde aquí.': 'This kind of library cannot be connected from here yet.',
@@ -91,7 +94,7 @@ export const EN_APP: Record<string, string> = {
   'Una carpeta WebDAV (otro Nextcloud u OpenCloud, un NAS): la dirección de la carpeta con los archivos. El progreso se guarda aquí.': 'A WebDAV folder (another Nextcloud or OpenCloud, a NAS): the address of the folder with the files. Progress is saved here.',
   // the kinds of library an app connects (libraries.ts)
   'Servidor propio': 'Own server',
-  'Un servidor con la API de lectura completa: su biblioteca y el progreso, las notas y los subrayados sincronizados entre tus dispositivos. Tu usuario y una contraseña de aplicación.': 'A server with the full reading API: its library, and progress, notes and highlights synced across your devices. Your user and an app password.',
+  'Un servidor con la API de lectura completa: su biblioteca y el progreso, las notas y los subrayados sincronizados entre tus dispositivos. Tu usuario y tu contraseña de siempre: la app se crea una contraseña de aplicación propia y no guarda la tuya.': 'A server with the full reading API: its library, and progress, notes and highlights synced across your devices. Your user and your usual password: the app makes itself an app password of its own and does not keep yours.',
   'https://lectura.ejemplo.com': 'https://reading.example.com',
   'Contraseña de aplicación': 'App password',
   'Catálogo OPDS': 'OPDS catalog',

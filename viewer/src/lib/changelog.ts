@@ -178,6 +178,16 @@ export const CHANGELOG: Record<ChangelogPlatform, Release[]> = {
   ],
   desktop: [
     {
+      version: '0.6.5',
+      date: '2026-11-25',
+      notes: [
+        { es: 'Tu servidor propio se conecta con tu contraseña de siempre: la app se crea una contraseña de aplicación para este equipo y no guarda la tuya.',
+          en: 'Your own server connects with your usual password: the app makes itself an app password for this computer and does not keep yours.' },
+        { es: 'Se actualiza sola si no la instalaste con PC Toolkit: baja la versión nueva y la instala al cerrar (o al pulsar «Reiniciar ahora»).',
+          en: 'It updates itself if you did not install it with PC Toolkit: it downloads the new version and installs it on closing (or on “Restart now”).' },
+      ],
+    },
+    {
       version: '0.6.4',
       date: '2026-11-17',
       notes: [
